@@ -1,16 +1,29 @@
 {
   "name": "tundra-gourmet-miniapp",
   "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
+  "description": "Telegram Mini App для Tundra Gourmet - Деликатесы Крайнего Севера",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "telegram",
+    "miniapp",
+    "tundra",
+    "gourmet",
+    "delicatessen",
+    "north"
+  ],
+  "author": "Tundra Gourmet",
+  "license": "ISC",
   "dependencies": {
-    "axios": "^1.7.7",
+    "axios": "^1.6.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
-
-
