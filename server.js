@@ -1,62 +1,98 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
+
 app.use(express.json());
 
-// Раздача статики фронта
+// Настройка статических файлов
 const webRoot = path.join(__dirname, 'webapp');
 app.use(express.static(webRoot));
 
-// Приём заказов с фронта (минимальный логгер)
+// Health check endpoints
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
+// API для заказов
 app.post('/api/orders', async (req, res) => {
-  try {
-    const order = req.body || {};
-
-    // Отправка уведомления в админ-группу (если задан chat_id)
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
-    if (botToken && adminChatId) {
-      const { totals = {}, cartItems = [], deliveryZone, phone } = order;
-      const total = totals.total ?? 0;
-      const itemsText = cartItems
-        .map(i => `• ${i.name} × ${i.quantity}`)
-        .slice(0, 6)
-        .join('\n');
-
-      const text = `🆕 НОВЫЙ ЗАКАЗ\n💰 ${total}₽\n📦 ${cartItems.length} поз.\n🚚 ${deliveryZone || ''}\n📞 ${phone || ''}\n\n${itemsText}`;
-      await axios.post(
-        `https://api.telegram.org/bot${botToken}/sendMessage`,
-        { chat_id: adminChatId, text }
-      );
+    try {
+        const orderData = req.body;
+        
+        // Формируем сообщение для админа
+        const message = `�� Новый заказ!\n\n�� Сумма: ${orderData.total}₽\n📦 Товаров: ${orderData.items.length}\n🚚 Зона доставки: ${orderData.deliveryZone}\n📱 Телефон: ${orderData.phone}\n\n�� Детали заказа:\n${orderData.items.map(item => `• ${item.name} x${item.quantity}`).join('\n')}`;
+        
+        // Отправляем уведомление в Telegram
+        if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
+            try {
+                await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: TELEGRAM_ADMIN_CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML'
+                });
+            } catch (telegramError) {
+                console.error('Ошибка отправки в Telegram:', telegramError.message);
+            }
+        }
+        
+        res.json({ ok: true, orderId: Date.now().toString() });
+    } catch (error) {
+        console.error('Ошибка обработки заказа:', error);
+        res.status(500).json({ ok: false, error: error.message });
     }
-
-    res.json({ ok: true, orderId: Date.now().toString() });
-  } catch (err) {
-    console.error('orders error', err?.message);
-    res.status(500).json({ ok: false });
-  }
 });
 
-// Вебхук Telegram (заглушка)
+// Webhook для Telegram
 app.post('/api/telegram/webhook', (req, res) => {
-  res.json({ ok: true });
+    console.log('Telegram webhook received:', req.body);
+    res.json({ ok: true });
 });
 
-// Вебхук ЮKassa (заглушка для будущей интеграции)
+// Webhook для ЮKassa
 app.post('/api/yookassa/webhook', (req, res) => {
-  res.json({ ok: true });
+    console.log('ЮKassa webhook received:', req.body);
+    res.json({ ok: true });
 });
 
-// SPA fallback для всего, кроме /api
+// SPA fallback - все остальные маршруты ведут на index.html
 app.get(/^\/(?!api).*/, (req, res) => {
-  res.sendFile(path.join(webRoot, 'index.html'));
+    res.sendFile(path.join(webRoot, 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
+// Запуск сервера
 app.listen(PORT, () => {
-  console.log('Server listening on', PORT);
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log(`📁 Статические файлы из: ${webRoot}`);
+    console.log(`�� Health check: http://localhost:${PORT}/health`);
 });
 
+// Keep-alive механизм для Railway
+setInterval(() => {
+    const uptime = process.uptime();
+    const memory = process.memoryUsage();
+    console.log(`💓 Keep-alive ping: ${new Date().toISOString()}, Uptime: ${Math.floor(uptime)}s, Memory: ${Math.round(memory.heapUsed / 1024 / 1024)}MB`);
+}, 5 * 60 * 1000); // Каждые 5 минут
 
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('�� Получен сигнал SIGTERM, завершаем работу...');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('�� Получен сигнал SIGINT, завершаем работу...');
+    process.exit(0);
+});
