@@ -11,15 +11,15 @@
     <!-- Приветственный экран -->
     <div id="welcome-screen" class="screen active">
         <div class="welcome-title">TUNDRA</div>
-        <div class="welcome-subtitle">GOURMET</div>
-        <button class="welcome-btn" onclick="startFromWelcome()">Открыть каталог</button>
+            <div class="welcome-subtitle">GOURMET</div>
+            <button class="welcome-btn" onclick="showMain()">Открыть каталог</button>
     </div>
 
     <!-- Главный экран -->
     <div id="main-screen" class="screen">
         <!-- Верхняя панель -->
         <div class="top-bar">
-            <div class="work-hours">
+            <div class="work-hours" onclick="showWorkHours()">
                 <span>🕐</span>
                 <span id="work-status">Работаем</span>
             </div>
@@ -83,51 +83,71 @@
             <div class="page-title">Оформление заказа</div>
         </div>
         <form id="orderForm" class="order-form">
-            <div class="form-group">
-                <label class="form-label">Зона доставки</label>
-                <select id="delivery-zone" class="form-select" required>
-                    <option value="">Выберите зону</option>
-                    <option value="zone1">Зона 1 (500₽)</option>
-                    <option value="zone2">Зона 2 (800₽)</option>
-                    <option value="zone3">Зона 3 (1200₽)</option>
-                </select>
+            <div class="delivery-info">
+                <h4>Информация о доставке</h4>
+                <div class="delivery-rules">
+                    <div class="delivery-rule">
+                        <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
+                    </div>
+                    <div class="delivery-rule">
+                        <strong>МО:</strong> минималка 5000₽, доставка 700₽
+                    </div>
+                    <div class="delivery-rule">
+                        <strong>Минимальный заказ:</strong> 3500₽
+                    </div>
+                </div>
             </div>
-            
-            <div class="form-group">
+
+                <div class="form-group">
+                <label class="form-label">Зона доставки</label>
+                <select id="delivery-zone" class="form-select" required onchange="updateDeliveryInfo()">
+                        <option value="">Выберите зону</option>
+                    <option value="moscow">Москва (МКАД) - 400₽</option>
+                    <option value="mo">Московская область - 700₽</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Улица</label>
                 <input type="text" id="street" class="form-input" required>
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Дом</label>
                 <input type="text" id="house" class="form-input" required>
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Квартира</label>
                 <input type="text" id="apartment" class="form-input">
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Этаж</label>
                 <input type="text" id="floor" class="form-input">
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Домофон</label>
                 <input type="text" id="intercom" class="form-input">
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Телефон</label>
                 <input type="tel" id="phone" class="form-input" required>
-            </div>
-            
-            <div class="form-group">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Комментарий к заказу</label>
                 <textarea id="comment" class="form-textarea" placeholder="Дополнительные пожелания"></textarea>
+                </div>
+
+            <div class="form-group">
+                <button type="submit" class="checkout-btn" style="width: 100%; margin-top: 20px;">
+                    Оформить заказ
+                </button>
             </div>
-        </form>
+            </form>
     </div>
 
     <!-- Экран успешного заказа -->
@@ -142,12 +162,6 @@
         <div class="page-header">
             <button class="back-btn" onclick="showMain()">←</button>
             <div class="page-title">Профиль</div>
-        </div>
-        
-        <div class="profile-header">
-            <div class="profile-avatar">👤</div>
-            <div class="profile-name">Гость</div>
-            <div class="profile-subtitle">Покупатель</div>
         </div>
 
         <div class="loyalty-card">
@@ -179,15 +193,23 @@
                     <div class="menu-item-icon">📋</div>
                     <div class="menu-item-text">Мои заказы</div>
                 </div>
-                <div class="menu-item-badge">3</div>
+                       <div class="menu-item-badge">3</div>
             </div>
-            
+
             <div class="menu-item">
                 <div class="menu-item-left">
                     <div class="menu-item-icon">🔔</div>
-                    <div class="menu-item-text">Уведомления</div>
+                           <div class="menu-item-text">Уведомления</div>
                 </div>
-                <div class="toggle-switch active"></div>
+                       <div class="toggle-switch active"></div>
+            </div>
+
+                   <div class="menu-item" onclick="openSupport()">
+                <div class="menu-item-left">
+                    <div class="menu-item-icon">💬</div>
+                    <div class="menu-item-text">Поддержка</div>
+                </div>
+                       <div class="menu-item-arrow">→</div>
             </div>
         </div>
     </div>
@@ -198,23 +220,23 @@
             <button class="back-btn" onclick="showProfile()">←</button>
             <div class="page-title">Мои заказы</div>
         </div>
-        
+
         <div class="products-list">
             <div class="product-card">
                 <div class="product-image">📦</div>
                 <div class="product-name">Заказ #125</div>
                 <div class="product-price">5,700₽</div>
-                <div style="background: #27ae60; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                    <div style="background: #27ae60; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
                     ✅ Выполнен
                 </div>
             </div>
-            
+
             <div class="product-card">
                 <div class="product-image">📦</div>
                 <div class="product-name">Заказ #124</div>
                 <div class="product-price">3,200₽</div>
-                <div style="background: #3498db; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
-                    🚚 В доставке
+                    <div style="background: #3498db; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                        🚚 В доставке
                 </div>
             </div>
         </div>
@@ -222,6 +244,27 @@
 
     <!-- Уведомления -->
     <div id="notification" class="notification"></div>
+
+    <!-- Модальное окно с часами работы -->
+    <div id="work-hours-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Часы работы</h3>
+                <button class="modal-close" onclick="hideWorkHours()">×</button>
+                    </div>
+            <div class="modal-body">
+                <div class="work-hours-info">
+                    <div class="work-hours-row">
+                        <span class="day">Понедельник - Воскресенье</span>
+                        <span class="time">10:00 - 21:00</span>
+                    </div>
+                    <div class="work-hours-note">
+                        Заказы принимаются ежедневно в указанное время
+                </div>
+                    </div>
+                    </div>
+                    </div>
+                                </div>
 
     <script src="script.js"></script>
 </body>
