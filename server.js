@@ -2,15 +2,22 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
+const config = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
+const PORT = config.PORT;
+const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
 // Хранилище заказов (в продакшене заменить на базу данных)
 let orders = new Map();
-let orderCounter = 125; // Начинаем с 125 как в приложении
+let orderCounter = 0; // Начинаем с 0 для нового пользователя
+
+// 🔥 ТАЙМЕРЫ ДЛЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗОВ (30 минут)
+let orderTimers = new Map();
+
+// 🔧 ХРАНИЛИЩЕ ТОВАРОВ ДЛЯ АДМИН ПАНЕЛИ
+let adminProducts = new Map();
 
 app.use(express.json());
 
@@ -21,13 +28,25 @@ function createOrder(orderData) {
     
     const order = {
         id: orderId,
-        status: 'new', // new, accepted, preparing, delivering, completed, cancelled
+        status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
+        paymentStatus: 'pending', // pending, paid, cancelled, expired
         createdAt: new Date(),
         updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 минут
         ...orderData
     };
     
     orders.set(orderId, order);
+    
+    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 30 МИНУТ
+    const timer = setTimeout(() => {
+        autoExpireOrder(orderId);
+    }, 30 * 60 * 1000); // 30 минут
+    
+    orderTimers.set(orderId, timer);
+    
+    console.log(`🔥 Заказ ${orderId} создан. Автоотмена через 30 минут.`);
+    
     return order;
 }
 
@@ -48,6 +67,48 @@ function getOrder(orderId) {
 
 function getAllOrders() {
     return Array.from(orders.values()).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// 🔥 ФУНКЦИЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗА
+function autoExpireOrder(orderId) {
+    const order = orders.get(orderId);
+    if (!order) {
+        console.log(`⚠️ Заказ ${orderId} не найден для автоотмены`);
+        return;
+    }
+    
+    // Проверяем, не был ли заказ уже оплачен
+    if (order.paymentStatus === 'paid') {
+        console.log(`✅ Заказ ${orderId} уже оплачен, отмена отменена`);
+        clearOrderTimer(orderId);
+        return;
+    }
+    
+    // Отменяем заказ
+    order.status = 'expired';
+    order.paymentStatus = 'expired';
+    order.updatedAt = new Date();
+    orders.set(orderId, order);
+    
+    // Очищаем таймер
+    clearOrderTimer(orderId);
+    
+    console.log(`⏰ Заказ ${orderId} автоматически отменен (время истекло)`);
+}
+
+// Функция очистки таймера заказа
+function clearOrderTimer(orderId) {
+    const timer = orderTimers.get(orderId);
+    if (timer) {
+        clearTimeout(timer);
+        orderTimers.delete(orderId);
+    }
+}
+
+// Функция отмены таймера при оплате
+function cancelOrderTimer(orderId) {
+    clearOrderTimer(orderId);
+    console.log(`🔥 Таймер заказа ${orderId} отменен (заказ оплачен)`);
 }
 
 // Настройка статических файлов
@@ -75,48 +136,10 @@ app.post('/api/orders', async (req, res) => {
         // Создаем заказ
         const order = createOrder(orderData);
         
-        // Формируем красивое сообщение для админа
-        const totalAmount = orderData.totals?.total || 0;
-        const itemsCount = orderData.cartItems?.length || 0;
+        console.log(`📝 Заказ #${order.id} создан, ожидает оплаты в течение 30 минут`);
         
-        const message = `🆕 НОВЫЙ ЗАКАЗ #${order.id}
-
-👤 ${orderData.customerName || 'Клиент'}
-📍 ${orderData.address.street}, ${orderData.address.house}${orderData.address.apartment ? `, кв.${orderData.address.apartment}` : ''} (${orderData.deliveryZone === 'moscow' ? 'Москва' : 'МО'})
-💰 ${totalAmount}₽ (ожидает оплаты ⏳)
-📦 ${itemsCount} товаров
-
-📋 Состав заказа:
-${orderData.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n')}
-
-📱 Телефон: ${orderData.phone}
-💬 Комментарий: ${orderData.comment || 'нет'}
-
-[🟡 Принять] [🔴 Отменить]`;
-
-        // Создаем inline-кнопки для управления заказом
-        const inlineKeyboard = {
-            inline_keyboard: [
-                [
-                    { text: '🟡 Принять', callback_data: `accept_${order.id}` },
-                    { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
-                ]
-            ]
-        };
-        
-        // Отправляем уведомление в Telegram с кнопками
-        if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
-            try {
-                await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: TELEGRAM_ADMIN_CHAT_ID,
-                    text: message,
-                    parse_mode: 'HTML',
-                    reply_markup: inlineKeyboard
-                });
-            } catch (telegramError) {
-                console.error('Ошибка отправки в Telegram:', telegramError.message);
-            }
-        }
+        // 🔥 НЕ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ В АДМИН ГРУППУ
+        // Уведомление будет отправлено только после успешной оплаты!
         
         res.json({ ok: true, orderId: order.id });
     } catch (error) {
@@ -155,9 +178,18 @@ app.get('/api/orders/:orderId', (req, res) => {
 app.put('/api/orders/:orderId/status', (req, res) => {
     try {
         const { status } = req.body;
-        const order = updateOrderStatus(req.params.orderId, status);
+        const orderId = req.params.orderId;
+        
+        // 🔥 ОБРАБАТЫВАЕМ СПЕЦИАЛЬНЫЕ СТАТУСЫ
+        if (status === 'cancelled' || status === 'expired') {
+            // Отменяем таймер при ручной отмене или истечении времени
+            clearOrderTimer(orderId);
+        }
+        
+        const order = updateOrderStatus(orderId, status);
         
         if (order) {
+            console.log(`📝 Статус заказа ${orderId} изменен на: ${status}`);
             res.json({ ok: true, order });
         } else {
             res.status(404).json({ ok: false, error: 'Заказ не найден' });
@@ -382,31 +414,57 @@ async function handlePaymentSuccess(payment) {
             return;
         }
         
+        // 🔥 ОТМЕНЯЕМ ТАЙМЕР АВТООТМЕНЫ
+        cancelOrderTimer(orderId);
+        
         // Обновляем статус заказа на "оплачен"
         order.paymentStatus = 'paid';
         order.paymentId = payment.id;
         order.updatedAt = new Date();
         orders.set(orderId, order);
         
-        // Отправляем уведомление в админ-группу
+        // 🔥 ТЕПЕРЬ ОТПРАВЛЯЕМ ПОЛНОЕ УВЕДОМЛЕНИЕ В АДМИН ГРУППУ
         if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
-            const message = `💰 ПЛАТЕЖ ПОЛУЧЕН!
+            const totalAmount = order.totals?.total || 0;
+            const itemsCount = order.cartItems?.length || 0;
+            
+            const message = `💰 ОПЛАЧЕННЫЙ ЗАКАЗ #${orderId}
 
-🆕 ЗАКАЗ #${orderId}
+👤 ${order.customerName || 'Клиент'}
+📍 ${order.address.street}, ${order.address.house}${order.address.apartment ? `, кв.${order.address.apartment}` : ''} (${order.deliveryZone === 'moscow' ? 'Москва' : 'МО'})
+💰 ${totalAmount}₽ ✅ ОПЛАЧЕНО
+📦 ${itemsCount} товаров
+
+📋 Состав заказа:
+${order.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n')}
+
+📱 Телефон: ${order.phone}
+💬 Комментарий: ${order.comment || 'нет'}
+
 💳 ID платежа: ${payment.id}
-💵 Сумма: ${payment.amount.value} ${payment.amount.currency}
-✅ Статус: Оплачен
+⏰ Время оплаты: ${new Date().toLocaleString('ru-RU')}
 
-Теперь можно приступать к выполнению заказа!`;
+Заказ готов к выполнению!`;
+
+            // Создаем кнопки для управления оплаченным заказом
+            const inlineKeyboard = {
+                inline_keyboard: [
+                    [
+                        { text: '🟡 Принять', callback_data: `accept_${order.id}` },
+                        { text: '🔵 Готовится', callback_data: `preparing_${order.id}` }
+                    ]
+                ]
+            };
             
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_ADMIN_CHAT_ID,
                 text: message,
-                parse_mode: 'HTML'
+                parse_mode: 'HTML',
+                reply_markup: inlineKeyboard
             });
         }
         
-        console.log(`Платеж для заказа ${orderId} успешно обработан`);
+        console.log(`✅ Платеж для заказа ${orderId} обработан. Уведомление отправлено админам.`);
         
     } catch (error) {
         console.error('Ошибка обработки успешного платежа:', error);
@@ -503,8 +561,235 @@ app.post('/api/payments/create', async (req, res) => {
     }
 });
 
+// 🔧 MIDDLEWARE ДЛЯ ЗАЩИТЫ АДМИН API
+function requireAdminAuth(req, res, next) {
+    const providedPassword = req.headers['x-admin-password'] || req.query.password;
+    const adminPassword = config.ADMIN_PASSWORD;
+    
+    if (providedPassword !== adminPassword) {
+        return res.status(401).json({ 
+            ok: false, 
+            error: 'Unauthorized. Admin password required.' 
+        });
+    }
+    
+    next();
+}
+
+// 🔧 API ДЛЯ ОСНОВНОГО ПРИЛОЖЕНИЯ
+
+// Получение товаров для основного приложения (публичный API)
+app.get('/api/products', (req, res) => {
+    try {
+        // Если есть товары из админ панели, используем их
+        if (adminProducts.size > 0) {
+            const productsObj = {};
+            for (const [categoryId, categoryProducts] of adminProducts) {
+                // Фильтруем только доступные товары
+                productsObj[categoryId] = categoryProducts.filter(product => product.available !== false);
+            }
+            res.json({ ok: true, products: productsObj });
+        } else {
+            // Возвращаем товары по умолчанию (можно загрузить из script.js)
+            res.json({ ok: true, products: {} });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка получения товаров:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔧 API ДЛЯ АДМИН ПАНЕЛИ
+
+// Получение всех товаров для админ панели
+app.get('/api/admin/products', requireAdminAuth, (req, res) => {
+    try {
+        // Возвращаем товары из хранилища или заглушку
+        if (adminProducts.size === 0) {
+            // Заглушка с товарами
+            const defaultProducts = {
+                'kolbasy': [
+                    {
+                        id: 'salame-oreh',
+                        name: 'Салями из мяса северного оленя с кедровым орехом',
+                        price: 2350,
+                        unit: '/кг',
+                        maxQty: 3,
+                        image: '🌭',
+                        imageUrl: 'images/products/kolbasy/salame-oreh.jpg',
+                        composition: 'мясо северного оленя 1 сорт, жир олений, орех кедровый, соль поваренная пищевая, сахар-песок, перец черный молотый, мускатный орех, чеснок сушеный, кориандр, оболочка искусственная',
+                        nutrition: 'белки - 20 г, жиры - 16 г',
+                        storage: '15 суток',
+                        available: true
+                    }
+                ]
+            };
+            res.json({ ok: true, products: defaultProducts });
+        } else {
+            const products = Object.fromEntries(adminProducts);
+            res.json({ ok: true, products });
+        }
+    } catch (error) {
+        console.error('Ошибка получения товаров:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Обновление товаров через админ панель
+app.put('/api/admin/products', requireAdminAuth, (req, res) => {
+    try {
+        const { products } = req.body;
+        
+        // Сохраняем товары
+        adminProducts.clear();
+        Object.entries(products).forEach(([categoryId, categoryProducts]) => {
+            adminProducts.set(categoryId, categoryProducts);
+        });
+        
+        console.log('🔧 Товары обновлены через админ панель');
+        res.json({ ok: true, message: 'Товары успешно обновлены' });
+        
+    } catch (error) {
+        console.error('Ошибка обновления товаров:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Переключение доступности товара
+app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, (req, res) => {
+    try {
+        const { categoryId, productId } = req.params;
+        
+        const categoryProducts = adminProducts.get(categoryId);
+        if (!categoryProducts) {
+            return res.status(404).json({ ok: false, error: 'Категория не найдена' });
+        }
+        
+        const product = categoryProducts.find(p => p.id === productId);
+        if (!product) {
+            return res.status(404).json({ ok: false, error: 'Товар не найден' });
+        }
+        
+        // Переключаем доступность
+        product.available = !product.available;
+        
+        console.log(`🔧 Товар ${productId} ${product.available ? 'показан' : 'скрыт'}`);
+        res.json({ ok: true, product, available: product.available });
+        
+    } catch (error) {
+        console.error('Ошибка переключения товара:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get(/^\/(?!api).*/, (req, res) => {
+    const requestedPath = req.path;
+    
+    // Если запрашивается admin.html, проверяем пароль
+    if (requestedPath === '/admin' || requestedPath === '/admin.html') {
+        const adminPassword = config.ADMIN_PASSWORD;
+        const providedPassword = req.query.password;
+        
+        if (providedPassword !== adminPassword) {
+            res.status(401).send(`
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в админ панель</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0b5c56, #2C5530);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .login-container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .login-icon { font-size: 60px; margin-bottom: 20px; }
+        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
+        .login-subtitle { opacity: 0.9; margin-bottom: 30px; }
+        .login-form { margin-top: 30px; }
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.9);
+            color: #2c3e50;
+        }
+        .login-btn {
+            width: 100%;
+            background: #D4A574;
+            color: #1A1F2E;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .login-btn:hover { background: #c19660; transform: translateY(-2px); }
+        .error-msg {
+            background: rgba(231, 76, 60, 0.2);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-icon">🔐</div>
+        <div class="login-title">Админ панель</div>
+        <div class="login-subtitle">Tundra Gourmet</div>
+        
+        ${providedPassword ? '<div class="error-msg">❌ Неверный пароль</div>' : ''}
+        
+        <form class="login-form" method="GET">
+            <input type="password" 
+                   name="password" 
+                   class="login-input" 
+                   placeholder="Введите пароль" 
+                   required 
+                   autofocus>
+            <button type="submit" class="login-btn">🚀 Войти</button>
+        </form>
+        
+        <div style="margin-top: 30px; font-size: 14px; opacity: 0.7;">
+            💡 Если забыли пароль, обратитесь к разработчику
+        </div>
+    </div>
+</body>
+</html>
+            `);
+            return;
+        }
+        
+        res.sendFile(path.join(webRoot, 'admin.html'));
+        return;
+    }
+    
+    // Остальные маршруты ведут на основное приложение
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
