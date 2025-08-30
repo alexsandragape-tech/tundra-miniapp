@@ -16,5 +16,8 @@ module.exports = {
     FRONTEND_URL: process.env.FRONTEND_URL || 'https://nodejs-production-64ed.up.railway.app',
     
     // 🔧 ПОРТ СЕРВЕРА
-    PORT: process.env.PORT || 3000
+    PORT: process.env.PORT || 3000,
+    
+    // 🗄️ DATABASE
+    DATABASE_URL: process.env.DATABASE_URL || 'postgresql://localhost:5432/tundra_gourmet'
 };
