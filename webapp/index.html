@@ -8,15 +8,10 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Приветственный экран -->
-    <div id="welcome-screen" class="screen active">
-        <div class="welcome-title">TUNDRA</div>
-            <div class="welcome-subtitle">GOURMET</div>
-            <button class="welcome-btn" onclick="showMain()">Открыть каталог</button>
-    </div>
+
 
     <!-- Главный экран -->
-    <div id="main-screen" class="screen">
+    <div id="main-screen" class="screen active">
         <!-- Верхняя панель -->
         <div class="top-bar">
             <div class="work-hours" onclick="showWorkHours()">
@@ -46,8 +41,14 @@
     <!-- Экран категории -->
     <div id="category-screen" class="screen">
         <div class="page-header">
+            <div class="left-section">
             <button class="back-btn" onclick="showMain()">←</button>
-            <div class="page-title" id="category-title">Категория</div>
+                <div class="page-title" id="category-title">Категория</div>
+        </div>
+            <div class="cart-icon" onclick="showCart()">
+                🛒
+                <span class="cart-badge" id="category-cart-badge">0</span>
+            </div>
         </div>
         <div id="products-list" class="products-list">
             <!-- Товары будут добавлены через JavaScript -->
@@ -150,10 +151,42 @@
             </form>
     </div>
 
+    <!-- Экран ожидания оплаты -->
+    <div id="payment-waiting-screen" class="screen">
+        <div class="payment-waiting">
+            <div class="payment-icon">💳</div>
+            <div class="payment-title">Ожидаем оплату</div>
+            <div class="payment-subtitle" id="payment-order-number">Заказ #0</div>
+            
+            <div class="payment-timer">
+                <div class="timer-title">Время на оплату:</div>
+                <div class="timer-display" id="payment-timer">30:00</div>
+                <div class="timer-warning">Заказ будет автоматически отменен</div>
+            </div>
+            
+            <div class="payment-actions">
+                <button class="payment-btn primary" id="pay-now-btn" onclick="redirectToPayment()">
+                    💳 Оплатить сейчас
+                </button>
+                <button class="payment-btn secondary" onclick="cancelPayment()">
+                    ❌ Отменить заказ
+                </button>
+                <button class="payment-btn tertiary" onclick="showMain()">
+                    🏠 Вернуться в каталог
+                </button>
+            </div>
+            
+            <div class="payment-status" id="payment-status">
+                Проверяем статус оплаты...
+            </div>
+        </div>
+    </div>
+
     <!-- Экран успешного заказа -->
     <div id="order-success-screen" class="screen">
-        <div class="welcome-title">Заказ оформлен!</div>
-        <div class="welcome-subtitle" id="order-number">Номер заказа: #125</div>
+        <div class="welcome-title">Заказ оплачен!</div>
+        <div class="welcome-subtitle" id="order-number">Номер заказа: #0</div>
+        <div class="success-message">Спасибо за покупку! Ваш заказ принят в обработку.</div>
         <button class="welcome-btn" onclick="showMain()">Вернуться в каталог</button>
     </div>
 
@@ -165,26 +198,7 @@
         </div>
 
         <div class="loyalty-card">
-            <div class="loyalty-title">
-                <span>🎯</span>
-                Карта лояльности
-            </div>
-            <div class="loyalty-stats">
-                <div class="loyalty-stat">
-                    <div class="loyalty-stat-value">5,700₽</div>
-                    <div class="loyalty-stat-label">Потрачено</div>
-                </div>
-                <div class="loyalty-stat">
-                    <div class="loyalty-stat-value">125</div>
-                    <div class="loyalty-stat-label">Заказов</div>
-                </div>
-            </div>
-            <div class="loyalty-progress">
-                <div class="loyalty-progress-label">До следующего уровня: 300₽</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: 90%"></div>
-                </div>
-            </div>
+            <!-- 🔥 Карта лояльности будет заполнена динамически через JavaScript -->
         </div>
 
         <div class="menu-list">
@@ -193,23 +207,22 @@
                     <div class="menu-item-icon">📋</div>
                     <div class="menu-item-text">Мои заказы</div>
                 </div>
-                       <div class="menu-item-badge">3</div>
             </div>
 
             <div class="menu-item">
                 <div class="menu-item-left">
                     <div class="menu-item-icon">🔔</div>
-                           <div class="menu-item-text">Уведомления</div>
+                    <div class="menu-item-text">Уведомления</div>
                 </div>
-                       <div class="toggle-switch active"></div>
+                <div class="notification-toggle active" onclick="toggleNotifications()"></div>
             </div>
 
-                   <div class="menu-item" onclick="openSupport()">
+            <div class="menu-item" onclick="openSupport()">
                 <div class="menu-item-left">
                     <div class="menu-item-icon">💬</div>
                     <div class="menu-item-text">Поддержка</div>
                 </div>
-                       <div class="menu-item-arrow">→</div>
+                <div class="menu-item-arrow">→</div>
             </div>
         </div>
     </div>
@@ -221,26 +234,15 @@
             <div class="page-title">Мои заказы</div>
         </div>
 
-        <div class="products-list">
-            <div class="product-card">
-                <div class="product-image">📦</div>
-                <div class="product-name">Заказ #125</div>
-                <div class="product-price">5,700₽</div>
-                    <div style="background: #27ae60; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
-                    ✅ Выполнен
+        <div class="empty-orders">
+            <div class="empty-orders-icon">📋</div>
+            <div class="empty-orders-title">История заказов пуста</div>
+            <div class="empty-orders-desc">У вас пока нет заказов. Сделайте первый заказ в каталоге!</div>
+            <button class="go-shopping-btn" onclick="showMain()">
+                Перейти к покупкам
+                    </button>
                 </div>
-            </div>
-
-            <div class="product-card">
-                <div class="product-image">📦</div>
-                <div class="product-name">Заказ #124</div>
-                <div class="product-price">3,200₽</div>
-                    <div style="background: #3498db; color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
-                        🚚 В доставке
-                </div>
-            </div>
-        </div>
-    </div>
+                    </div>
 
     <!-- Уведомления -->
     <div id="notification" class="notification"></div>
@@ -257,14 +259,14 @@
                     <div class="work-hours-row">
                         <span class="day">Понедельник - Воскресенье</span>
                         <span class="time">10:00 - 21:00</span>
-                    </div>
+                                </div>
                     <div class="work-hours-note">
                         Заказы принимаются ежедневно в указанное время
-                </div>
-                    </div>
-                    </div>
-                    </div>
+                            </div>
                                 </div>
+                            </div>
+                        </div>
+                        </div>
 
     <script src="script.js"></script>
 </body>
