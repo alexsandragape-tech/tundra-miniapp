@@ -580,20 +580,27 @@ function requireAdminAuth(req, res, next) {
 // 🔧 API ДЛЯ ОСНОВНОГО ПРИЛОЖЕНИЯ
 
 // Получение товаров для основного приложения (публичный API)
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
     try {
-        // Если есть товары из админ панели, используем их
-        if (adminProducts.size > 0) {
-            const productsObj = {};
-            for (const [categoryId, categoryProducts] of adminProducts) {
-                // Фильтруем только доступные товары
-                productsObj[categoryId] = categoryProducts.filter(product => product.available !== false);
-            }
-            res.json({ ok: true, products: productsObj });
-        } else {
-            // Возвращаем товары по умолчанию (можно загрузить из script.js)
-            res.json({ ok: true, products: {} });
+        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
+        let allProducts = await AdminProductsDB.loadAll();
+        
+        // Если в БД нет товаров, используем данные из памяти
+        if (Object.keys(allProducts).length === 0 && adminProducts.size > 0) {
+            allProducts = Object.fromEntries(adminProducts);
         }
+        
+        // Фильтруем только доступные товары для клиентов
+        const productsObj = {};
+        for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
+            const availableProducts = categoryProducts.filter(product => product.available !== false);
+            if (availableProducts.length > 0) {
+                productsObj[categoryId] = availableProducts;
+            }
+        }
+        
+        res.json({ ok: true, products: productsObj });
+        
     } catch (error) {
         console.error('❌ Ошибка получения товаров:', error);
         res.status(500).json({ ok: false, error: error.message });
@@ -603,10 +610,13 @@ app.get('/api/products', (req, res) => {
 // 🔧 API ДЛЯ АДМИН ПАНЕЛИ
 
 // Получение всех товаров для админ панели
-app.get('/api/admin/products', requireAdminAuth, (req, res) => {
+app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     try {
-        // Возвращаем товары из хранилища или заглушку
-        if (adminProducts.size === 0) {
+        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
+        let products = await AdminProductsDB.loadAll();
+        
+        // Если в БД нет товаров, используем fallback
+        if (Object.keys(products).length === 0 && adminProducts.size === 0) {
             // Заглушка с товарами
             const defaultProducts = {
                 'kolbasy': [
@@ -625,11 +635,13 @@ app.get('/api/admin/products', requireAdminAuth, (req, res) => {
                     }
                 ]
             };
-            res.json({ ok: true, products: defaultProducts });
-        } else {
-            const products = Object.fromEntries(adminProducts);
-            res.json({ ok: true, products });
+            products = defaultProducts;
+        } else if (Object.keys(products).length === 0) {
+            // Если в БД нет товаров, но есть в памяти
+            products = Object.fromEntries(adminProducts);
         }
+        
+        res.json({ ok: true, products });
     } catch (error) {
         console.error('Ошибка получения товаров:', error);
         res.status(500).json({ ok: false, error: error.message });
@@ -637,21 +649,24 @@ app.get('/api/admin/products', requireAdminAuth, (req, res) => {
 });
 
 // Обновление товаров через админ панель
-app.put('/api/admin/products', requireAdminAuth, (req, res) => {
+app.put('/api/admin/products', requireAdminAuth, async (req, res) => {
     try {
         const { products } = req.body;
         
-        // Сохраняем товары
+        // 🗄️ СОХРАНЯЕМ В БАЗУ ДАННЫХ
+        await AdminProductsDB.saveAll(products);
+        
+        // Обновляем локальный кэш для совместимости
         adminProducts.clear();
         Object.entries(products).forEach(([categoryId, categoryProducts]) => {
             adminProducts.set(categoryId, categoryProducts);
         });
         
-        console.log('🔧 Товары обновлены через админ панель');
-        res.json({ ok: true, message: 'Товары успешно обновлены' });
+        console.log('🔧 Товары обновлены через админ панель и сохранены в БД');
+        res.json({ ok: true, message: 'Товары успешно обновлены и сохранены в базе данных' });
         
     } catch (error) {
-        console.error('Ошибка обновления товаров:', error);
+        console.error('❌ Ошибка обновления товаров:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
