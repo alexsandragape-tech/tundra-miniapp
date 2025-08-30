@@ -1,7 +1,7 @@
 // Базовый URL API
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? 'http://localhost:3000' 
-    : 'https://nodejs-production-64ed.up.railway.app';
+    : 'https://tundra-miniapp-production.up.railway.app';
 
 // Глобальные переменные
 let products = {};
