@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const config = require('./config');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
 
 const app = express();
 const PORT = config.PORT;
@@ -793,12 +794,42 @@ app.get(/^\/(?!api).*/, (req, res) => {
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
-// Запуск сервера
-app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`📁 Статические файлы из: ${webRoot}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-});
+// Запуск сервера с инициализацией БД
+async function startServer() {
+    try {
+        // Инициализируем базу данных
+        await initializeDatabase();
+        
+        // Загружаем товары из БД если есть
+        try {
+            const dbProducts = await AdminProductsDB.loadAll();
+            if (Object.keys(dbProducts).length > 0) {
+                console.log('✅ Товары загружены из базы данных');
+                // Преобразуем в Map для совместимости с текущим кодом
+                adminProducts.clear();
+                for (const [categoryId, products] of Object.entries(dbProducts)) {
+                    adminProducts.set(categoryId, products);
+                }
+            }
+        } catch (error) {
+            console.log('⚠️ Товары из БД не загружены, используем fallback');
+        }
+        
+        // Запускаем сервер
+        app.listen(PORT, () => {
+            console.log(`🚀 Сервер запущен на порту ${PORT}`);
+            console.log(`📁 Статические файлы из: ${webRoot}`);
+            console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+            console.log(`🗄️ База данных подключена`);
+        });
+        
+    } catch (error) {
+        console.error('❌ Ошибка запуска сервера:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 // Keep-alive механизм для Railway
 setInterval(() => {
