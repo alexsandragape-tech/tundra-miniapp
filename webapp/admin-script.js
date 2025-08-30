@@ -902,7 +902,7 @@ function hasProductChanged(categoryId, product) {
 }
 
 // Переключение доступности товара
-function toggleProductAvailability(categoryId, productId) {
+async function toggleProductAvailability(categoryId, productId) {
     const product = products[categoryId].find(p => p.id === productId);
     if (!product) return;
     
@@ -912,7 +912,22 @@ function toggleProductAvailability(categoryId, productId) {
     updateStats();
     
     const status = product.available ? 'показан' : 'скрыт';
-    showNotification(`Товар "${product.name}" ${status}`, 'success');
+    showNotification(`Товар "${product.name}" ${status}`, 'info');
+    
+    // 🔥 АВТОМАТИЧЕСКИ СОХРАНЯЕМ НА СЕРВЕР
+    try {
+        await saveProductsToServer();
+        showNotification(`Товар "${product.name}" ${status} и сохранен на сервере!`, 'success');
+        
+        // Обновляем оригинальную копию
+        originalProducts = JSON.parse(JSON.stringify(products));
+        hasUnsavedChanges = false;
+        document.getElementById('save-btn').disabled = true;
+        
+    } catch (error) {
+        console.error('Ошибка сохранения:', error);
+        showNotification('Товар изменен локально, но не сохранен на сервере. Нажмите "Сохранить изменения"', 'warning');
+    }
 }
 
 // Открытие модального окна редактирования
