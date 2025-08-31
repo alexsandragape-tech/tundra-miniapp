@@ -1818,6 +1818,19 @@ async function startServer() {
     }
 }
 
+// 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
+process.on('uncaughtException', (error) => {
+    console.error('💥 Неперехваченная ошибка:', error);
+    console.error('Stack:', error.stack);
+    // НЕ завершаем процесс, логируем и продолжаем
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 Неперехваченное отклонение промиса:', reason);
+    console.error('Промис:', promise);
+    // НЕ завершаем процесс, логируем и продолжаем
+});
+
 startServer();
 
 // Keep-alive механизм для Railway
@@ -1827,13 +1840,29 @@ setInterval(() => {
     console.log(`💓 Keep-alive ping: ${new Date().toISOString()}, Uptime: ${Math.floor(uptime)}s, Memory: ${Math.round(memory.heapUsed / 1024 / 1024)}MB`);
 }, 5 * 60 * 1000); // Каждые 5 минут
 
-// Graceful shutdown
+// Graceful shutdown с очисткой ресурсов
 process.on('SIGTERM', () => {
     console.log('🛑 Получен сигнал SIGTERM, завершаем работу...');
+    cleanup();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     console.log('🛑 Получен сигнал SIGINT, завершаем работу...');
+    cleanup();
     process.exit(0);
 });
+
+// Функция очистки ресурсов
+function cleanup() {
+    console.log('🧹 Очистка ресурсов...');
+    
+    // Очищаем все таймеры заказов
+    for (const [orderId, timer] of orderTimers.entries()) {
+        clearTimeout(timer);
+        console.log(`🗑️ Таймер заказа ${orderId} очищен`);
+    }
+    orderTimers.clear();
+    
+    console.log('✅ Ресурсы очищены');
+}
