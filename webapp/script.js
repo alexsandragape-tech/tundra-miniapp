@@ -1,5 +1,26 @@
 // Telegram Web App MainButton and BackButton logic
 let tg = window.Telegram?.WebApp;
+let currentUserId = null; // ID текущего пользователя для истории покупок
+
+// 🔑 Функция получения ID пользователя
+function getUserId() {
+    if (currentUserId) return currentUserId;
+    
+    // Пытаемся получить из Telegram Web App
+    if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+        currentUserId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+        return currentUserId;
+    }
+    
+    // Fallback: создаем или берем из localStorage
+    let userId = localStorage.getItem('tundra_user_id');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('tundra_user_id', userId);
+    }
+    currentUserId = userId;
+    return currentUserId;
+}
 
 function updateMainButton(screenId) {
     if (!tg) return;
@@ -1340,9 +1361,103 @@ function showProfile() {
     }
 }
 
+// 📋 ФУНКЦИЯ ЗАГРУЗКИ ИСТОРИИ ПОКУПОК
+async function loadPurchaseHistory() {
+    try {
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.purchases || [];
+        } else {
+            console.warn('Не удалось загрузить историю покупок');
+            return [];
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки истории покупок:', error);
+        return [];
+    }
+}
+
 // Функция показа моих заказов
-function showMyOrders() {
+async function showMyOrders() {
     showScreen('my-orders-screen');
+    
+    // Находим контейнер для истории заказов
+    const ordersContainer = document.querySelector('#my-orders-screen');
+    if (!ordersContainer) return;
+    
+    // Показываем загрузку
+    ordersContainer.innerHTML = `
+        <div class="page-header">
+            <button class="back-btn" onclick="showProfile()">←</button>
+            <div class="page-title">Мои заказы</div>
+        </div>
+        <div class="loading-orders">
+            <div class="loading-text">Загрузка истории заказов...</div>
+        </div>
+    `;
+    
+    // Загружаем историю покупок
+    const purchases = await loadPurchaseHistory();
+    
+    if (purchases.length === 0) {
+        // Показываем пустое состояние
+        ordersContainer.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" onclick="showProfile()">←</button>
+                <div class="page-title">Мои заказы</div>
+            </div>
+            <div class="empty-orders">
+                <div class="empty-orders-icon">📋</div>
+                <div class="empty-orders-title">История заказов пуста</div>
+                <div class="empty-orders-desc">У вас пока нет оплаченных заказов. Сделайте первый заказ в каталоге!</div>
+                <button class="go-shopping-btn" onclick="showMain()">
+                    Перейти к покупкам
+                </button>
+            </div>
+        `;
+    } else {
+        // Отображаем историю покупок
+        const ordersHtml = purchases.map((purchase, index) => {
+            const date = new Date(purchase.purchase_date).toLocaleDateString('ru-RU');
+            const time = new Date(purchase.purchase_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            
+            return `
+                <div class="order-item">
+                    <div class="order-header">
+                        <div class="order-number">Заказ #${purchase.order_id}</div>
+                        <div class="order-date">${date} ${time}</div>
+                    </div>
+                    <div class="order-details">
+                        <div class="order-amount">${purchase.totalAmount.toLocaleString()}₽</div>
+                        <div class="order-items-count">${purchase.itemsCount} товаров</div>
+                    </div>
+                    <div class="order-items">
+                        ${purchase.items.map(item => `
+                            <div class="order-item-detail">
+                                <span class="item-name">${item.name}</span>
+                                <span class="item-qty">x${item.quantity}</span>
+                                <span class="item-price">${(item.price * item.quantity).toLocaleString()}₽</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="order-status completed">✅ Оплачен</div>
+                </div>
+            `;
+        }).join('');
+        
+        ordersContainer.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" onclick="showProfile()">←</button>
+                <div class="page-title">Мои заказы</div>
+            </div>
+            <div class="orders-list">
+                ${ordersHtml}
+            </div>
+        `;
+    }
 }
 
 // Функция проверки рабочих часов
@@ -1487,6 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const formData = {
+                userId: getUserId(), // Добавляем ID пользователя
                 deliveryZone: deliveryZone,
                 address: {
                     street: document.getElementById('street').value.trim(),
@@ -1656,57 +1772,117 @@ function calculateLoyalty(totalSpent) {
     }
 }
 
-// Функция обновления карты лояльности
-function updateLoyaltyCard() {
-    const loyalty = calculateLoyalty(userProfile.totalSpent);
-    const loyaltyCard = document.querySelector('.loyalty-card');
-
-    if (loyaltyCard) {
-        loyaltyCard.innerHTML = `
-            <div class="loyalty-header">
-                <div class="loyalty-icon">🔥</div>
-                <div class="loyalty-title">Программа лояльности</div>
-            </div>
-            <div class="loyalty-stats">
-                <div class="loyalty-stat">
-                    <div class="stat-value">${userProfile.totalSpent.toLocaleString()}₽</div>
-                    <div class="stat-label">Потрачено всего</div>
-                </div>
-                <div class="loyalty-stat">
-                    <div class="stat-value">${userProfile.completedOrders}</div>
-                    <div class="stat-label">Заказов сделано</div>
-                </div>
-                <div class="loyalty-stat">
-                    <div class="stat-value">${loyalty.discount}%</div>
-                    <div class="stat-label">Текущая скидка</div>
-                </div>
-            </div>
-            <div class="loyalty-progress">
-                <div class="progress-text">До скидки ${loyalty.nextLevel ? getNextDiscount(loyalty.level) : 'максимальной'} осталось: ${loyalty.nextLevel ? (loyalty.nextLevel - userProfile.totalSpent).toLocaleString() : '0'}₽</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${loyalty.progress}%"></div>
-                </div>
-            </div>
-            <div class="loyalty-tiers">
-                <div class="tier-item ${loyalty.level === 'Bronze' ? 'current' : ''}">
-                    <div class="tier-icon">💜</div>
-                    <div class="tier-info">0₽ - 9,999₽ → 0%</div>
-                </div>
-                <div class="tier-item ${loyalty.level === 'Silver' ? 'current' : ''}">
-                    <div class="tier-icon">⭐</div>
-                    <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
-                </div>
-                <div class="tier-item ${loyalty.level === 'Gold' ? 'current' : ''}">
-                    <div class="tier-icon">⭐</div>
-                    <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
-                </div>
-                <div class="tier-item ${loyalty.level === 'VIP' ? 'current' : ''}">
-                    <div class="tier-icon">⭐</div>
-                    <div class="tier-info">50,000₽+ → 10%</div>
-                </div>
-            </div>
-        `;
+// 🏆 ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ЛОЯЛЬНОСТИ С СЕРВЕРА
+async function loadLoyaltyData() {
+    try {
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.stats || null;
+        } else {
+            console.warn('Не удалось загрузить данные лояльности с сервера');
+            return null;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных лояльности:', error);
+        return null;
     }
+}
+
+// Функция обновления карты лояльности
+async function updateLoyaltyCard() {
+    const loyaltyCard = document.querySelector('.loyalty-card');
+    if (!loyaltyCard) return;
+
+    // Показываем загрузку
+    loyaltyCard.innerHTML = `
+        <div class="loyalty-header">
+            <div class="loyalty-icon">🔥</div>
+            <div class="loyalty-title">Программа лояльности</div>
+        </div>
+        <div class="loading-text">Загрузка данных...</div>
+    `;
+
+    // Загружаем данные с сервера
+    const serverStats = await loadLoyaltyData();
+    
+    let stats;
+    if (serverStats) {
+        // Используем данные с сервера
+        stats = {
+            totalSpent: serverStats.totalSpent,
+            totalPurchases: serverStats.totalPurchases,
+            currentDiscount: serverStats.currentDiscount,
+            nextLevelTarget: serverStats.nextLevelTarget,
+            nextLevelProgress: serverStats.nextLevelProgress,
+            levelName: serverStats.levelName
+        };
+    } else {
+        // Fallback: используем локальные данные
+        const loyalty = calculateLoyalty(userProfile.totalSpent);
+        stats = {
+            totalSpent: userProfile.totalSpent,
+            totalPurchases: userProfile.completedOrders,
+            currentDiscount: loyalty.discount,
+            nextLevelTarget: loyalty.nextLevel,
+            nextLevelProgress: loyalty.progress,
+            levelName: loyalty.level
+        };
+    }
+
+    // Определяем следующую скидку
+    const nextDiscount = stats.nextLevelTarget ? 
+        (stats.currentDiscount === 0 ? 3 : 
+         stats.currentDiscount === 3 ? 5 : 
+         stats.currentDiscount === 5 ? 10 : 'максимальная') : 'максимальная';
+
+    // Отображаем карту лояльности
+    loyaltyCard.innerHTML = `
+        <div class="loyalty-header">
+            <div class="loyalty-icon">🔥</div>
+            <div class="loyalty-title">Программа лояльности</div>
+        </div>
+        <div class="loyalty-stats">
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.totalSpent.toLocaleString()}₽</div>
+                <div class="stat-label">Потрачено всего</div>
+            </div>
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.totalPurchases}</div>
+                <div class="stat-label">Заказов сделано</div>
+            </div>
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.currentDiscount}%</div>
+                <div class="stat-label">Текущая скидка</div>
+            </div>
+        </div>
+        <div class="loyalty-progress">
+            <div class="progress-text">До скидки ${nextDiscount} осталось: ${stats.nextLevelTarget ? (stats.nextLevelTarget - stats.totalSpent).toLocaleString() : '0'}₽</div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${stats.nextLevelProgress}%"></div>
+            </div>
+        </div>
+        <div class="loyalty-tiers">
+            <div class="tier-item ${stats.currentDiscount === 0 ? 'current' : ''}">
+                <div class="tier-icon">💜</div>
+                <div class="tier-info">0₽ - 9,999₽ → 0%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 3 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 5 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 10 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">50,000₽+ → 10%</div>
+            </div>
+        </div>
+    `;
 }
 
 // Функция получения следующей скидки
