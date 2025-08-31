@@ -1688,6 +1688,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 
                 const result = await response.json();
+                console.log('📥 Ответ от сервера:', result);
+                
                 if (result.ok) {
                     // 🔥 ЗАКАЗ СОЗДАН - ПОЛУЧАЕМ URL ДЛЯ ОПЛАТЫ
                     currentOrderId = parseInt(result.orderId);
@@ -1715,12 +1717,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 💳 ПЕРЕНАПРАВЛЯЕМ НА ОПЛАТУ YOOKASSA
                     if (result.paymentUrl) {
                         console.log(`🚀 Открываем страницу оплаты: ${result.paymentUrl}`);
+                        console.log(`🤖 Telegram WebApp доступен:`, !!window.Telegram?.WebApp);
                         
                         // Проверяем, запускается ли в Telegram
                         if (window.Telegram?.WebApp) {
+                            console.log(`📱 Открываем через Telegram WebApp...`);
                             // В Telegram Web App открываем через openLink
                             window.Telegram.WebApp.openLink(result.paymentUrl);
                         } else {
+                            console.log(`🌐 Открываем в браузере...`);
                             // В обычном браузере открываем в том же окне
                             window.location.href = result.paymentUrl;
                         }
