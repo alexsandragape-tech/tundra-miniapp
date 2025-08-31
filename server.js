@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
+const crypto = require('crypto');
+const { YooCheckout } = require('@a2seven/yoo-checkout');
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
 
@@ -9,6 +11,12 @@ const app = express();
 const PORT = config.PORT;
 const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
+
+// 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
+const checkout = new YooCheckout({
+    shopId: config.YOOKASSA_SHOP_ID,
+    secretKey: config.YOOKASSA_SECRET_KEY
+});
 
 // Хранилище заказов (в продакшене заменить на базу данных)
 let orders = new Map();
@@ -744,6 +752,35 @@ async function loadFullProductCatalog() {
     };
 }
 
+// 💳 ФУНКЦИЯ СОЗДАНИЯ ПЛАТЕЖА В YOOKASSA
+async function createYooKassaPayment(orderId, amount, description, customerInfo) {
+    try {
+        const payment = await checkout.createPayment({
+            amount: {
+                value: amount.toFixed(2),
+                currency: 'RUB'
+            },
+            confirmation: {
+                type: 'redirect',
+                return_url: `${config.FRONTEND_URL}/payment/success?order=${orderId}`
+            },
+            capture: true,
+            description: description,
+            metadata: {
+                orderId: orderId,
+                customerName: customerInfo.customerName || 'Клиент',
+                phone: customerInfo.phone || ''
+            }
+        }, crypto.randomUUID());
+
+        console.log(`💳 Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
+        return payment;
+    } catch (error) {
+        console.error('❌ Ошибка создания платежа ЮKassa:', error);
+        throw error;
+    }
+}
+
 // Функции для работы с заказами
 function createOrder(orderData) {
     orderCounter++;
@@ -759,7 +796,16 @@ function createOrder(orderData) {
         ...orderData
     };
     
+    // 💾 СОХРАНЯЕМ В БД И В ПАМЯТЬ
     orders.set(orderId, order);
+    
+    // Сохраняем в базу данных
+    try {
+        OrdersDB.create(order);
+        console.log(`💾 Заказ ${orderId} сохранен в БД`);
+    } catch (error) {
+        console.error(`❌ Ошибка сохранения заказа ${orderId} в БД:`, error);
+    }
     
     // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 30 МИНУТ
     const timer = setTimeout(() => {
@@ -859,14 +905,111 @@ app.post('/api/orders', async (req, res) => {
         // Создаем заказ
         const order = createOrder(orderData);
         
-        console.log(`📝 Заказ #${order.id} создан, ожидает оплаты в течение 30 минут`);
+        console.log(`📝 Заказ #${order.id} создан, создаем платеж в ЮKassa...`);
+        
+        // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
+        const totalAmount = order.totals?.total || 0;
+        const description = `Заказ #${order.id} в Tundra Gourmet`;
+        
+        const customerInfo = {
+            customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
+            phone: order.phone || ''
+        };
+        
+        // Добавляем customerName в заказ
+        order.customerName = customerInfo.customerName;
+        
+        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
+        
+        // Сохраняем ID платежа в заказе
+        order.paymentId = payment.id;
+        order.paymentUrl = payment.confirmation.confirmation_url;
+        orders.set(order.id, order);
+        
+        // Обновляем в БД
+        try {
+            await OrdersDB.update(order.id, order);
+        } catch (dbError) {
+            console.error(`❌ Ошибка обновления заказа в БД:`, dbError);
+        }
+        
+        console.log(`✅ Заказ #${order.id} и платеж созданы успешно`);
         
         // 🔥 НЕ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ В АДМИН ГРУППУ
         // Уведомление будет отправлено только после успешной оплаты!
         
-        res.json({ ok: true, orderId: order.id });
+        res.json({ 
+            ok: true, 
+            orderId: order.id,
+            paymentUrl: payment.confirmation.confirmation_url,
+            paymentId: payment.id,
+            amount: totalAmount
+        });
     } catch (error) {
         console.error('Ошибка обработки заказа:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// API для получения истории покупок клиента
+app.get('/api/purchases/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Загружаем историю покупок из БД
+        const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        
+        // Подсчитываем статистику лояльности
+        const totalPurchases = purchases.length;
+        const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+        
+        // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
+        let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
+        
+        if (totalSpent < 10000) {
+            // 💜 0₽ - 9,999₽ → 0% скидка
+            loyaltyLevel = 0;
+            currentDiscount = 0;
+            nextLevelTarget = 10000;
+            nextLevelProgress = (totalSpent / 10000) * 100;
+        } else if (totalSpent < 25000) {
+            // ⭐ 10,000₽ - 24,999₽ → 3% скидка
+            loyaltyLevel = 1;
+            currentDiscount = 3;
+            nextLevelTarget = 25000;
+            nextLevelProgress = ((totalSpent - 10000) / (25000 - 10000)) * 100;
+        } else if (totalSpent < 50000) {
+            // ⭐ 25,000₽ - 49,999₽ → 5% скидка
+            loyaltyLevel = 2;
+            currentDiscount = 5;
+            nextLevelTarget = 50000;
+            nextLevelProgress = ((totalSpent - 25000) / (50000 - 25000)) * 100;
+        } else {
+            // ⭐ 50,000₽+ → 10% скидка
+            loyaltyLevel = 3;
+            currentDiscount = 10;
+            nextLevelTarget = null; // максимальный уровень
+            nextLevelProgress = 100;
+        }
+        
+        res.json({
+            ok: true,
+            purchases,
+            stats: {
+                totalPurchases,
+                totalSpent,
+                loyaltyLevel,
+                currentDiscount,
+                nextLevelProgress: Math.round(nextLevelProgress),
+                nextLevelTarget,
+                levelName: loyaltyLevel === 0 ? "Новичок" : 
+                          loyaltyLevel === 1 ? "Бронза" :
+                          loyaltyLevel === 2 ? "Серебро" : "Золото"
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Ошибка получения истории покупок:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
@@ -1145,6 +1288,34 @@ async function handlePaymentSuccess(payment) {
         order.paymentId = payment.id;
         order.updatedAt = new Date();
         orders.set(orderId, order);
+        
+        // 💾 СОХРАНЯЕМ В ИСТОРИЮ ПОКУПОК
+        try {
+            await PurchaseHistoryDB.create({
+                orderId: order.id,
+                userId: order.telegramUserId || order.userId || 'unknown',
+                customerName: order.customerName,
+                phone: order.phone,
+                totalAmount: order.totals?.total || 0,
+                itemsCount: order.cartItems?.length || 0,
+                items: order.cartItems,
+                paymentId: payment.id,
+                purchaseDate: new Date(),
+                deliveryZone: order.deliveryZone,
+                address: order.address
+            });
+            console.log(`💾 Покупка сохранена в историю для заказа ${orderId}`);
+        } catch (error) {
+            console.error(`❌ Ошибка сохранения истории покупки ${orderId}:`, error);
+        }
+        
+        // 🗄️ ОБНОВЛЯЕМ ЗАКАЗ В БД
+        try {
+            await OrdersDB.update(orderId, order);
+            console.log(`💾 Заказ ${orderId} обновлен в БД`);
+        } catch (error) {
+            console.error(`❌ Ошибка обновления заказа ${orderId} в БД:`, error);
+        }
         
         // 🔥 ТЕПЕРЬ ОТПРАВЛЯЕМ ПОЛНОЕ УВЕДОМЛЕНИЕ В АДМИН ГРУППУ
         if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
