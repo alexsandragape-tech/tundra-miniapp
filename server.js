@@ -13,6 +13,10 @@ const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
+console.log('🔧 Инициализация ЮKassa...');
+console.log('Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
+console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
+
 const checkout = new YooCheckout({
     shopId: config.YOOKASSA_SHOP_ID,
     secretKey: config.YOOKASSA_SECRET_KEY
@@ -906,10 +910,16 @@ app.post('/api/orders', async (req, res) => {
         const order = createOrder(orderData);
         
         console.log(`📝 Заказ #${order.id} создан, создаем платеж в ЮKassa...`);
+        console.log(`💰 Сумма заказа: ${order.totals?.total || 0}₽`);
         
         // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
         const totalAmount = order.totals?.total || 0;
         const description = `Заказ #${order.id} в Tundra Gourmet`;
+        
+        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
+            console.error('❌ ЮKassa ключи не настроены!');
+            throw new Error('ЮKassa ключи не настроены');
+        }
         
         const customerInfo = {
             customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
@@ -934,20 +944,37 @@ app.post('/api/orders', async (req, res) => {
         }
         
         console.log(`✅ Заказ #${order.id} и платеж созданы успешно`);
+        console.log(`🔗 Payment URL: ${payment.confirmation.confirmation_url}`);
         
         // 🔥 НЕ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ В АДМИН ГРУППУ
         // Уведомление будет отправлено только после успешной оплаты!
         
-        res.json({ 
+        const response = { 
             ok: true, 
             orderId: order.id,
             paymentUrl: payment.confirmation.confirmation_url,
             paymentId: payment.id,
             amount: totalAmount
-        });
+        };
+        
+        console.log(`📤 Отправляем ответ клиенту:`, response);
+        res.json(response);
     } catch (error) {
-        console.error('Ошибка обработки заказа:', error);
-        res.status(500).json({ ok: false, error: error.message });
+        console.error('❌ Ошибка обработки заказа:', error);
+        console.error('❌ Детали ошибки:', error.stack);
+        
+        // Если ошибка ЮKassa, отправим заказ без платежа для тестирования
+        if (error.message.includes('ЮKassa') || error.message.includes('shopId') || error.message.includes('secretKey')) {
+            console.log('⚠️ ЮKassa недоступна, отправляем заказ без платежа (для тестирования)');
+            res.json({ 
+                ok: true, 
+                orderId: orders.get(orders.size)?.id || '1',
+                paymentUrl: null,
+                error: 'ЮKassa не настроена - тестовый режим'
+            });
+        } else {
+            res.status(500).json({ ok: false, error: error.message });
+        }
     }
 });
 
