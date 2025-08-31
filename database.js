@@ -233,9 +233,23 @@ class AdminProductsDB {
                 products[row.category_id] = [];
             }
             
-            const productData = JSON.parse(row.product_data);
-            productData.available = row.is_available;
-            products[row.category_id].push(productData);
+            try {
+                let productData;
+                if (typeof row.product_data === 'string') {
+                    productData = JSON.parse(row.product_data);
+                } else if (typeof row.product_data === 'object') {
+                    productData = row.product_data;
+                } else {
+                    console.error('❌ Неверный формат product_data:', row.product_data);
+                    continue;
+                }
+                
+                productData.available = row.is_available;
+                products[row.category_id].push(productData);
+            } catch (error) {
+                console.error('❌ Ошибка парсинга товара:', error, 'Данные:', row.product_data);
+                continue;
+            }
         }
         
         return products;
