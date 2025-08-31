@@ -244,6 +244,29 @@
                 </div>
                     </div>
 
+    <!-- Экран успешной оплаты -->
+    <div id="payment-success-screen" class="screen">
+        <div class="payment-success-content">
+            <div class="success-icon">✅</div>
+            <div class="success-title">Оплата прошла успешно!</div>
+            <div class="success-subtitle">Ваш заказ принят в обработку</div>
+            <div class="success-details">
+                <div class="order-info">
+                    <div class="order-number-success">Заказ #<span id="success-order-id">-</span></div>
+                    <div class="order-amount-success"><span id="success-amount">0</span>₽</div>
+                </div>
+            </div>
+            <div class="success-actions">
+                <button class="primary-btn" onclick="viewPurchaseHistory()">
+                    📋 Посмотреть мои заказы
+                </button>
+                <button class="secondary-btn" onclick="showMain()">
+                    🏠 Вернуться в каталог
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Уведомления -->
     <div id="notification" class="notification"></div>
 
