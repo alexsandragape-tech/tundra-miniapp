@@ -1380,6 +1380,61 @@ async function loadPurchaseHistory() {
     }
 }
 
+// 💳 ФУНКЦИЯ ОБРАБОТКИ УСПЕШНОЙ ОПЛАТЫ
+function handlePaymentSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order');
+    
+    if (orderId) {
+        console.log(`✅ Обрабатываем успешную оплату заказа #${orderId}`);
+        
+        // Получаем данные заказа из localStorage
+        const pendingOrder = localStorage.getItem('pending_order');
+        if (pendingOrder) {
+            try {
+                const orderData = JSON.parse(pendingOrder);
+                
+                // Показываем экран успешной оплаты
+                document.getElementById('success-order-id').textContent = orderId;
+                document.getElementById('success-amount').textContent = orderData.amount || 0;
+                showScreen('payment-success-screen');
+                
+                // Обновляем профиль пользователя
+                if (orderData.cartTotal) {
+                    userProfile.totalSpent += orderData.cartTotal.total || 0;
+                    userProfile.completedOrders += 1;
+                    localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
+                    console.log('✅ Профиль пользователя обновлен после оплаты');
+                }
+                
+                // Удаляем данные ожидающего заказа
+                localStorage.removeItem('pending_order');
+                
+                // Обновляем карту лояльности
+                updateLoyaltyCard();
+                
+                // Очищаем URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+            } catch (error) {
+                console.error('Ошибка обработки данных заказа:', error);
+                showMain();
+            }
+        } else {
+            console.warn('Данные заказа не найдены в localStorage');
+            showMain();
+        }
+    }
+}
+
+// Функция быстрого перехода к истории покупок
+function viewPurchaseHistory() {
+    showProfile();
+    setTimeout(() => {
+        showMyOrders();
+    }, 100);
+}
+
 // Функция показа моих заказов
 async function showMyOrders() {
     showScreen('my-orders-screen');
@@ -1634,7 +1689,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const result = await response.json();
                 if (result.ok) {
-                    // 🔥 ЗАКАЗ СОЗДАН - ПЕРЕХОДИМ К ОЖИДАНИЮ ОПЛАТЫ
+                    // 🔥 ЗАКАЗ СОЗДАН - ПОЛУЧАЕМ URL ДЛЯ ОПЛАТЫ
                     currentOrderId = parseInt(result.orderId);
                     orderCounter = currentOrderId;
                     localStorage.setItem('tundra_order_counter', orderCounter.toString());
@@ -1644,19 +1699,41 @@ document.addEventListener('DOMContentLoaded', () => {
                         orderId: currentOrderId,
                         cartTotal: calculateCartTotal(),
                         cartItems: Object.values(cart).filter(i => i.quantity > 0),
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        paymentId: result.paymentId,
+                        amount: result.amount
                     };
                     localStorage.setItem('pending_order', JSON.stringify(orderData));
                     
-                    console.log('📝 Заказ создан, ожидает оплаты. Профиль будет обновлен ТОЛЬКО после оплаты!');
-                    
-                    // Показываем экран ожидания оплаты
-                    startPaymentTimer(currentOrderId);
+                    console.log(`💳 Заказ #${currentOrderId} создан, перенаправляем на оплату ЮKassa...`);
                     
                     // Очищаем корзину
                     cart = {};
                     localStorage.setItem('tundra_cart', JSON.stringify(cart));
                     updateCartBadge();
+                    
+                    // 💳 ПЕРЕНАПРАВЛЯЕМ НА ОПЛАТУ YOOKASSA
+                    if (result.paymentUrl) {
+                        console.log(`🚀 Открываем страницу оплаты: ${result.paymentUrl}`);
+                        
+                        // Проверяем, запускается ли в Telegram
+                        if (window.Telegram?.WebApp) {
+                            // В Telegram Web App открываем через openLink
+                            window.Telegram.WebApp.openLink(result.paymentUrl);
+                        } else {
+                            // В обычном браузере открываем в том же окне
+                            window.location.href = result.paymentUrl;
+                        }
+                        
+                        // Показываем экран ожидания оплаты как fallback
+                        setTimeout(() => {
+                            startPaymentTimer(currentOrderId);
+                        }, 1000);
+                    } else {
+                        // Fallback: показываем экран ожидания оплаты
+                        console.warn('⚠️ PaymentUrl не получен, показываем экран ожидания');
+                        startPaymentTimer(currentOrderId);
+                    }
                     
                     return; // Выходим из функции
                 }
@@ -1710,6 +1787,13 @@ function renderCategories() {
 
 // Инициализация приложения
 async function initApp() {
+    // 💳 ПРОВЕРЯЕМ ВОЗВРАТ С ОПЛАТЫ (делаем это первым)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('order')) {
+        handlePaymentSuccess();
+        return; // Выходим, т.к. обработка успешной оплаты покажет нужный экран
+    }
+    
     // Загружаем товары с сервера перед инициализацией
     await loadProductsFromServer();
     
