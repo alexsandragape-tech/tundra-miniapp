@@ -3,7 +3,19 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
-const { YooCheckout } = require('@a2seven/yoo-checkout');
+// Проверяем разные варианты импорта ЮKassa
+let YooCheckout;
+try {
+    // Пробуем новый способ импорта
+    YooCheckout = require('@a2seven/yoo-checkout').YooCheckout;
+} catch (e1) {
+    try {
+        // Пробуем старый способ импорта
+        YooCheckout = require('@a2seven/yoo-checkout');
+    } catch (e2) {
+        console.error('❌ Не удалось импортировать ЮKassa:', e1.message, e2.message);
+    }
+}
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
 
@@ -13,21 +25,33 @@ const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
-console.log('🚀 НОВАЯ ВЕРСИЯ SERVER.JS ЗАГРУЖЕНА - ЮKassa интеграция!');
+console.log('🚀 ВЕРСИЯ 2.0 - ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ RAILWAY!');
+console.log('⏰ Время сборки:', new Date().toISOString());
 console.log('🔧 Инициализация ЮKassa...');
 console.log('Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 
 let checkout = null;
 try {
+    if (!YooCheckout) {
+        throw new Error('ЮKassa класс не найден');
+    }
+    
+    if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
+        throw new Error('Не настроены ключи ЮKassa');
+    }
+    
     checkout = new YooCheckout({
         shopId: config.YOOKASSA_SHOP_ID,
         secretKey: config.YOOKASSA_SECRET_KEY
     });
+    
     console.log('✅ ЮKassa инициализирована успешно');
+    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.2.5');
 } catch (error) {
     console.error('❌ Ошибка инициализации ЮKassa:', error.message);
     console.log('⚠️ Приложение запустится без ЮKassa');
+    console.log('🔧 Проверьте: 1) Установлен ли пакет 2) Настроены ли ключи');
 }
 
 // Хранилище заказов (в продакшене заменить на базу данных)
@@ -984,13 +1008,20 @@ app.post('/api/orders', async (req, res) => {
         console.error('❌ Детали ошибки:', error.stack);
         
         // Если ошибка ЮKassa, отправим заказ без платежа для тестирования
-        if (error.message.includes('ЮKassa') || error.message.includes('shopId') || error.message.includes('secretKey')) {
-            console.log('⚠️ ЮKassa недоступна, отправляем заказ без платежа (для тестирования)');
+        if (error.message.includes('ЮKassa') || error.message.includes('shopId') || error.message.includes('secretKey') || error.message.includes('недоступна')) {
+            console.log('⚠️ ЮKassa недоступна, отправляем заказ без платежа (ТЕСТОВЫЙ РЕЖИМ)');
+            
+            // Генерируем тестовую ссылку для демонстрации
+            const testPaymentUrl = `https://yookassa.ru/demo/checkout?orderId=${orderId}&amount=${order.totals?.total || 0}`;
+            
             res.json({ 
                 ok: true, 
-                orderId: orders.get(orders.size)?.id || '1',
-                paymentUrl: null,
-                error: 'ЮKassa не настроена - тестовый режим'
+                orderId: orderId,
+                paymentUrl: testPaymentUrl,
+                paymentId: 'test_payment_' + orderId,
+                amount: order.totals?.total || 0,
+                isTestMode: true,
+                message: 'ТЕСТОВЫЙ РЕЖИМ: ЮKassa не настроена'
             });
         } else {
             res.status(500).json({ ok: false, error: error.message });
