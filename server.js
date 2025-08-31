@@ -1389,11 +1389,19 @@ app.put('/api/admin/products', requireAdminAuth, async (req, res) => {
 });
 
 // Переключение доступности товара
-app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, (req, res) => {
+app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, async (req, res) => {
     try {
         const { categoryId, productId } = req.params;
         
-        const categoryProducts = adminProducts.get(categoryId);
+        // 🗄️ ЗАГРУЖАЕМ ВСЕ ТОВАРЫ ИЗ БД
+        let allProducts = await AdminProductsDB.loadAll();
+        
+        // Если в БД пусто, используем память
+        if (Object.keys(allProducts).length === 0) {
+            allProducts = Object.fromEntries(adminProducts);
+        }
+        
+        const categoryProducts = allProducts[categoryId];
         if (!categoryProducts) {
             return res.status(404).json({ ok: false, error: 'Категория не найдена' });
         }
@@ -1406,11 +1414,23 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
         // Переключаем доступность
         product.available = !product.available;
         
-        console.log(`🔧 Товар ${productId} ${product.available ? 'показан' : 'скрыт'}`);
+        // 💾 СОХРАНЯЕМ ВСЕ ТОВАРЫ ОБРАТНО В БД
+        await AdminProductsDB.saveAll(allProducts);
+        
+        // Обновляем локальный кэш
+        if (adminProducts.has(categoryId)) {
+            const localProducts = adminProducts.get(categoryId);
+            const localProduct = localProducts.find(p => p.id === productId);
+            if (localProduct) {
+                localProduct.available = product.available;
+            }
+        }
+        
+        console.log(`🔧 Товар ${productId} ${product.available ? 'показан' : 'скрыт'} и сохранен в БД`);
         res.json({ ok: true, product, available: product.available });
         
     } catch (error) {
-        console.error('Ошибка переключения товара:', error);
+        console.error('❌ Ошибка переключения товара:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
