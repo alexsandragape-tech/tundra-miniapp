@@ -53,8 +53,16 @@ async function initializeDatabase() {
                 id SERIAL PRIMARY KEY,
                 user_id VARCHAR(100) NOT NULL,
                 order_id VARCHAR(50) NOT NULL,
+                customer_name VARCHAR(255),
+                phone VARCHAR(20),
                 amount INTEGER NOT NULL,
+                items_count INTEGER DEFAULT 0,
+                items_data TEXT,
+                payment_id VARCHAR(100),
                 purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                delivery_zone VARCHAR(20),
+                address_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (order_id) REFERENCES orders(order_id)
             )
         `);
@@ -186,6 +194,88 @@ class PurchaseHistoryDB {
         `;
         const result = await pool.query(query, [userId]);
         return parseInt(result.rows[0].orders_count);
+    }
+    
+    // 💾 СОЗДАТЬ ЗАПИСЬ О ПОКУПКЕ (для интеграции с server.js)
+    static async create(purchaseData) {
+        const {
+            orderId,
+            userId,
+            customerName,
+            phone,
+            totalAmount,
+            itemsCount,
+            items,
+            paymentId,
+            purchaseDate,
+            deliveryZone,
+            address
+        } = purchaseData;
+        
+        const query = `
+            INSERT INTO purchase_history (
+                order_id, user_id, customer_name, phone, amount, 
+                items_count, items_data, payment_id, purchase_date, 
+                delivery_zone, address_data
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING *
+        `;
+        
+        const values = [
+            orderId,
+            userId,
+            customerName,
+            phone,
+            totalAmount,
+            itemsCount,
+            JSON.stringify(items),
+            paymentId,
+            purchaseDate,
+            deliveryZone,
+            JSON.stringify(address)
+        ];
+        
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }
+    
+    // 📋 ПОЛУЧИТЬ ВСЕ ПОКУПКИ ПОЛЬЗОВАТЕЛЯ (для API)
+    static async getByUserId(userId) {
+        const query = `
+            SELECT 
+                order_id,
+                customer_name,
+                phone,
+                amount as totalAmount,
+                items_count as itemsCount,
+                items_data,
+                payment_id,
+                purchase_date,
+                delivery_zone,
+                address_data
+            FROM purchase_history 
+            WHERE user_id = $1 
+            ORDER BY purchase_date DESC
+        `;
+        
+        const result = await pool.query(query, [userId]);
+        
+        // Парсим JSON данные
+        return result.rows.map(row => {
+            try {
+                row.items = JSON.parse(row.items_data);
+                row.address = JSON.parse(row.address_data);
+                delete row.items_data;
+                delete row.address_data;
+                return row;
+            } catch (error) {
+                console.error('❌ Ошибка парсинга данных покупки:', error);
+                row.items = [];
+                row.address = {};
+                return row;
+            }
+        });
     }
 }
 
