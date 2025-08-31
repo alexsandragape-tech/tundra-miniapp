@@ -1554,6 +1554,20 @@ app.get(/^\/(?!api).*/, (req, res) => {
 // Запуск сервера с инициализацией БД
 async function startServer() {
     try {
+        // 🗄️ ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БД (если установлена переменная)
+        if (process.env.CLEAR_DATABASE === 'true') {
+            console.log('🚨 ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БАЗЫ ДАННЫХ...');
+            try {
+                const { Pool } = require('pg');
+                const pool = new Pool({ connectionString: config.DATABASE_URL });
+                await pool.query('DELETE FROM admin_products');
+                await pool.end();
+                console.log('✅ Таблица admin_products очищена');
+            } catch (error) {
+                console.error('❌ Ошибка очистки БД:', error);
+            }
+        }
+        
         // Инициализируем базу данных
         await initializeDatabase();
         
