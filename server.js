@@ -13,6 +13,7 @@ const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
+console.log('🚀 НОВАЯ ВЕРСИЯ SERVER.JS ЗАГРУЖЕНА - ЮKassa интеграция!');
 console.log('🔧 Инициализация ЮKassa...');
 console.log('Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
@@ -903,11 +904,14 @@ app.get('/ping', (req, res) => {
 
 // API для заказов
 app.post('/api/orders', async (req, res) => {
+    console.log('🔥 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА!');
     try {
         const orderData = req.body;
+        console.log('📦 Данные заказа:', JSON.stringify(orderData, null, 2));
         
         // Создаем заказ
         const order = createOrder(orderData);
+        console.log('✅ Заказ создан:', order.id);
         
         console.log(`📝 Заказ #${order.id} создан, создаем платеж в ЮKassa...`);
         console.log(`💰 Сумма заказа: ${order.totals?.total || 0}₽`);
@@ -918,8 +922,12 @@ app.post('/api/orders', async (req, res) => {
         
         if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
             console.error('❌ ЮKassa ключи не настроены!');
+            console.error('❌ Shop ID:', config.YOOKASSA_SHOP_ID);
+            console.error('❌ Secret Key:', config.YOOKASSA_SECRET_KEY ? 'ЕСТЬ' : 'НЕТ');
             throw new Error('ЮKassa ключи не настроены');
         }
+        
+        console.log('💳 ЮKassa ключи проверены - создаем платеж...');
         
         const customerInfo = {
             customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
@@ -1817,4 +1825,3 @@ process.on('SIGINT', () => {
     console.log('🛑 Получен сигнал SIGINT, завершаем работу...');
     process.exit(0);
 });
- 
