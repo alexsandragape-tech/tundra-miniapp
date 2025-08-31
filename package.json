@@ -19,6 +19,7 @@
   "author": "Tundra Gourmet",
   "license": "ISC",
   "dependencies": {
+    "@a2seven/yoo-checkout": "^1.4.0",
     "axios": "^1.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
