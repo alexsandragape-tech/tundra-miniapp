@@ -2,10 +2,15 @@
 const { Pool } = require('pg');
 const config = require('./config');
 
-// Создаем пул соединений
+// Создаем пул соединений с ограничениями
 const pool = new Pool({
     connectionString: config.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: 10, // Максимум 10 соединений
+    min: 2,  // Минимум 2 соединения
+    idle: 10000, // 10 секунд до закрытия неактивного соединения
+    connectionTimeoutMillis: 10000, // 10 секунд на подключение
+    idleTimeoutMillis: 30000, // 30 секунд до отключения idle соединения
 });
 
 // 🔧 ИНИЦИАЛИЗАЦИЯ ТАБЛИЦ
