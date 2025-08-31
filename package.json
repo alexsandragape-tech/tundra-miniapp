@@ -19,12 +19,12 @@
   "author": "Tundra Gourmet",
   "license": "ISC",
   "dependencies": {
-    "@a2seven/yoo-checkout": "^1.4.0",
-    "axios": "^1.6.0",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "pg": "^8.11.3",
-    "pg-pool": "^3.6.2"
+    "@a2seven/yoo-checkout": "1.2.5",
+    "axios": "1.6.8",
+    "dotenv": "16.4.5",
+    "express": "4.19.2",
+    "pg": "8.12.0",
+    "pg-pool": "3.6.2"
   },
   "engines": {
     "node": ">=18.0.0"
