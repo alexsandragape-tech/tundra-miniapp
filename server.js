@@ -18,10 +18,17 @@ console.log('🔧 Инициализация ЮKassa...');
 console.log('Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 
-const checkout = new YooCheckout({
-    shopId: config.YOOKASSA_SHOP_ID,
-    secretKey: config.YOOKASSA_SECRET_KEY
-});
+let checkout = null;
+try {
+    checkout = new YooCheckout({
+        shopId: config.YOOKASSA_SHOP_ID,
+        secretKey: config.YOOKASSA_SECRET_KEY
+    });
+    console.log('✅ ЮKassa инициализирована успешно');
+} catch (error) {
+    console.error('❌ Ошибка инициализации ЮKassa:', error.message);
+    console.log('⚠️ Приложение запустится без ЮKassa');
+}
 
 // Хранилище заказов (в продакшене заменить на базу данных)
 let orders = new Map();
@@ -928,6 +935,11 @@ app.post('/api/orders', async (req, res) => {
         }
         
         console.log('💳 ЮKassa ключи проверены - создаем платеж...');
+        
+        if (!checkout) {
+            console.error('❌ ЮKassa не инициализирована!');
+            throw new Error('ЮKassa недоступна');
+        }
         
         const customerInfo = {
             customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
