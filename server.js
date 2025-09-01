@@ -798,7 +798,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             },
             confirmation: {
                 type: 'redirect',
-                return_url: `${config.FRONTEND_URL}/payment/success?order=${orderId}`
+                return_url: `https://tundra-miniapp-production.up.railway.app/payment/success?order=${orderId}`
             },
             capture: true,
             description: description,
@@ -1012,14 +1012,15 @@ app.post('/api/orders', async (req, res) => {
             console.log('⚠️ ЮKassa недоступна, отправляем заказ без платежа (ТЕСТОВЫЙ РЕЖИМ)');
             
             // Генерируем тестовую ссылку для демонстрации
-            const testPaymentUrl = `https://yookassa.ru/demo/checkout?orderId=${orderId}&amount=${order.totals?.total || 0}`;
+            const fallbackOrderId = order?.id || 'test_1';
+            const testPaymentUrl = `https://yookassa.ru/demo/checkout?orderId=${fallbackOrderId}&amount=${order?.totals?.total || 0}`;
             
             res.json({ 
                 ok: true, 
-                orderId: orderId,
+                orderId: fallbackOrderId,
                 paymentUrl: testPaymentUrl,
-                paymentId: 'test_payment_' + orderId,
-                amount: order.totals?.total || 0,
+                paymentId: 'test_payment_' + fallbackOrderId,
+                amount: order?.totals?.total || 0,
                 isTestMode: true,
                 message: 'ТЕСТОВЫЙ РЕЖИМ: ЮKassa не настроена'
             });
@@ -1488,50 +1489,7 @@ async function handlePaymentCanceled(payment) {
     }
 }
 
-// API для создания платежа через ЮKassa
-app.post('/api/payments/create', async (req, res) => {
-    try {
-        const { orderId, amount, description } = req.body;
-        
-        // Проверяем существование заказа
-        const order = getOrder(orderId);
-        if (!order) {
-            return res.status(404).json({ ok: false, error: 'Заказ не найден' });
-        }
-        
-        // Создаем платеж в ЮKassa
-        const paymentData = {
-            amount: {
-                value: amount.toString(),
-                currency: 'RUB'
-            },
-            capture: true,
-            confirmation: {
-                type: 'redirect',
-                return_url: `${process.env.FRONTEND_URL || 'https://your-domain.com'}/payment-success`
-            },
-            description: description || `Заказ #${orderId}`,
-            metadata: {
-                orderId: orderId
-            }
-        };
-        
-        // В продакшене здесь будет реальный запрос к ЮKassa API
-        // Пока возвращаем заглушку
-        const mockPayment = {
-            id: `payment_${Date.now()}`,
-            status: 'pending',
-            confirmation_url: `https://yoomoney.ru/checkout/payments/v2/contract?orderId=${orderId}`,
-            ...paymentData
-        };
-        
-        res.json({ ok: true, payment: mockPayment });
-        
-    } catch (error) {
-        console.error('Ошибка создания платежа:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
+// API для создания платежа через ЮKassa - УДАЛЕН (дублирует /api/orders)
 
 // 🔧 MIDDLEWARE ДЛЯ ЗАЩИТЫ АДМИН API
 function requireAdminAuth(req, res, next) {
