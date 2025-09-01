@@ -35,6 +35,8 @@ console.log('🔑 Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_I
 console.log('🔑 Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 console.log('🔑 Shop ID полный:', config.YOOKASSA_SHOP_ID);
 console.log('🔑 Secret Key полный:', config.YOOKASSA_SECRET_KEY);
+console.log('🔑 Shop ID длина:', config.YOOKASSA_SHOP_ID?.length);
+console.log('🔑 Secret Key длина:', config.YOOKASSA_SECRET_KEY?.length);
 
 let checkout = null;
 try {
@@ -49,11 +51,12 @@ try {
     console.log('🔧 Создаем экземпляр YooCheckout...');
     checkout = new YooCheckout({
         shopId: config.YOOKASSA_SHOP_ID,
-        secretKey: config.YOOKASSA_SECRET_KEY
+        secretKey: config.YOOKASSA_SECRET_KEY,
+        timeout: 60000
     });
     
     console.log('✅ ЮKassa инициализирована успешно');
-    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.2.0');
+    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.3.0');
     console.log('🔑 Shop ID:', config.YOOKASSA_SHOP_ID);
     console.log('🔑 Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 } catch (error) {
