@@ -11,9 +11,13 @@ let YooCheckout;
 try {
     console.log('🔧 Попытка импорта ЮKassa...');
     const yooModule = require('@a2seven/yoo-checkout');
-    YooCheckout = yooModule.YooCheckout;
+    
+    // Пробуем разные способы импорта
+    YooCheckout = yooModule.YooCheckout || yooModule.default || yooModule;
+    
     console.log('✅ ЮKassa модуль импортирован успешно');
     console.log('📦 YooCheckout:', typeof YooCheckout);
+    console.log('📦 Доступные методы:', Object.keys(yooModule));
 } catch (error) {
     console.error('❌ Ошибка импорта ЮKassa:', error.message);
     console.error('❌ Stack:', error.stack);
@@ -56,7 +60,7 @@ try {
     });
     
     console.log('✅ ЮKassa инициализирована успешно');
-    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.3.0');
+    console.log('📦 Версия пакета: @a2seven/yoo-checkout@^1.0.0');
     console.log('🔑 Shop ID:', config.YOOKASSA_SHOP_ID);
     console.log('🔑 Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 } catch (error) {
@@ -826,7 +830,12 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
         };
         
         console.log('💳 Отправляем запрос в ЮKassa...');
-        const payment = await checkout.createPayment(paymentData, crypto.randomUUID());
+        
+        // Создаем уникальный ключ идемпотентности
+        const idempotenceKey = crypto.randomUUID();
+        console.log('🔑 Idempotence Key:', idempotenceKey);
+        
+        const payment = await checkout.createPayment(paymentData, idempotenceKey);
 
         console.log(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
         console.log(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
