@@ -1703,6 +1703,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         cartItems: Object.values(cart).filter(i => i.quantity > 0),
                         timestamp: Date.now(),
                         paymentId: result.paymentId,
+                        paymentUrl: result.paymentUrl,
                         amount: result.amount
                     };
                     localStorage.setItem('pending_order', JSON.stringify(orderData));
@@ -2243,26 +2244,35 @@ async function cancelPayment() {
     showMain();
 }
 
-// Переход к оплате (заглушка пока)
+// Переход к оплате
 function redirectToPayment() {
     if (!currentOrderId) return;
     
     showNotification('🔄 Перенаправляем на оплату...', 'info');
     
-    // Здесь будет интеграция с ЮKassa
-    console.log('💳 Переход к оплате заказа:', currentOrderId);
-    
-    // Пока что имитируем успешную оплату через 3 секунды (для тестирования)
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        setTimeout(() => {
-            console.log('🧪 Имитируем успешную оплату (тестовый режим)');
-            const mockOrder = {
-                id: currentOrderId,
-                paymentStatus: 'paid'
-            };
-            handleSuccessfulPayment(mockOrder);
-        }, 3000);
+    // Получаем URL оплаты из localStorage
+    const pendingOrder = localStorage.getItem('pending_order');
+    if (pendingOrder) {
+        try {
+            const orderData = JSON.parse(pendingOrder);
+            if (orderData.paymentUrl) {
+                console.log('💳 Переход к оплате заказа:', currentOrderId);
+                console.log('🔗 Payment URL:', orderData.paymentUrl);
+                
+                // Открываем страницу оплаты
+                if (window.Telegram?.WebApp) {
+                    window.Telegram.WebApp.openLink(orderData.paymentUrl);
+                } else {
+                    window.location.href = orderData.paymentUrl;
+                }
+                return;
+            }
+        } catch (error) {
+            console.error('Ошибка получения paymentUrl:', error);
+        }
     }
+    
+    showNotification('❌ Ошибка: URL оплаты не найден', 'error');
 }
 
 // Функция переключения уведомлений
