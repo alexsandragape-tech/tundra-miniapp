@@ -144,6 +144,48 @@ class OrdersDB {
         return null;
     }
     
+    // Обновить заказ
+    static async update(orderId, updateData) {
+        const fields = [];
+        const values = [];
+        let paramCounter = 1;
+        
+        // Динамически строим запрос
+        for (const [key, value] of Object.entries(updateData)) {
+            if (key === 'paymentId') {
+                fields.push(`payment_id = $${paramCounter}`);
+            } else if (key === 'paymentUrl') {
+                fields.push(`payment_url = $${paramCounter}`);
+            } else {
+                fields.push(`${key} = $${paramCounter}`);
+            }
+            values.push(value);
+            paramCounter++;
+        }
+        
+        if (fields.length === 0) return null;
+        
+        fields.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(orderId);
+        
+        const query = `
+            UPDATE orders 
+            SET ${fields.join(', ')}
+            WHERE order_id = $${paramCounter}
+            RETURNING *
+        `;
+        
+        const result = await pool.query(query, values);
+        if (result.rows.length > 0) {
+            const order = result.rows[0];
+            if (order.items) {
+                order.items = JSON.parse(order.items);
+            }
+            return order;
+        }
+        return null;
+    }
+    
     // Получить все заказы пользователя
     static async getByUserId(userId) {
         const query = 'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC';
