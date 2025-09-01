@@ -799,7 +799,12 @@ async function loadFullProductCatalog() {
 // 💳 ФУНКЦИЯ СОЗДАНИЯ ПЛАТЕЖА В YOOKASSA
 async function createYooKassaPayment(orderId, amount, description, customerInfo) {
     try {
-        const payment = await checkout.createPayment({
+        console.log('💳 Создаем платеж ЮKassa с параметрами:');
+        console.log('   - Сумма:', amount.toFixed(2), 'RUB');
+        console.log('   - Описание:', description);
+        console.log('   - Клиент:', customerInfo.customerName);
+        
+        const paymentData = {
             amount: {
                 value: amount.toFixed(2),
                 currency: 'RUB'
@@ -815,12 +820,20 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
                 customerName: customerInfo.customerName || 'Клиент',
                 phone: customerInfo.phone || ''
             }
-        }, crypto.randomUUID());
+        };
+        
+        console.log('💳 Отправляем запрос в ЮKassa...');
+        const payment = await checkout.createPayment(paymentData, crypto.randomUUID());
 
-        console.log(`💳 Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
+        console.log(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
+        console.log(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
         return payment;
     } catch (error) {
-        console.error('❌ Ошибка создания платежа ЮKassa:', error);
+        console.error('❌ Ошибка создания платежа ЮKassa:');
+        console.error('   - Сообщение:', error.message);
+        console.error('   - Код:', error.code);
+        console.error('   - Статус:', error.status);
+        console.error('   - Детали:', error.response?.data);
         throw error;
     }
 }
