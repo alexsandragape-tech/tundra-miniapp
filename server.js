@@ -1,3 +1,6 @@
+console.log('🚀 СТАРТ СЕРВЕРА - НОВАЯ ВЕРСИЯ С ДИАГНОСТИКОЙ ЮKASSA!');
+console.log('⏰ Время запуска:', new Date().toISOString());
+
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
