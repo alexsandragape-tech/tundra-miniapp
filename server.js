@@ -23,11 +23,17 @@ class YooKassaAPI {
         try {
             console.log('💳 Создаем платеж через нативный API...');
             
+            // Попробуем разные варианты авторизации
+            console.log('🔐 Пробуем Basic авторизацию (Shop ID + Secret Key)...');
+            
             const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Idempotence-Key': idempotenceKey,
-                    'Authorization': `Bearer ${this.secretKey}`
+                    'Idempotence-Key': idempotenceKey
+                },
+                auth: {
+                    username: this.shopId,
+                    password: this.secretKey
                 },
                 timeout: 30000
             });
@@ -36,10 +42,46 @@ class YooKassaAPI {
             return response.data;
             
         } catch (error) {
-            console.error('❌ Ошибка создания платежа:');
-            console.error('   - Статус:', error.response?.status);
-            console.error('   - Данные:', JSON.stringify(error.response?.data, null, 2));
-            throw error;
+            console.error('❌ Basic авторизация не сработала, пробуем Bearer...');
+            
+            try {
+                const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotence-Key': idempotenceKey,
+                        'Authorization': `Bearer ${this.secretKey}`
+                    },
+                    timeout: 30000
+                });
+                
+                console.log('✅ Платеж создан через Bearer:', response.data.id);
+                return response.data;
+                
+            } catch (bearerError) {
+                console.error('❌ Bearer тоже не работает, пробуем только Secret Key...');
+                
+                try {
+                    const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Idempotence-Key': idempotenceKey,
+                            'Authorization': this.secretKey
+                        },
+                        timeout: 30000
+                    });
+                    
+                    console.log('✅ Платеж создан через Secret Key:', response.data.id);
+                    return response.data;
+                    
+                } catch (finalError) {
+                    console.error('❌ ВСЕ методы авторизации провалились!');
+                    console.error('   - Basic статус:', error.response?.status);
+                    console.error('   - Bearer статус:', bearerError.response?.status);
+                    console.error('   - Secret статус:', finalError.response?.status);
+                    console.error('   - Финальная ошибка:', JSON.stringify(finalError.response?.data, null, 2));
+                    throw finalError;
+                }
+            }
         }
     }
 }
