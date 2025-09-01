@@ -67,9 +67,49 @@ async function initializeDatabase() {
                 purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 delivery_zone VARCHAR(20),
                 address_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (order_id) REFERENCES orders(order_id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        `);
+        
+        // Добавляем отсутствующие колонки если их нет
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='customer_name') THEN
+                    ALTER TABLE purchase_history ADD COLUMN customer_name VARCHAR(255);
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='phone') THEN
+                    ALTER TABLE purchase_history ADD COLUMN phone VARCHAR(20);
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='items_count') THEN
+                    ALTER TABLE purchase_history ADD COLUMN items_count INTEGER DEFAULT 0;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='items_data') THEN
+                    ALTER TABLE purchase_history ADD COLUMN items_data TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='payment_id') THEN
+                    ALTER TABLE purchase_history ADD COLUMN payment_id VARCHAR(100);
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='delivery_zone') THEN
+                    ALTER TABLE purchase_history ADD COLUMN delivery_zone VARCHAR(20);
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='purchase_history' AND column_name='address_data') THEN
+                    ALTER TABLE purchase_history ADD COLUMN address_data TEXT;
+                END IF;
+            END $$;
         `);
         
         // Создаем индексы для производительности
