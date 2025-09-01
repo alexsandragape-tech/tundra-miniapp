@@ -4,7 +4,18 @@ const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
 // Импорт ЮKassa
-const { YooCheckout } = require('@a2seven/yoo-checkout');
+let YooCheckout;
+try {
+    console.log('🔧 Попытка импорта ЮKassa...');
+    const yooModule = require('@a2seven/yoo-checkout');
+    YooCheckout = yooModule.YooCheckout;
+    console.log('✅ ЮKassa модуль импортирован успешно');
+    console.log('📦 YooCheckout:', typeof YooCheckout);
+} catch (error) {
+    console.error('❌ Ошибка импорта ЮKassa:', error.message);
+    console.error('❌ Stack:', error.stack);
+    YooCheckout = null;
+}
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
 
@@ -17,15 +28,22 @@ const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 console.log('🚀 ВЕРСИЯ 2.0 - ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ RAILWAY!');
 console.log('⏰ Время сборки:', new Date().toISOString());
 console.log('🔧 Инициализация ЮKassa...');
-console.log('Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
-console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
+console.log('🔑 Shop ID:', config.YOOKASSA_SHOP_ID ? `${config.YOOKASSA_SHOP_ID.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
+console.log('🔑 Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
+console.log('🔑 Shop ID полный:', config.YOOKASSA_SHOP_ID);
+console.log('🔑 Secret Key полный:', config.YOOKASSA_SECRET_KEY);
 
 let checkout = null;
 try {
+    if (!YooCheckout) {
+        throw new Error('YooCheckout класс не найден - пакет не установлен');
+    }
+    
     if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
         throw new Error('Не настроены ключи ЮKassa');
     }
     
+    console.log('🔧 Создаем экземпляр YooCheckout...');
     checkout = new YooCheckout({
         shopId: config.YOOKASSA_SHOP_ID,
         secretKey: config.YOOKASSA_SECRET_KEY
