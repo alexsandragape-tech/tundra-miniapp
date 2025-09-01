@@ -826,7 +826,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
 }
 
 // Функции для работы с заказами
-function createOrder(orderData) {
+async function createOrder(orderData) {
     orderCounter++;
     const orderId = orderCounter.toString();
     
@@ -963,7 +963,7 @@ app.post('/api/orders', async (req, res) => {
         console.log('📦 Данные заказа:', JSON.stringify(orderData, null, 2));
         
         // Создаем заказ
-        const order = createOrder(orderData);
+        const order = await createOrder(orderData);
         console.log('✅ Заказ создан:', order.id);
         
         console.log(`📝 Заказ #${order.id} создан, создаем платеж в ЮKassa...`);
