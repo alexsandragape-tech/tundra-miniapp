@@ -16,6 +16,7 @@ class YooKassaAPI {
         console.log('💳 YooKassa API инициализирована');
         console.log('🔑 Shop ID:', shopId);
         console.log('🔑 Secret Key:', secretKey ? `${secretKey.substring(0, 10)}***` : 'НЕ УСТАНОВЛЕН');
+        console.log('🔐 Тип авторизации: Bearer (современный)');
     }
     
     async createPayment(paymentData, idempotenceKey) {
@@ -26,7 +27,7 @@ class YooKassaAPI {
                 headers: {
                     'Content-Type': 'application/json',
                     'Idempotence-Key': idempotenceKey,
-                    'Authorization': `Basic ${Buffer.from(`${this.shopId}:${this.secretKey}`).toString('base64')}`
+                    'Authorization': `Bearer ${this.secretKey}`
                 },
                 timeout: 30000
             });
