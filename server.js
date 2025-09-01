@@ -3,19 +3,8 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
-// Проверяем разные варианты импорта ЮKassa
-let YooCheckout;
-try {
-    // Пробуем новый способ импорта
-    YooCheckout = require('@a2seven/yoo-checkout').YooCheckout;
-} catch (e1) {
-    try {
-        // Пробуем старый способ импорта
-        YooCheckout = require('@a2seven/yoo-checkout');
-    } catch (e2) {
-        console.error('❌ Не удалось импортировать ЮKassa:', e1.message, e2.message);
-    }
-}
+// Импорт ЮKassa
+const { YooCheckout } = require('@a2seven/yoo-checkout');
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
 
@@ -33,10 +22,6 @@ console.log('Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRE
 
 let checkout = null;
 try {
-    if (!YooCheckout) {
-        throw new Error('ЮKassa класс не найден');
-    }
-    
     if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
         throw new Error('Не настроены ключи ЮKassa');
     }
@@ -47,7 +32,9 @@ try {
     });
     
     console.log('✅ ЮKassa инициализирована успешно');
-    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.2.5');
+    console.log('📦 Версия пакета: @a2seven/yoo-checkout@1.2.0');
+    console.log('🔑 Shop ID:', config.YOOKASSA_SHOP_ID);
+    console.log('🔑 Secret Key:', config.YOOKASSA_SECRET_KEY ? `${config.YOOKASSA_SECRET_KEY.substring(0, 6)}***` : 'НЕ УСТАНОВЛЕН');
 } catch (error) {
     console.error('❌ Ошибка инициализации ЮKassa:', error.message);
     console.log('⚠️ Приложение запустится без ЮKassa');
