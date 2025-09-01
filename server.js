@@ -845,7 +845,21 @@ function createOrder(orderData) {
     
     // Сохраняем в базу данных
     try {
-        OrdersDB.create(order);
+        const dbOrder = {
+            orderId: order.id,
+            userId: order.userId || order.telegramUserId || 'unknown',
+            userName: order.customerName || 'Клиент',
+            phone: order.phone || '',
+            deliveryZone: order.deliveryZone || 'moscow',
+            address: JSON.stringify(order.address || {}),
+            items: JSON.stringify(order.cartItems || []),
+            totalAmount: order.totals?.total || 0,
+            status: order.status,
+            paymentId: order.paymentId || null,
+            paymentUrl: order.paymentUrl || null
+        };
+        
+        await OrdersDB.create(dbOrder);
         console.log(`💾 Заказ ${orderId} сохранен в БД`);
     } catch (error) {
         console.error(`❌ Ошибка сохранения заказа ${orderId} в БД:`, error);
@@ -990,7 +1004,12 @@ app.post('/api/orders', async (req, res) => {
         
         // Обновляем в БД
         try {
-            await OrdersDB.update(order.id, order);
+            const updateData = {
+                paymentId: order.paymentId,
+                paymentUrl: order.paymentUrl,
+                status: order.status
+            };
+            await OrdersDB.update(order.id, updateData);
         } catch (dbError) {
             console.error(`❌ Ошибка обновления заказа в БД:`, dbError);
         }
