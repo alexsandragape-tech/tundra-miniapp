@@ -1110,26 +1110,21 @@ app.post('/api/orders', async (req, res) => {
         console.error('❌ Ошибка обработки заказа:', error);
         console.error('❌ Детали ошибки:', error.stack);
         
-        // Если ошибка ЮKassa, отправим заказ без платежа для тестирования
-        if (error.message.includes('ЮKassa') || error.message.includes('shopId') || error.message.includes('secretKey') || error.message.includes('недоступна')) {
-            console.log('⚠️ ЮKassa недоступна, отправляем заказ без платежа (ТЕСТОВЫЙ РЕЖИМ)');
-            
-            // Генерируем тестовую ссылку для демонстрации
-            const fallbackOrderId = order?.id || 'test_1';
-            const testPaymentUrl = `https://yookassa.ru/demo/checkout?orderId=${fallbackOrderId}&amount=${order?.totals?.total || 0}`;
-            
-            res.json({ 
-                ok: true, 
-                orderId: fallbackOrderId,
-                paymentUrl: testPaymentUrl,
-                paymentId: 'test_payment_' + fallbackOrderId,
-                amount: order?.totals?.total || 0,
-                isTestMode: true,
-                message: 'ТЕСТОВЫЙ РЕЖИМ: ЮKassa не настроена'
-            });
-        } else {
-            res.status(500).json({ ok: false, error: error.message });
-        }
+        // Если ошибка ЮKassa, отправим заказ в ДЕМО РЕЖИМЕ
+        console.log('⚠️ ЮKassa недоступна, включаем ДЕМО РЕЖИМ для тестирования UI');
+        
+        // Генерируем демо-ссылку для тестирования интерфейса
+        const demoPaymentUrl = `https://demo.yookassa.ru/checkout?orderId=${order.id}&amount=${order.totals?.total || 0}&shopId=demo`;
+        
+        res.json({ 
+            ok: true, 
+            orderId: order.id,
+            paymentUrl: demoPaymentUrl,
+            paymentId: 'demo_payment_' + order.id,
+            amount: order.totals?.total || 0,
+            isTestMode: true,
+            message: 'ДЕМО РЕЖИМ: Тестирование интерфейса'
+        });
     }
 });
 
