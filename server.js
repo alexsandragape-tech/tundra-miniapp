@@ -16,15 +16,58 @@ class YooKassaAPI {
         console.log('💳 YooKassa API инициализирована');
         console.log('🔑 Shop ID:', shopId);
         console.log('🔑 Secret Key:', secretKey ? `${secretKey.substring(0, 10)}***` : 'НЕ УСТАНОВЛЕН');
-        console.log('🔐 Тип авторизации: Bearer (современный)');
+        console.log('🔐 Тип авторизации: Basic (стандартный для ЮKassa)');
+        
+        // Проверяем формат ключей
+        this.validateKeys();
+    }
+    
+    validateKeys() {
+        console.log('🔍 Проверяем формат ключей...');
+        
+        // Проверяем Shop ID
+        if (!this.shopId || typeof this.shopId !== 'string') {
+            console.error('❌ Shop ID неверный:', this.shopId);
+            return false;
+        }
+        
+        // Shop ID должен быть числовым
+        if (!/^\d+$/.test(this.shopId)) {
+            console.error('❌ Shop ID должен быть числовым:', this.shopId);
+            return false;
+        }
+        
+        // Проверяем Secret Key
+        if (!this.secretKey || typeof this.secretKey !== 'string') {
+            console.error('❌ Secret Key неверный:', this.secretKey);
+            return false;
+        }
+        
+        // Secret Key должен начинаться с test_ или live_
+        if (!this.secretKey.startsWith('test_') && !this.secretKey.startsWith('live_')) {
+            console.error('❌ Secret Key должен начинаться с test_ или live_:', this.secretKey.substring(0, 10) + '***');
+            return false;
+        }
+        
+        console.log('✅ Формат ключей корректный');
+        return true;
     }
     
     async createPayment(paymentData, idempotenceKey) {
         try {
             console.log('💳 Создаем платеж через нативный API...');
+            console.log('🔑 Idempotence Key:', idempotenceKey);
+            console.log('📋 Данные платежа:', JSON.stringify(paymentData, null, 2));
             
-            // Попробуем разные варианты авторизации
-            console.log('🔐 Пробуем Basic авторизацию (Shop ID + Secret Key)...');
+            // Используем только Basic авторизацию (стандарт для ЮKassa)
+            console.log('🔐 Используем Basic авторизацию (Shop ID + Secret Key)...');
+            console.log('🔑 Shop ID для авторизации:', this.shopId);
+            console.log('🔑 Secret Key для авторизации (первые 15 символов):', this.secretKey.substring(0, 15) + '***');
+            
+            // Проверяем, что ключи не пустые
+            if (!this.shopId || !this.secretKey) {
+                throw new Error('Ключи ЮKassa пустые!');
+            }
             
             const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
                 headers: {
@@ -42,46 +85,39 @@ class YooKassaAPI {
             return response.data;
             
         } catch (error) {
-            console.error('❌ Basic авторизация не сработала, пробуем Bearer...');
+            console.error('❌ Ошибка создания платежа ЮKassa:');
+            console.error('   - Сообщение:', error.message);
+            console.error('   - Код:', error.code);
             
-            try {
-                const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Idempotence-Key': idempotenceKey,
-                        'Authorization': `Bearer ${this.secretKey}`
-                    },
-                    timeout: 30000
-                });
+            if (error.response) {
+                console.error('   - Статус:', error.response.status);
+                console.error('   - Заголовки ответа:', JSON.stringify(error.response.headers, null, 2));
+                console.error('   - Данные ошибки:', JSON.stringify(error.response.data, null, 2));
                 
-                console.log('✅ Платеж создан через Bearer:', response.data.id);
-                return response.data;
-                
-            } catch (bearerError) {
-                console.error('❌ Bearer тоже не работает, пробуем только Secret Key...');
-                
-                try {
-                    const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Idempotence-Key': idempotenceKey,
-                            'Authorization': this.secretKey
-                        },
-                        timeout: 30000
-                    });
+                // Детальная диагностика ошибки авторизации
+                if (error.response.status === 401) {
+                    console.error('🔍 ДЕТАЛЬНАЯ ДИАГНОСТИКА 401 ОШИБКИ:');
+                    console.error('   - Shop ID:', this.shopId);
+                    console.error('   - Shop ID тип:', typeof this.shopId);
+                    console.error('   - Shop ID длина:', this.shopId?.length);
+                    console.error('   - Secret Key (первые 15 символов):', this.secretKey.substring(0, 15) + '***');
+                    console.error('   - Secret Key тип:', typeof this.secretKey);
+                    console.error('   - Secret Key длина:', this.secretKey?.length);
+                    console.error('   - Тип ключа:', this.secretKey.startsWith('test_') ? 'ТЕСТОВЫЙ' : 'БОЕВОЙ');
+                    console.error('   - URL запроса:', `${this.baseURL}/payments`);
                     
-                    console.log('✅ Платеж создан через Secret Key:', response.data.id);
-                    return response.data;
-                    
-                } catch (finalError) {
-                    console.error('❌ ВСЕ методы авторизации провалились!');
-                    console.error('   - Basic статус:', error.response?.status);
-                    console.error('   - Bearer статус:', bearerError.response?.status);
-                    console.error('   - Secret статус:', finalError.response?.status);
-                    console.error('   - Финальная ошибка:', JSON.stringify(finalError.response?.data, null, 2));
-                    throw finalError;
+                    // Проверяем возможные причины 401:
+                    console.error('🔍 ВОЗМОЖНЫЕ ПРИЧИНЫ 401 ОШИБКИ:');
+                    console.error('   1. Аккаунт ЮKassa не подтвержден');
+                    console.error('   2. Ключи неактивны в личном кабинете');
+                    console.error('   3. Неправильный формат Shop ID (должен быть числовой)');
+                    console.error('   4. Secret Key поврежден при копировании');
+                    console.error('   5. Аккаунт заблокирован или ограничен');
+                    console.error('   6. Проблемы с сетью или DNS');
                 }
             }
+            
+            throw error;
         }
     }
 }
@@ -112,6 +148,32 @@ try {
     
     console.log('🔧 Создаем экземпляр YooKassa API...');
     checkout = new YooKassaAPI(config.YOOKASSA_SHOP_ID, config.YOOKASSA_SECRET_KEY);
+    
+    // Тестируем доступность API ЮKassa
+    console.log('🧪 Тестируем доступность API ЮKassa...');
+    try {
+        const testResponse = await axios.get('https://api.yookassa.ru/v3/me', {
+            auth: {
+                username: config.YOOKASSA_SHOP_ID,
+                password: config.YOOKASSA_SECRET_KEY
+            },
+            timeout: 10000
+        });
+        console.log('✅ API ЮKassa доступен, аккаунт активен');
+        console.log('📋 Информация об аккаунте:', JSON.stringify(testResponse.data, null, 2));
+        
+        // Проверяем, что это рабочие ключи
+        if (testResponse.data.test) {
+            console.log('⚠️ ВНИМАНИЕ: Используются ТЕСТОВЫЕ ключи!');
+        } else {
+            console.log('✅ Используются РАБОЧИЕ ключи ЮKassa');
+        }
+    } catch (testError) {
+        console.error('❌ Тест API ЮKassa провалился:');
+        console.error('   - Статус:', testError.response?.status);
+        console.error('   - Данные:', JSON.stringify(testError.response?.data, null, 2));
+        console.error('   - Это может объяснить проблему с созданием платежей');
+    }
     
     console.log('✅ ЮKassa инициализирована успешно (нативная реализация)');
 } catch (error) {
@@ -1031,15 +1093,198 @@ app.get('/ping', (req, res) => {
     res.status(200).send('pong');
 });
 
+// Тестовый эндпоинт для проверки ЮKassa
+app.get('/test-yookassa', async (req, res) => {
+    try {
+        console.log('🧪 Тестируем ЮKassa API...');
+        
+        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
+            return res.status(500).json({ 
+                ok: false, 
+                error: 'Ключи ЮKassa не настроены',
+                shopId: config.YOOKASSA_SHOP_ID,
+                secretKey: config.YOOKASSA_SECRET_KEY ? 'ЕСТЬ' : 'НЕТ'
+            });
+        }
+        
+        // Тест 1: Проверка доступности API
+        console.log('🔍 Тест 1: Проверка доступности API...');
+        const meResponse = await axios.get('https://api.yookassa.ru/v3/me', {
+            auth: {
+                username: config.YOOKASSA_SHOP_ID,
+                password: config.YOOKASSA_SECRET_KEY
+            },
+            timeout: 10000
+        });
+        
+        console.log('✅ API доступен:', meResponse.data);
+        
+        // Тест 2: Создание тестового платежа
+        console.log('🔍 Тест 2: Создание тестового платежа...');
+        const testPaymentData = {
+            amount: {
+                value: "1.00",
+                currency: "RUB"
+            },
+            confirmation: {
+                type: "redirect",
+                return_url: "https://tundra-miniapp-production.up.railway.app"
+            },
+            description: "Тестовый платеж для проверки API",
+            metadata: {
+                test: "true"
+            }
+        };
+        
+        const testIdempotenceKey = crypto.randomUUID();
+        const paymentResponse = await axios.post('https://api.yookassa.ru/v3/payments', testPaymentData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Idempotence-Key': testIdempotenceKey
+            },
+            auth: {
+                username: config.YOOKASSA_SHOP_ID,
+                password: config.YOOKASSA_SECRET_KEY
+            },
+            timeout: 30000
+        });
+        
+        console.log('✅ Тестовый платеж создан:', paymentResponse.data.id);
+        
+        res.json({
+            ok: true,
+            message: 'ЮKassa работает корректно',
+            accountInfo: meResponse.data,
+            testPayment: {
+                id: paymentResponse.data.id,
+                status: paymentResponse.data.status,
+                confirmationUrl: paymentResponse.data.confirmation?.confirmation_url
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Тест ЮKassa провалился:', error.message);
+        
+        res.status(500).json({
+            ok: false,
+            error: error.message,
+            details: error.response?.data || null,
+            status: error.response?.status || null,
+            shopId: config.YOOKASSA_SHOP_ID,
+            secretKeyLength: config.YOOKASSA_SECRET_KEY?.length || 0
+        });
+    }
+});
+
+// Webhook для обработки уведомлений от ЮKassa
+app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
+    try {
+        console.log('🔔 Получено уведомление от ЮKassa');
+        console.log('📋 Raw данные:', req.body.toString());
+        
+        const notification = JSON.parse(req.body.toString());
+        console.log('📋 Парсированные данные:', JSON.stringify(notification, null, 2));
+        
+        // Проверяем тип уведомления
+        if (notification.type === 'payment.succeeded') {
+            const payment = notification.object;
+            console.log('✅ Платеж успешно завершен:', payment.id);
+            console.log('💰 Сумма:', payment.amount.value, payment.amount.currency);
+            console.log('📋 Метаданные:', payment.metadata);
+            
+            // Обновляем статус заказа в базе данных
+            if (payment.metadata && payment.metadata.orderId) {
+                const orderId = payment.metadata.orderId;
+                console.log('🔄 Обновляем статус заказа:', orderId);
+                
+                try {
+                    // Обновляем статус заказа
+                    await OrdersDB.update(orderId, { 
+                        status: 'paid',
+                        paymentId: payment.id,
+                        paidAt: new Date().toISOString()
+                    });
+                    
+                    // Получаем данные заказа для создания записи в истории покупок
+                    const order = await OrdersDB.getById(orderId);
+                    if (order) {
+                        // Создаем запись в истории покупок
+                        await PurchaseHistoryDB.create({
+                            user_id: order.user_id,
+                            order_id: orderId,
+                            total_amount: parseFloat(payment.amount.value),
+                            items_count: order.items.length,
+                            items_data: JSON.stringify(order.items),
+                            payment_id: payment.id,
+                            customer_name: order.customer_name,
+                            phone: order.phone,
+                            delivery_zone: order.delivery_zone,
+                            address_data: JSON.stringify(order.address),
+                            created_at: new Date().toISOString()
+                        });
+                        
+                        console.log('✅ Заказ обновлен и добавлен в историю покупок');
+                        
+                        // Отправляем уведомление в Telegram (если настроен бот)
+                        if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+                            try {
+                                const message = `🎉 НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!\n\n` +
+                                    `📋 Заказ #${orderId}\n` +
+                                    `👤 Клиент: ${order.customer_name}\n` +
+                                    `📞 Телефон: ${order.phone}\n` +
+                                    `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
+                                    `💳 ID платежа: ${payment.id}\n` +
+                                    `📍 Зона доставки: ${order.delivery_zone}\n` +
+                                    `🏠 Адрес: ${order.address.street}, ${order.address.house}`;
+                                
+                                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                                    chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+                                    text: message,
+                                    parse_mode: 'HTML'
+                                });
+                                
+                                console.log('📱 Уведомление отправлено в Telegram');
+                            } catch (telegramError) {
+                                console.error('❌ Ошибка отправки в Telegram:', telegramError.message);
+                            }
+                        }
+                    }
+                } catch (dbError) {
+                    console.error('❌ Ошибка обновления заказа в БД:', dbError);
+                }
+            }
+        } else if (notification.type === 'payment.canceled') {
+            const payment = notification.object;
+            console.log('❌ Платеж отменен:', payment.id);
+            
+            // Обновляем статус заказа
+            if (payment.metadata && payment.metadata.orderId) {
+                await OrdersDB.update(payment.metadata.orderId, { 
+                    status: 'canceled',
+                    paymentId: payment.id
+                });
+                console.log('🔄 Статус заказа обновлен на "отменен"');
+            }
+        }
+        
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('❌ Ошибка обработки webhook:', error);
+        res.status(500).send('Error');
+    }
+});
+
 // API для заказов
 app.post('/api/orders', async (req, res) => {
     console.log('🔥 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА!');
+    let order = null; // Объявляем order в области видимости всего блока
+    
     try {
         const orderData = req.body;
         console.log('📦 Данные заказа:', JSON.stringify(orderData, null, 2));
         
         // Создаем заказ
-        const order = await createOrder(orderData);
+        order = await createOrder(orderData);
         console.log('✅ Заказ создан:', order.id);
         
         console.log(`📝 Заказ #${order.id} создан, создаем платеж в ЮKassa...`);
@@ -1113,18 +1358,29 @@ app.post('/api/orders', async (req, res) => {
         // Если ошибка ЮKassa, отправим заказ в ДЕМО РЕЖИМЕ
         console.log('⚠️ ЮKassa недоступна, включаем ДЕМО РЕЖИМ для тестирования UI');
         
-        // Генерируем демо-ссылку для тестирования интерфейса
-        const demoPaymentUrl = `https://demo.yookassa.ru/checkout?orderId=${order.id}&amount=${order.totals?.total || 0}&shopId=demo`;
-        
-        res.json({ 
-            ok: true, 
-            orderId: order.id,
-            paymentUrl: demoPaymentUrl,
-            paymentId: 'demo_payment_' + order.id,
-            amount: order.totals?.total || 0,
-            isTestMode: true,
-            message: 'ДЕМО РЕЖИМ: Тестирование интерфейса'
-        });
+        // Проверяем, что order был создан
+        if (order && order.id) {
+            // Генерируем демо-ссылку для тестирования интерфейса
+            const demoPaymentUrl = `https://demo.yookassa.ru/checkout?orderId=${order.id}&amount=${order.totals?.total || 0}&shopId=demo`;
+            
+            res.json({ 
+                ok: true, 
+                orderId: order.id,
+                paymentUrl: demoPaymentUrl,
+                paymentId: 'demo_payment_' + order.id,
+                amount: order.totals?.total || 0,
+                isTestMode: true,
+                message: 'ДЕМО РЕЖИМ: Тестирование интерфейса'
+            });
+        } else {
+            // Если заказ не был создан, возвращаем ошибку
+            console.error('❌ Заказ не был создан, возвращаем ошибку');
+            res.status(500).json({ 
+                ok: false, 
+                error: 'Ошибка создания заказа',
+                message: 'Не удалось создать заказ'
+            });
+        }
     }
 });
 
