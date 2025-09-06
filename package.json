@@ -1,6 +1,6 @@
 {
   "name": "tundra-gourmet-miniapp",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "Telegram Mini App для Tundra Gourmet - Деликатесы Крайнего Севера",
   "main": "server.js",
   "scripts": {
