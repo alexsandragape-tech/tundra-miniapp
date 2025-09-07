@@ -1,2282 +1,2366 @@
-// 🔧 СИСТЕМА ЛОГИРОВАНИЯ
-const LOG_LEVELS = {
-    ERROR: 0,
-    WARN: 1,
-    INFO: 2,
-    DEBUG: 3
-};
+// Telegram Web App MainButton and BackButton logic
+let tg = window.Telegram?.WebApp;
+let currentUserId = null; // ID текущего пользователя для истории покупок
 
-const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL || LOG_LEVELS.INFO;
+// 🔑 Функция получения ID пользователя
+function getUserId() {
+    if (currentUserId) return currentUserId;
+    
+    // Пытаемся получить из Telegram Web App
+    if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+        currentUserId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+        return currentUserId;
+    }
+    
+    // Fallback: создаем или берем из localStorage
+    let userId = localStorage.getItem('tundra_user_id');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('tundra_user_id', userId);
+    }
+    currentUserId = userId;
+    return currentUserId;
+}
 
-function log(level, message, ...args) {
-    if (level <= CURRENT_LOG_LEVEL) {
-        const timestamp = new Date().toISOString();
-        const levelNames = ['❌ ERROR', '⚠️ WARN', 'ℹ️ INFO', '🔍 DEBUG'];
-        console.log(`[${timestamp}] ${levelNames[level]} ${message}`, ...args);
+function updateMainButton(screenId) {
+    if (!tg) return;
+
+    tg.MainButton.hide();
+    tg.BackButton.hide();
+
+    switch (screenId) {
+        case 'main-screen':
+            // No MainButton on main screen
+            break;
+        case 'category-screen':
+            tg.BackButton.show();
+            break;
+        case 'product-detail-screen':
+            tg.BackButton.show();
+            // MainButton for "Add to Cart" will be handled by the product detail screen itself
+            break;
+        case 'cart-screen':
+            const cartItems = Object.values(cart).filter(item => item.quantity > 0);
+            const { subtotal } = calculateCartTotal();
+            const minOrderAmount = 3500;
+            if (cartItems.length > 0 && subtotal >= minOrderAmount) {
+                tg.MainButton.setText('Оформить заказ');
+                tg.MainButton.show();
+                tg.MainButton.onClick(proceedToOrder);
+            }
+            tg.BackButton.show();
+            break;
+        case 'order-form-screen':
+            tg.MainButton.setText('Перейти к оплате');
+            tg.MainButton.show();
+            tg.MainButton.onClick(() => document.getElementById('orderForm').requestSubmit());
+            tg.BackButton.show();
+            break;
+        case 'profile-screen':
+        case 'my-orders-screen':
+            tg.BackButton.show();
+            break;
+        case 'order-success-screen':
+            // No MainButton on success screen
+            break;
     }
 }
 
-// Алиасы для удобства
-const logger = {
-    error: (msg, ...args) => log(LOG_LEVELS.ERROR, msg, ...args),
-    warn: (msg, ...args) => log(LOG_LEVELS.WARN, msg, ...args),
-    info: (msg, ...args) => log(LOG_LEVELS.INFO, msg, ...args),
-    debug: (msg, ...args) => log(LOG_LEVELS.DEBUG, msg, ...args)
+// Override showScreen to update Telegram buttons
+const originalShowScreen = window.showScreen;
+window.showScreen = function(screenId) {
+    originalShowScreen(screenId);
+    updateMainButton(screenId);
 };
 
-logger.info('🚀 СТАРТ СЕРВЕРА - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ!');
-logger.info('⏰ Время запуска:', new Date().toISOString());
-
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const axios = require('axios');
-const crypto = require('crypto');
-const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const helmet = require('helmet');
-// 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
-class YooKassaAPI {
-    constructor(shopId, secretKey) {
-        this.shopId = shopId;
-        this.secretKey = secretKey;
-        this.baseURL = 'https://api.yookassa.ru/v3';
-        
-        logger.info('💳 YooKassa API инициализирована');
-        
-        // Проверяем формат ключей
-        this.validateKeys();
-    }
-    
-    validateKeys() {
-        // Проверяем Shop ID
-        if (!this.shopId || typeof this.shopId !== 'string' || !/^\d+$/.test(this.shopId)) {
-            logger.error('❌ Shop ID неверный');
-            return false;
-        }
-        
-        // Проверяем Secret Key
-        if (!this.secretKey || typeof this.secretKey !== 'string' || 
-            (!this.secretKey.startsWith('test_') && !this.secretKey.startsWith('live_'))) {
-            logger.error('❌ Secret Key неверный');
-            return false;
-        }
-        
-        logger.debug('✅ Формат ключей корректный');
-        return true;
-    }
-    
-    async createPayment(paymentData, idempotenceKey) {
-        try {
-            logger.debug('💳 Создаем платеж через ЮKassa API');
-            
-            // Проверяем, что ключи не пустые
-            if (!this.shopId || !this.secretKey) {
-                throw new Error('Ключи ЮKassa пустые!');
+// Initial setup for Telegram buttons
+document.addEventListener('DOMContentLoaded', () => {
+    if (tg) {
+        tg.ready();
+        tg.expand();
+        tg.onEvent('themeChanged', () => {
+            document.body.style.backgroundColor = tg.themeParams.bg_color;
+            document.body.style.color = tg.themeParams.text_color;
+        });
+        tg.BackButton.onClick(() => {
+            const currentScreen = document.querySelector('.screen.active').id;
+            if (currentScreen === 'category-screen') {
+                showMain();
+            } else if (currentScreen === 'product-detail-screen') {
+                goBackFromProduct();
+            } else if (currentScreen === 'cart-screen') {
+                showMain();
+            } else if (currentScreen === 'order-form-screen') {
+                showCart();
+            } else if (currentScreen === 'profile-screen') {
+                showMain();
+            } else if (currentScreen === 'my-orders-screen') {
+                showProfile();
             }
-            
-            const response = await axios.post(`${this.baseURL}/payments`, paymentData, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Idempotence-Key': idempotenceKey
-                },
-                auth: {
-                    username: this.shopId,
-                    password: this.secretKey
-                },
-                timeout: 30000
-            });
-            
-            logger.info('✅ Платеж создан успешно:', response.data.id);
-            return response.data;
-            
-        } catch (error) {
-            logger.error('❌ Ошибка создания платежа ЮKassa:', error.message);
-            
-            if (error.response?.status === 401) {
-                logger.error('🔍 Ошибка авторизации - проверьте ключи ЮKassa');
-            }
-            
-            throw error;
-        }
+        });
     }
-}
-const config = require('./config');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
-
-const app = express();
-const PORT = config.PORT;
-const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
-
-// Настройка для работы с прокси (Railway)
-app.set('trust proxy', 1);
-
-// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ (ОТКЛЮЧЕНЫ ДЛЯ TELEGRAM WEB APP)
-// Отключаем все ограничения безопасности для статических файлов
-
-// CORS только для API (не для статических файлов)
-const corsOrigins = config.CORS_ORIGIN.split(',');
-const corsOptions = {
-    origin: corsOrigins,
-    credentials: true
-};
-
-// Защита от DDoS только для API (УПРОЩЕННАЯ)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // 100 запросов
-    message: 'Слишком много запросов, попробуйте позже',
-    trustProxy: true
+    updateMainButton(document.querySelector('.screen.active').id);
 });
 
-// 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
-logger.info('🔧 Инициализация ЮKassa...');
+// Базовый URL сервера (автоопределение)
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:3000' 
+    : 'https://tundra-miniapp-production.up.railway.app';
 
-let checkout = null;
+// Глобальные переменные
+let currentCategory = null;
+let currentProduct = null;
+let cart = JSON.parse(localStorage.getItem('tundra_cart') || '{}');
+let userProfile = JSON.parse(localStorage.getItem('tundra_profile') || '{"totalSpent": 0, "completedOrders": 0, "notificationsEnabled": true}');
+let orderCounter = parseInt(localStorage.getItem('tundra_order_counter') || '0');
 
-// 🔧 АСИНХРОННАЯ ИНИЦИАЛИЗАЦИЯ ЮKASSA
-async function initializeYooKassa() {
+// 🔥 ПЕРЕМЕННЫЕ ДЛЯ ТАЙМЕРА ОПЛАТЫ
+let paymentTimer = null;
+let paymentTimeLeft = 10 * 60; // 10 минут в секундах
+let currentOrderId = null;
+let paymentStatusChecker = null;
+
+// Данные категорий
+const categories = [
+    {
+        id: 'kolbasy',
+        name: 'Колбасы',
+        desc: 'Сыровяленые деликатесы из оленины',
+        icon: '🌭',
+        imageUrl: 'images/categories/колбасы.jpg',
+        count: 8
+    },
+    {
+        id: 'pashtet',
+        name: 'Паштеты',
+        desc: 'Рийеты с трюфелем и грибами',
+        icon: '🥫',
+        imageUrl: 'images/categories/паштеты .png',
+        count: 4
+    },
+    {
+        id: 'delikatesy',
+        name: 'Деликатесы',
+        desc: 'Карпаччо, хамон, снеки премиум',
+        icon: '🥩',
+        imageUrl: 'images/categories/деликатесы.jpg',
+        count: 6
+    },
+    {
+        id: 'gotovye',
+        name: 'Готовые деликатесы',
+        desc: 'Запечённые корейки и окорок',
+        icon: '🔥',
+        imageUrl: 'images/categories/деликатесы готовые.jpg',
+        count: 5
+    },
+    {
+        id: 'zamorozhennye',
+        name: 'Замороженные',
+        desc: 'Пельмени с олениной и трюфелем',
+        icon: '❄️',
+        imageUrl: 'images/categories/JLA_0991.jpg',
+        count: 4
+    },
+    {
+        id: 'polufabrikaty',
+        name: 'Полуфабрикаты',
+        desc: 'Мясо для приготовления',
+        icon: '🥓',
+        imageUrl: 'images/categories/раздел полуфарикаты.jpg',
+        count: 7
+    },
+    {
+        id: 'pirogi-sytnye',
+        name: 'Пироги сытные',
+        desc: 'С олениной, грибами, трюфелем',
+        icon: '🥧',
+        imageUrl: 'images/categories/Пирог с грибами_small (1).jpg',
+        count: 7
+    },
+    {
+        id: 'pirogi-sladkie',
+        name: 'Пироги сладкие',
+        desc: 'С ягодами и творогом',
+        icon: '🧁',
+        imageUrl: 'images/categories/Пирог с грибами_1_small.jpg',
+        count: 8
+    }
+];
+
+// Данные товаров (будут загружены с сервера или используется fallback)
+let products = {
+    'kolbasy': [
+                       {
+                   id: 'chorizo-70',
+                   name: 'Колбаса из сыровяленая оленины "Чоризо"',
+                   price: 395,
+                   unit: '/70 гр.',
+                   maxQty: 20,
+                   image: '🌭',
+                   imageUrl: 'images/products/kolbasy/chorizo-70.jpg',
+                   composition: 'оленина, жир говяжий, соль поваренная пищевая, смесь 5 перцев, паприка копченая, кардамон, перец черный',
+                   nutrition: 'белок - 15 г, жир - 20 г',
+                   calories: '510 ккал/2140 кДж',
+                   storage: '180 суток'
+               },
+                       {
+                   id: 'trufel-70',
+                   name: 'Колбаса сыровяленая из оленины "С Трюфелем"',
+                   price: 411,
+                   unit: '/70 гр.',
+                   maxQty: 20,
+                   image: '🌭',
+                   imageUrl: 'images/products/kolbasy/trufel-70.jpg',
+                   composition: 'оленина, жир говяжий, соль поваренная пищевая, специи, перец, трюфель черный 0,02%, мускатный орех',
+                   nutrition: 'белок - 15 г, жир - 20 г',
+                   calories: '510 ккал/2140 кДж',
+                   storage: '180 суток'
+               },
+                       {
+                   id: 'kedr-70',
+                   name: 'Колбаса сыровяленая из оленины "Северная с кедровым орехом"',
+                   price: 405,
+                   unit: '/70 гр.',
+                   maxQty: 20,
+                   image: '🌭',
+                   imageUrl: 'images/products/kolbasy/kedr-70.jpg',
+                   composition: 'оленина, жир говяжий, орех кедровый, смесь специй и пряностей, соль поваренная пищевая',
+                   nutrition: 'белок - 15 г, жир - 20 г, углеводы - 8 г',
+                   calories: '540 ккал/2266 кДж',
+                   storage: '180 суток'
+               },
+        {
+            id: 'osobaya-70',
+            name: 'Колбаса сыровяленая из оленины "Особая"',
+            price: 390,
+            unit: '/70 гр.',
+            maxQty: 20,
+            image: '🌭',
+            imageUrl: 'images/products/kolbasy/osobaya-70.jpg',
+            composition: 'оленина, жир говяжий, соль поваренная пищевая, сахар, специи, чеснок молотый, мускатный орех, перец, антиокислитель (аскорбиновая кислота), стартовые культуры (молочнокислые микроорганизмы)',
+            nutrition: 'белок - 15 г, жир - 20 г',
+            calories: '510 ккал/2140 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'chorizo-170',
+            name: 'Колбаса сыровяленая из оленины "Чоризо"',
+            price: 860,
+            unit: '/170 гр.',
+            maxQty: 15,
+            image: '🌭',
+            imageUrl: 'images/products/kolbasy/chorizo-170.jpg',
+            composition: 'оленина, жир говяжий, соль поваренная пищевая, смесь 5 перцев, паприка копченая, кардамон, перец черный',
+            nutrition: 'белок - 15 г, жир - 20 г',
+            calories: '510 ккал/2140 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'trufel-200',
+            name: 'Колбаса сыровяленая из оленины "С Трюфелем"',
+            price: 980,
+            unit: '/200 гр.',
+            maxQty: 12,
+            image: '🌭',
+            imageUrl: 'images/products/kolbasy/trufel-200.jpg',
+            composition: 'оленина, жир говяжий, соль поваренная пищевая, специи, перец, трюфель черный 0,02%, мускатный орех',
+            nutrition: 'белок - 15 г, жир - 20 г',
+            calories: '510 ккал/2140 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'osobaya-170',
+            name: 'Колбаса сыровяленая из оленины "Особая"',
+            price: 885,
+            unit: '/170 гр.',
+            maxQty: 12,
+            image: '🌭',
+            imageUrl: 'images/products/kolbasy/osobaya-170.jpg',
+            composition: 'оленина, жир говяжий, соль поваренная пищевая, сахар, специи, чеснок молотый, мускатный орех, перец',
+            nutrition: 'белок - 15 г, жир - 20 г',
+            calories: '510 ккал/2140 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'kedr-160',
+            name: 'Колбаса сыровяленая из оленины "Северная с кедровым орехом"',
+            price: 910,
+            unit: '/160 гр.',
+            maxQty: 10,
+            image: '🌭',
+            imageUrl: 'images/products/kolbasy/kedr-160.jpg',
+            composition: 'оленина, жир говяжий, орех кедровый, смесь специй и пряностей, соль поваренная пищевая',
+            nutrition: 'белок - 15 г, жир - 20 г, углеводы - 8 г',
+            calories: '540 ккал/2266 кДж',
+            storage: '180 суток'
+        }
+    ],
+    'pashtet': [
+        {
+            id: 'riyet-olene-griby',
+            name: 'Рийет из оленины с белыми грибами и трюфелем',
+            price: 378,
+            unit: '/85 гр.',
+            maxQty: 15,
+            image: '🥫',
+            imageUrl: 'images/products/pashtet/riyet-olene-griby.jpg',
+            composition: 'мясо северного оленя, грибы белые, трюфель черный 0,02%, жир олений, лук репчатый',
+            nutrition: 'белки - 17,8 г, жиры - 19,8 г, углеводы - 2,6 г',
+            calories: '259,8 ккал/1087 кДж',
+            storage: '90 суток'
+        },
+        {
+            id: 'riyet-serdtse',
+            name: 'Рийет из сердца оленя с шампиньонами, ягодами, можжевельника и розмарином',
+            price: 360,
+            unit: '/85 гр.',
+            maxQty: 15,
+            image: '🥫',
+            imageUrl: 'images/products/pashtet/riyet-serdtse.jpg',
+            composition: 'мясо северного оленя, морковь, лук, вино белое сухое, соль морская, масло растительное, масло сливочное, соль, ягоды можжевельника, перец',
+            nutrition: 'белки - 12 г, жиры - 10 г, углеводы - 9 г',
+            calories: '182 ккал/762 кДж',
+            storage: '90 суток'
+        },
+        {
+            id: 'riyet-utka',
+            name: 'Рийет из полярной утки с трюфелем',
+            price: 378,
+            unit: '/85 гр.',
+            maxQty: 15,
+            image: '🥫',
+            imageUrl: 'images/products/pashtet/riyet-utka.jpg',
+            composition: 'мясо утки, белые грибы, вино белое сухое, утиный жир, трюфель черный 0,02%, лук, соль морская, специи',
+            nutrition: 'белки - 13,3 г, жиры - 45,9 г, углеводы - 2,3 г',
+            calories: '496 ккал/2077 кДж',
+            storage: '90 суток'
+        },
+        {
+            id: 'riyet-yagnenok',
+            name: 'Рийет из ягненка',
+            price: 365,
+            unit: '/85 гр.',
+            maxQty: 15,
+            image: '🥫',
+            imageUrl: 'images/products/pashtet/riyet-yagnenok.jpg',
+            composition: 'мясо ягненка, масло растительное, лук, соль морская, специи',
+            nutrition: 'белки - 15,7 г, жиры - 15,4 г, углеводы - 5,5 г',
+            calories: '223,4 ккал/935 кДж',
+            storage: '90 суток'
+        }
+    ],
+    'delikatesy': [
+        {
+            id: 'hamon-utka',
+            name: 'Хамон из утки сыровяленый',
+            price: 560,
+            unit: '/70 гр.',
+            maxQty: 12,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/hamon-utka.jpg',
+            composition: 'филе утиной грудки премиум, соль, специи',
+            nutrition: 'белки - 18,9 г, жиры - 9 г, углеводы - 1,9 г',
+            calories: '172 ккал/720,1 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'karpachcho-olene',
+            name: 'Карпаччо из оленины высший сорт',
+            price: 495,
+            unit: '/70 гр.',
+            maxQty: 12,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/karpachcho-olene.jpg',
+            composition: 'оленина высший сорт, специи, соль',
+            nutrition: 'белки - 22 г, жиры - 6 г',
+            calories: '160 ккал/620 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'sneki-okorok',
+            name: 'Снеки из окорока оленя сыровяленые "Таёжные с дымком"',
+            price: 170,
+            unit: '/30 гр.',
+            maxQty: 12,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/sneki-okorok.jpg',
+            composition: 'оленина 1 сорт, соль поваренная пищевая, BBQ паприка, мускатный орех',
+            nutrition: 'белки - 20 г, жиры - 6 г',
+            calories: '180 ккал/610 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'filey-olene',
+            name: 'Филей оленя сыровяленый',
+            price: 490,
+            unit: '/70 гр.',
+            maxQty: 12,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/filey-olene.jpg',
+            composition: 'оленина, сахар, экстракты пряностей (черный перец, кориандр), соль поваренная пищевая',
+            nutrition: 'Белки - 20,0 г, жиры - 10,0 г, углеводы - 1,5 г',
+            calories: '260 ккал/1090 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'pastila-filey',
+            name: 'Пастила сыровяленая из филея оленя',
+            price: 250,
+            unit: '/50 гр.',
+            maxQty: 15,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/pastila-filey.jpg',
+            composition: 'вырезка оленя высший сорт, сахар, соевый соус, соль поваренная пищевая, паприка BBQ, смесь специй, острый кайенский перец, нитритно-посолочная смесь',
+            nutrition: 'белки - 25 г, жиры – 10 г, углеводы - 3 г',
+            calories: '176 ккал/736 кДж',
+            storage: '180 суток'
+        },
+        {
+            id: 'chipsy-olene',
+            name: 'Чипсы из оленины сыровяленые',
+            price: 230,
+            unit: '/50 гр.',
+            maxQty: 15,
+            image: '🥩',
+            imageUrl: 'images/products/delikatesy/chipsy-olene.jpg',
+            composition: 'оленина 1 сорт, соль, соус ворчестер, специи, сахар',
+            nutrition: 'белки - 18,0 г, жиры - 7,0 г, углеводы - 12,0 г',
+            calories: '140 ккал/590 кДж',
+            storage: '180 суток'
+        }
+    ],
+    'gotovye': [
+        {
+            id: 'koreyka-yagody',
+            name: 'Корейка оленя запечённая в северных ягодах',
+            price: 4880,
+            unit: '/кг',
+            maxQty: 5,
+            image: '🔥',
+            imageUrl: 'images/products/gotovye/koreyka-yagody.jpg',
+            composition: 'корейка оленя высший сорт, маринад из Северных ягод (брусника, морошка), специи (розмарин, смесь перцев), соль поваренная пищевая',
+            nutrition: 'белки - 22 г, жиры - 11 г',
+            calories: '260 ккал/1190 кДж',
+            storage: '20 суток'
+        },
+        {
+            id: 'koreyka-bbq',
+            name: 'Корейка оленя запечённая "BBQ"',
+            price: 4880,
+            unit: '/кг',
+            maxQty: 5,
+            image: '🔥',
+            imageUrl: 'images/products/gotovye/koreyka-bbq.jpg',
+            composition: 'корейка оленя высший сорт, Паприка BBQ, соус ворчестер, специи, соль поваренная пищевая, нитритно-посолочная смесь',
+            nutrition: 'белки - 22 г, жиры - 11 г',
+            calories: '260 ккал/1190 кДж',
+            storage: '20 суток'
+        },
+        {
+            id: 'okorok-vino',
+            name: 'Окорок оленя томленый с вином и пряными травами',
+            price: 4480,
+            unit: '/кг',
+            maxQty: 5,
+            image: '🔥',
+            imageUrl: 'images/products/gotovye/okorok-vino.jpg',
+            composition: 'окорок северного оленя высший сорт, сахар, соевый соус, соль поваренная пищевая, тимьян, розмарин',
+            nutrition: 'белки - 22 г, жиры - 6 г',
+            calories: '160 ккал/620 кДж',
+            storage: '20 суток'
+        },
+        {
+            id: 'okorok-trufel',
+            name: 'Окорок оленя томленый с трюфелем',
+            price: 4600,
+            unit: '/кг',
+            maxQty: 5,
+            image: '🔥',
+            imageUrl: 'images/products/gotovye/okorok-trufel.jpg',
+            composition: 'окорок северного оленя высший сорт, маринад (соус ворчестер, Guinness), трюфель черный 0,02%, смесь специй (розмарин, мускатный орех, анис), соль поваренная пищевая',
+            nutrition: 'белки - 22 г, жиры - 6 г',
+            calories: '160 ккал/620 кДж',
+            storage: '20 суток'
+        },
+        {
+            id: 'pastrami-trufel',
+            name: 'Пастрами из окорока оленя с трюфелем',
+            price: 4630,
+            unit: '/кг',
+            maxQty: 5,
+            image: '🔥',
+            imageUrl: 'images/products/gotovye/pastrami-trufel.jpg',
+            composition: 'окорок северного оленя высший сорт, смесь специй (тимьян, розмарин, кориандр), маринад (вино красное сухое, мёд), соль поваренная пищевая',
+            nutrition: 'белки - 22 г, жиры - 6 г',
+            calories: '160 ккал/620 кДж',
+            storage: '20 суток'
+        }
+    ],
+    'zamorozhennye': [
+        {
+            id: 'pelmeni-severnye',
+            name: 'Пельмени «Северные» с трюфелем',
+            price: 758,
+            unit: '/500 гр.',
+            maxQty: 8,
+            image: '❄️',
+            imageUrl: 'images/products/zamorozhennye/pelmeni-severnye.jpg',
+            composition: 'фарш - оленина, соль, перец, трюфельное масло, Тесто - мука пшеничная в/с, вода, соль, яичный меланж, масло растительное',
+            nutrition: 'белки - 16 г, жиры - 12 г, углеводы - 28 г',
+            calories: '220 ккал/921 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'pelmeni-taymyrskie',
+            name: 'Пельмени «Таймырские»',
+            price: 758,
+            unit: '/500 гр.',
+            maxQty: 8,
+            image: '❄️',
+            imageUrl: 'images/products/zamorozhennye/pelmeni-taymyrskie.jpg',
+            composition: 'оленина, лук, вода, соль поваренная, перец чёрный молотый. Тесто – мука пшеничная в/с, вода, соль, яичный меланж, масло растительное',
+            nutrition: 'белки - 22 г, жиры - 6 г, углеводы - 28 г',
+            calories: '220 ккал/921 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'pelmeni-los-griby',
+            name: 'Пельмени с мясом лося и грибами',
+            price: 780,
+            unit: '/500 гр.',
+            maxQty: 8,
+            image: '❄️',
+            imageUrl: 'images/products/zamorozhennye/pelmeni-los-griby.jpg',
+            composition: 'мясо лося, говяжий жир, лук, вода, перец черный молотый, соль поваренная, грибы шампиньоны. Тесто: мука в/с, вода, яичный меланж, соль поваренная, масло растительное',
+            nutrition: 'белки - 16 г, жиры - 12 г, углеводы - 28 г',
+            calories: '220 ккал/921 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'pelmeni-chernye',
+            name: 'Пельмени чёрные из оленины с трюфелем (ручная лепка)',
+            price: 960,
+            unit: '/500 гр.',
+            maxQty: 6,
+            image: '❄️',
+            imageUrl: 'images/products/zamorozhennye/pelmeni-chernye.jpg',
+            composition: 'фарш - оленина, масло сливочное, ежевика, соль, мускатный орех, орегано, трюфель -0,02%, Тесто – мука пшеничная в/с, вода, соль, яичный меланж, чернила каракатицы',
+            nutrition: 'белки - 22 г, жиры - 6 г, углеводы - 28 г',
+            calories: '220 ккал/921 кДж',
+            storage: '10 месяцев'
+        }
+    ],
+    'polufabrikaty': [
+        {
+            id: 'okorok-olene',
+            name: 'Окорок оленя',
+            price: 1970,
+            unit: '/кг',
+            maxQty: 6,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/okorok-olene.jpg',
+            composition: 'оленина окорок высший сорт',
+            nutrition: 'белки - 22 г, жиры - 11 г',
+            calories: '260 ккал/1190 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'vyrezka-olene',
+            name: 'Вырезка оленя',
+            price: 3160,
+            unit: '/кг',
+            maxQty: 4,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/vyrezka-olene.jpg',
+            composition: 'вырезка оленя высший сорт',
+            nutrition: 'Белки - 22 г, Жиры - 11 г',
+            calories: '260 ккал/1190 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'koreyka-kost',
+            name: 'Корейка оленя на кости',
+            price: 3310,
+            unit: '/кг',
+            maxQty: 4,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/koreyka-kost.jpg',
+            composition: 'корейка оленя высший сорт',
+            nutrition: 'Белки - 22 г, Жиры - 11 г',
+            calories: '260 ккал/1190 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'kupaty-piknik',
+            name: 'Купаты "Пикник"',
+            price: 1268,
+            unit: '/кг',
+            maxQty: 8,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/kupaty-piknik.jpg',
+            composition: 'оленина, шпик, чеснок, сахар, экстракты пряностей, кориандр, черный перец, соль поваренная пищевая',
+            nutrition: 'белки - 15,0 г, жиры - 21,0 г, углеводы - 1,5 г',
+            calories: '260 ккал/1090 кДж',
+            storage: '12 месяцев'
+        },
+        {
+            id: 'kupaty-tundra',
+            name: 'Купаты "Тундра"',
+            price: 1268,
+            unit: '/кг',
+            maxQty: 8,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/kupaty-tundra.jpg',
+            composition: 'оленина, шпик, лук, сахар, экстракты пряностей, соль поваренная пищевая',
+            nutrition: 'белки - 15 г, жиры - 21 г, углеводы - 1 г',
+            calories: '250 ккал/1050 кДж',
+            storage: '12 месяцев'
+        },
+        {
+            id: 'kotleti-burger',
+            name: 'Котлеты для бургера из мяса северного оленя',
+            price: 290,
+            unit: '/300 гр. (2 штуки)',
+            maxQty: 10,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/kotleti-burger.jpg',
+            composition: 'мясо северного оленя рубленное, жир олений',
+            nutrition: 'Белки - 17 г, Жиры - 12 г',
+            calories: '270 ккал/980 кДж',
+            storage: '10 месяцев'
+        },
+        {
+            id: 'lopatka-olene',
+            name: 'Лопатка оленя без кости',
+            price: 1770,
+            unit: '/кг',
+            maxQty: 6,
+            image: '🥓',
+            imageUrl: 'images/products/polufabrikaty/lopatka-olene.jpg',
+            composition: 'оленина лопаточная часть без кости',
+            nutrition: 'Белки - 19 г, Жиры - 4 г',
+            calories: '112 ккал/780 кДж',
+            storage: '10 месяцев'
+        }
+    ],
+    'pirogi-sytnye': [
+        {
+            id: 'pirog-ohotnichiy',
+            name: 'Пирог с олениной охотничий',
+            price: 880,
+            unit: '/550 гр.',
+            maxQty: 8,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-ohotnichiy.jpg',
+            composition: 'мука в/с, оленина в/с, томаты вяленые, масло оливковое, соль, сахар, яйцо, вода, дрожжи хлебопекарные, лук репчатый, морковь, специи',
+            nutrition: 'Белки 11.55 г, Жиры 9.32 г, Углеводы 25.24 г',
+            calories: '232.8 ккал/974.1 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-brusnika',
+            name: 'Пирог с олениной и брусникой',
+            price: 880,
+            unit: '/550 гр.',
+            maxQty: 8,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-brusnika.jpg',
+            composition: 'мука в/с, оленина в/с, брусника, соевый соус, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
+            nutrition: 'Белки 14.02 г, Жиры 9.12 г, Углеводы 23.42 г',
+            calories: '233.2 ккал/917.6 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-griby-trufel',
+            name: 'Пирог с олениной, грибами и трюфелем',
+            price: 880,
+            unit: '/550 гр.',
+            maxQty: 8,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-griby-trufel.jpg',
+            composition: 'мука в/с, оленина в/с, шампиньоны свежие, трюфельная паста, масло оливковое, соль, сахар, яйцо, вода, дрожжи хлебопекарные, лук репчатый, специи',
+            nutrition: 'Белки 13.02 г, Жиры 9.31 г, Углеводы 25.42 г',
+            calories: '235.2 ккал/921.4 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-gribnoy',
+            name: 'Пирог с грибным жюльеном',
+            price: 964,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-gribnoy.jpg',
+            composition: 'мука в/с, шампиньоны свежие, сливки натуральные, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
+            nutrition: 'Белки 8.8 г, Жиры 8.9 г, Углеводы 22.6 г',
+            calories: '241.2 ккал/1009.68 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-kuritsa-griby',
+            name: 'Пирог с курицей и грибами',
+            price: 980,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-kuritsa-griby.jpg',
+            composition: 'мука в/с, куриное филе, шампиньоны свежие, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
+            nutrition: 'Белки 11.4 г, Жиры 2.8 г, Углеводы 24.5 г',
+            calories: '255.3 ккал/1085 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-kartofel-griby',
+            name: 'Пирог с картофелем и грибами',
+            price: 922,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-kartofel-griby.jpg',
+            composition: 'мука в/с, картофель, шампиньоны свежие, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
+            nutrition: 'Белки 4.6 г, Жиры 7.8 г, Углеводы 18.4 г',
+            calories: '154.8 ккал/904 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-krasnaya-ryba',
+            name: 'Пирог с красной рыбой',
+            price: 2460,
+            unit: '/700 гр.',
+            maxQty: 4,
+            image: '🥧',
+            imageUrl: 'images/products/pirogi-sytnye/pirog-krasnaya-ryba.jpg',
+            composition: 'мука в/с, семга (лосось), соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
+            nutrition: 'Белки 14.9 г, Жиры 13 г, Углеводы 24.6 г',
+            calories: '274.7 ккал/1150.4 кДж',
+            storage: '6 месяцев'
+        }
+    ],
+    'pirogi-sladkie': [
+        {
+            id: 'pirog-yabloko-smorodina',
+            name: 'Пирог с яблоком и черной смородиной',
+            price: 860,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko-smorodina.jpg',
+            composition: 'мука в/с, яблоки натуральные, черная смородина натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 6.2 г, Жиры 5.4 г, Углеводы 52.8 г',
+            calories: '251.4 ккал/1163.3 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-vishnya',
+            name: 'Пирог с вишней',
+            price: 885,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-vishnya.jpg',
+            composition: 'мука в/с, вишня натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 6.5 г, Жиры 5.8 г, Углеводы 52.4 г',
+            calories: '285.4 ккал/1195.4 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-tvorog-klubnika',
+            name: 'Пирог с творогом и клубникой',
+            price: 874,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-klubnika.jpg',
+            composition: 'мука в/с, клубника натуральная, крем ванильно-сливочный заварной, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 8.3 г, Жиры 7.1 г, Углеводы 38.4 г',
+            calories: '285.6 ккал/1049.2 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-tvorog-chernika',
+            name: 'Пирог с творогом и черникой',
+            price: 878,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-chernika.jpg',
+            composition: 'мука в/с, черника натуральная, крем ванильно-сливочный заварной соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 8.2 г, Жиры 6.8 г, Углеводы 37.8 г',
+            calories: '258.6 ккал/1049.2 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-tvorog-malina',
+            name: 'Пирог с творогом и малиной',
+            price: 880,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-malina.jpg',
+            composition: 'мука в/с, малина натуральная, крем ванильно-сливочный заварной, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 8.4 г, Жиры 7.2 г, Углеводы 38.1 г',
+            calories: '250.8 ккал/1050 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-chernika',
+            name: 'Пирог с черникой',
+            price: 885,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-chernika.jpg',
+            composition: 'мука в/с, черника натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 2.7 г, Жиры 9.9 г, Углеводы 33.4 г',
+            calories: '245.8 ккал/1026.18 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-yabloko-brusnika',
+            name: 'Пирог с яблоком и брусникой',
+            price: 868,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko-brusnika.jpg',
+            composition: 'мука в/с, брусника натуральная, яблоки натуральные, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 3.5 г, Жиры 4 г, Углеводы 35.7 г',
+            calories: '192.3 ккал/805.25 кДж',
+            storage: '6 месяцев'
+        },
+        {
+            id: 'pirog-yabloko',
+            name: 'Пирог с яблоком',
+            price: 860,
+            unit: '/700 гр.',
+            maxQty: 6,
+            image: '🧁',
+            imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko.jpg',
+            composition: 'мука в/с, яблоки натуральные, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
+            nutrition: 'Белки 9.2 г, Жиры 5.4 г, Углеводы 52.8 г',
+            calories: '258.4 ккал/1184.3 кДж',
+            storage: '6 месяцев'
+        }
+    ]
+};
+
+// 🔄 ЗАГРУЗКА ТОВАРОВ С СЕРВЕРА
+async function loadProductsFromServer() {
     try {
-        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
-            throw new Error('Не настроены ключи ЮKassa');
-        }
+        console.log('🔄 Загружаем товары с сервера...');
+        const response = await fetch(`${API_BASE}/api/products`);
         
-        checkout = new YooKassaAPI(config.YOOKASSA_SHOP_ID, config.YOOKASSA_SECRET_KEY);
-        
-        // Тестируем доступность API ЮKassa
-        try {
-            const testResponse = await axios.get('https://api.yookassa.ru/v3/me', {
-                auth: {
-                    username: config.YOOKASSA_SHOP_ID,
-                    password: config.YOOKASSA_SECRET_KEY
-                },
-                timeout: 10000
-            });
-            
-            if (testResponse.data.test) {
-                logger.warn('⚠️ Используются ТЕСТОВЫЕ ключи ЮKassa');
-            } else {
-                logger.info('✅ Используются РАБОЧИЕ ключи ЮKassa');
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok && result.products) {
+                // Обновляем товары, если получили с сервера
+                const serverProducts = result.products;
+                
+                // Проверяем, есть ли товары с сервера
+                const hasServerProducts = Object.keys(serverProducts).some(
+                    categoryId => serverProducts[categoryId] && serverProducts[categoryId].length > 0
+                );
+                
+                if (hasServerProducts) {
+                    console.log('✅ Товары загружены с сервера');
+                    products = serverProducts;
+                    updateCategoryCounts();
+                    return true;
+                }
             }
-        } catch (testError) {
-            logger.error('❌ Тест API ЮKassa провалился:', testError.response?.status);
         }
         
-        logger.info('✅ ЮKassa инициализирована успешно');
+        console.log('⚠️ Используем товары по умолчанию (fallback)');
+        return false;
     } catch (error) {
-        logger.error('❌ Ошибка инициализации ЮKassa:', error.message);
-        logger.warn('⚠️ Приложение запустится без ЮKassa');
+        console.error('❌ Ошибка загрузки товаров с сервера:', error);
+        console.log('⚠️ Используем товары по умолчанию (fallback)');
+        return false;
     }
 }
 
-// Хранилище заказов (в продакшене заменить на базу данных)
-let orders = new Map();
-let orderCounter = 0; // Будет инициализирован из БД
+// Обновление счетчиков категорий после загрузки товаров
+function updateCategoryCounts() {
+    categories.forEach(category => {
+        const categoryProducts = products[category.id] || [];
+        category.count = categoryProducts.length;
+    });
+}
 
-// 🔥 ТАЙМЕРЫ ДЛЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗОВ (30 минут)
-let orderTimers = new Map();
-
-// 🔧 ХРАНИЛИЩЕ ТОВАРОВ ДЛЯ АДМИН ПАНЕЛИ
-let adminProducts = new Map();
-
-app.use(express.json());
-
-// 🔧 CORS для админ панели
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Password');
+// Функции навигации
+function showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    document.getElementById(screenId).classList.add('active');
     
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
+    // Обновляем Telegram кнопки
+    if (typeof updateMainButton === 'function') {
+        updateMainButton(screenId);
+    }
+}
+
+function showMain() {
+    showScreen('main-screen');
+    updateWorkStatus();
+}
+
+function showCategory(categoryId) {
+    currentCategory = categoryId;
+    const category = categories.find(c => c.id === categoryId);
+    document.getElementById('category-title').textContent = category.name;
+    
+    const productsList = document.getElementById('products-list');
+    productsList.innerHTML = '';
+    
+    products[categoryId].forEach(product => {
+        console.log('Loading product:', product.name, 'with imageUrl:', product.imageUrl);
+        const productCard = document.createElement('div');
+        productCard.className = 'product-card';
+        productCard.onclick = () => showProductDetail(categoryId, product.id);
+        
+        // Определяем, что отображать: изображение или эмодзи
+        let imageContent = '';
+        let emojiContent = '';
+        
+        if (product.imageUrl) {
+            console.log('Product has imageUrl:', product.imageUrl);
+            console.log('Full image path:', window.location.origin + '/' + product.imageUrl);
+            imageContent = `<img src="${product.imageUrl}" alt="${product.name}" class="product-image-img" onload="console.log('Image loaded successfully:', '${product.imageUrl}')" onerror="console.error('Image failed to load:', '${product.imageUrl}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
+            emojiContent = `<div class="product-image-emoji" style="display: none;">${product.image}</div>`;
+        } else {
+            console.log('Product has no imageUrl, using emoji:', product.image);
+            imageContent = '';
+            emojiContent = `<div class="product-image-emoji">${product.image}</div>`;
+        }
+        
+        // Получаем текущее количество товара в корзине
+        const cartKey = `${categoryId}_${product.id}`;
+        const currentQty = cart[cartKey] ? cart[cartKey].quantity : 0;
+        
+        productCard.innerHTML = `
+            <div class="product-image">
+                ${imageContent}
+                ${emojiContent}
+            </div>
+            <div class="product-name">${product.name}</div>
+            <div class="product-price">${product.price}₽${product.unit}</div>
+            <div class="product-actions">
+                <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
+                    <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
+                    <div class="qty-display">${currentQty}</div>
+                    <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
+                </div>
+                <button class="add-to-cart-btn" id="add-btn-${cartKey}" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)" style="display: ${currentQty > 0 ? 'none' : 'block'};">
+                    Добавить в корзину
+                </button>
+            </div>
+        `;
+        
+        productsList.appendChild(productCard);
+    });
+    
+    showScreen('category-screen');
+    updateCartBadge(); // Обновляем счетчик корзины
+}
+
+// Функция изменения количества товара на карточке
+function changeProductQuantity(categoryId, productId, delta) {
+    const cartKey = `${categoryId}_${productId}`;
+    const product = products[categoryId].find(p => p.id === productId);
+    
+    if (!cart[cartKey]) {
+        cart[cartKey] = { ...product, quantity: 0, categoryId, productId };
+    }
+    
+    const newQty = Math.max(0, Math.min(product.maxQty, cart[cartKey].quantity + delta));
+    
+    if (newQty === 0) {
+        delete cart[cartKey];
+        // Скрываем счетчик, показываем кнопку
+        document.getElementById(`qty-${cartKey}`).style.display = 'none';
+        document.getElementById(`add-btn-${cartKey}`).style.display = 'block';
     } else {
-        next();
+        cart[cartKey].quantity = newQty;
+        // Обновляем отображение количества
+        const qtyDisplay = document.querySelector(`#qty-${cartKey} .qty-display`);
+        if (qtyDisplay) qtyDisplay.textContent = newQty;
+        
+        // Показываем счетчик, скрываем кнопку
+        document.getElementById(`qty-${cartKey}`).style.display = 'flex';
+        document.getElementById(`add-btn-${cartKey}`).style.display = 'none';
     }
-});
-
-// 🗄️ ПОЛНЫЙ КАТАЛОГ ТОВАРОВ (все 49 товаров из 8 категорий)
-async function loadFullProductCatalog() {
-    return {
-        'kolbasy': [
-            {
-                id: 'chorizo-70',
-                name: 'Колбаса из сыровяленая оленины "Чоризо"',
-                price: 395,
-                unit: '/70 гр.',
-                maxQty: 20,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/chorizo-70.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, смесь 5 перцев, паприка копченая, кардамон, перец черный',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'trufel-70',
-                name: 'Колбаса сыровяленая из оленины "С Трюфелем"',
-                price: 411,
-                unit: '/70 гр.',
-                maxQty: 20,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/trufel-70.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, специи, перец, трюфель черный 0,02%, мускатный орех',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'kedr-70',
-                name: 'Колбаса сыровяленая из оленины "Северная с кедровым орехом"',
-                price: 405,
-                unit: '/70 гр.',
-                maxQty: 20,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/kedr-70.jpg',
-                composition: 'оленина, жир говяжий, орех кедровый, смесь специй и пряностей, соль поваренная пищевая',
-                nutrition: 'белок - 15 г, жир - 20 г, углеводы - 8 г',
-                calories: '540 ккал/2266 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'osobaya-70',
-                name: 'Колбаса сыровяленая из оленины "Особая"',
-                price: 390,
-                unit: '/70 гр.',
-                maxQty: 20,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/osobaya-70.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, сахар, специи, чеснок молотый, мускатный орех, перец, антиокислитель (аскорбиновая кислота), стартовые культуры (молочнокислые микроорганизмы)',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'chorizo-170',
-                name: 'Колбаса сыровяленая из оленины "Чоризо"',
-                price: 860,
-                unit: '/170 гр.',
-                maxQty: 15,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/chorizo-170.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, смесь 5 перцев, паприка копченая, кардамон, перец черный',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'trufel-200',
-                name: 'Колбаса сыровяленая из оленины "С Трюфелем"',
-                price: 980,
-                unit: '/200 гр.',
-                maxQty: 12,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/trufel-200.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, специи, перец, трюфель черный 0,02%, мускатный орех',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'osobaya-170',
-                name: 'Колбаса сыровяленая из оленины "Особая"',
-                price: 885,
-                unit: '/170 гр.',
-                maxQty: 12,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/osobaya-170.jpg',
-                composition: 'оленина, жир говяжий, соль поваренная пищевая, сахар, специи, чеснок молотый, мускатный орех, перец',
-                nutrition: 'белок - 15 г, жир - 20 г',
-                calories: '510 ккал/2140 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'kedr-160',
-                name: 'Колбаса сыровяленая из оленины "Северная с кедровым орехом"',
-                price: 910,
-                unit: '/160 гр.',
-                maxQty: 10,
-                image: '🌭',
-                imageUrl: 'images/products/kolbasy/kedr-160.jpg',
-                composition: 'оленина, жир говяжий, орех кедровый, смесь специй и пряностей, соль поваренная пищевая',
-                nutrition: 'белок - 15 г, жир - 20 г, углеводы - 8 г',
-                calories: '540 ккал/2266 кДж',
-                storage: '180 суток',
-                available: true
-            }
-        ],
-        'pashtet': [
-            {
-                id: 'riyet-olene-griby',
-                name: 'Рийет из оленины с белыми грибами и трюфелем',
-                price: 378,
-                unit: '/85 гр.',
-                maxQty: 15,
-                image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-olene-griby.jpg',
-                composition: 'мясо северного оленя, грибы белые, трюфель черный 0,02%, жир олений, лук репчатый',
-                nutrition: 'белки - 17,8 г, жиры - 19,8 г, углеводы - 2,6 г',
-                calories: '259,8 ккал/1087 кДж',
-                storage: '90 суток',
-                available: true
-            },
-            {
-                id: 'riyet-serdtse',
-                name: 'Рийет из сердца оленя с шампиньонами, ягодами, можжевельника и розмарином',
-                price: 360,
-                unit: '/85 гр.',
-                maxQty: 15,
-                image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-serdtse.jpg',
-                composition: 'мясо северного оленя, морковь, лук, вино белое сухое, соль морская, масло растительное, масло сливочное, соль, ягоды можжевельника, перец',
-                nutrition: 'белки - 12 г, жиры - 10 г, углеводы - 9 г',
-                calories: '182 ккал/762 кДж',
-                storage: '90 суток',
-                available: true
-            },
-            {
-                id: 'riyet-utka',
-                name: 'Рийет из полярной утки с трюфелем',
-                price: 378,
-                unit: '/85 гр.',
-                maxQty: 15,
-                image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-utka.jpg',
-                composition: 'мясо утки, белые грибы, вино белое сухое, утиный жир, трюфель черный 0,02%, лук, соль морская, специи',
-                nutrition: 'белки - 13,3 г, жиры - 45,9 г, углеводы - 2,3 г',
-                calories: '496 ккал/2077 кДж',
-                storage: '90 суток',
-                available: true
-            },
-            {
-                id: 'riyet-yagnenok',
-                name: 'Рийет из ягненка',
-                price: 365,
-                unit: '/85 гр.',
-                maxQty: 15,
-                image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-yagnenok.jpg',
-                composition: 'мясо ягненка, масло растительное, лук, соль морская, специи',
-                nutrition: 'белки - 15,7 г, жиры - 15,4 г, углеводы - 5,5 г',
-                calories: '223,4 ккал/935 кДж',
-                storage: '90 суток',
-                available: true
-            }
-        ],
-        'delikatesy': [
-            {
-                id: 'hamon-utka',
-                name: 'Хамон из утки сыровяленый',
-                price: 560,
-                unit: '/70 гр.',
-                maxQty: 12,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/hamon-utka.jpg',
-                composition: 'филе утиной грудки премиум, соль, специи',
-                nutrition: 'белки - 18,9 г, жиры - 9 г, углеводы - 1,9 г',
-                calories: '172 ккал/720,1 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'karpachcho-olene',
-                name: 'Карпаччо из оленины высший сорт',
-                price: 495,
-                unit: '/70 гр.',
-                maxQty: 12,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/karpachcho-olene.jpg',
-                composition: 'оленина высший сорт, специи, соль',
-                nutrition: 'белки - 22 г, жиры - 6 г',
-                calories: '160 ккал/620 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'sneki-okorok',
-                name: 'Снеки из окорока оленя сыровяленые "Таёжные с дымком"',
-                price: 170,
-                unit: '/30 гр.',
-                maxQty: 12,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/sneki-okorok.jpg',
-                composition: 'оленина 1 сорт, соль поваренная пищевая, BBQ паприка, мускатный орех',
-                nutrition: 'белки - 20 г, жиры - 6 г',
-                calories: '180 ккал/610 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'filey-olene',
-                name: 'Филей оленя сыровяленый',
-                price: 490,
-                unit: '/70 гр.',
-                maxQty: 12,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/filey-olene.jpg',
-                composition: 'оленина, сахар, экстракты пряностей (черный перец, кориандр), соль поваренная пищевая',
-                nutrition: 'Белки - 20,0 г, жиры - 10,0 г, углеводы - 1,5 г',
-                calories: '260 ккал/1090 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'pastila-filey',
-                name: 'Пастила сыровяленая из филея оленя',
-                price: 250,
-                unit: '/50 гр.',
-                maxQty: 15,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/pastila-filey.jpg',
-                composition: 'вырезка оленя высший сорт, сахар, соевый соус, соль поваренная пищевая, паприка BBQ, смесь специй, острый кайенский перец, нитритно-посолочная смесь',
-                nutrition: 'белки - 25 г, жиры – 10 г, углеводы - 3 г',
-                calories: '176 ккал/736 кДж',
-                storage: '180 суток',
-                available: true
-            },
-            {
-                id: 'chipsy-olene',
-                name: 'Чипсы из оленины сыровяленые',
-                price: 230,
-                unit: '/50 гр.',
-                maxQty: 15,
-                image: '🥩',
-                imageUrl: 'images/products/delikatesy/chipsy-olene.jpg',
-                composition: 'оленина 1 сорт, соль, соус ворчестер, специи, сахар',
-                nutrition: 'белки - 18,0 г, жиры - 7,0 г, углеводы - 12,0 г',
-                calories: '140 ккал/590 кДж',
-                storage: '180 суток',
-                available: true
-            }
-        ],
-        'gotovye': [
-            {
-                id: 'koreyka-yagody',
-                name: 'Корейка оленя запечённая в северных ягодах',
-                price: 4880,
-                unit: '/кг',
-                maxQty: 5,
-                image: '🔥',
-                imageUrl: 'images/products/gotovye/koreyka-yagody.jpg',
-                composition: 'корейка оленя высший сорт, маринад из Северных ягод (брусника, морошка), специи (розмарин, смесь перцев), соль поваренная пищевая',
-                nutrition: 'белки - 22 г, жиры - 11 г',
-                calories: '260 ккал/1190 кДж',
-                storage: '20 суток',
-                available: true
-            },
-            {
-                id: 'koreyka-bbq',
-                name: 'Корейка оленя запечённая "BBQ"',
-                price: 4880,
-                unit: '/кг',
-                maxQty: 5,
-                image: '🔥',
-                imageUrl: 'images/products/gotovye/koreyka-bbq.jpg',
-                composition: 'корейка оленя высший сорт, Паприка BBQ, соус ворчестер, специи, соль поваренная пищевая, нитритно-посолочная смесь',
-                nutrition: 'белки - 22 г, жиры - 11 г',
-                calories: '260 ккал/1190 кДж',
-                storage: '20 суток',
-                available: true
-            },
-            {
-                id: 'okorok-vino',
-                name: 'Окорок оленя томленый с вином и пряными травами',
-                price: 4480,
-                unit: '/кг',
-                maxQty: 5,
-                image: '🔥',
-                imageUrl: 'images/products/gotovye/okorok-vino.jpg',
-                composition: 'окорок северного оленя высший сорт, сахар, соевый соус, соль поваренная пищевая, тимьян, розмарин',
-                nutrition: 'белки - 22 г, жиры - 6 г',
-                calories: '160 ккал/620 кДж',
-                storage: '20 суток',
-                available: true
-            },
-            {
-                id: 'okorok-trufel',
-                name: 'Окорок оленя томленый с трюфелем',
-                price: 4600,
-                unit: '/кг',
-                maxQty: 5,
-                image: '🔥',
-                imageUrl: 'images/products/gotovye/okorok-trufel.jpg',
-                composition: 'окорок северного оленя высший сорт, маринад (соус ворчестер, Guinness), трюфель черный 0,02%, смесь специй (розмарин, мускатный орех, анис), соль поваренная пищевая',
-                nutrition: 'белки - 22 г, жиры - 6 г',
-                calories: '160 ккал/620 кДж',
-                storage: '20 суток',
-                available: true
-            },
-            {
-                id: 'pastrami-trufel',
-                name: 'Пастрами из окорока оленя с трюфелем',
-                price: 4630,
-                unit: '/кг',
-                maxQty: 5,
-                image: '🔥',
-                imageUrl: 'images/products/gotovye/pastrami-trufel.jpg',
-                composition: 'окорок северного оленя высший сорт, смесь специй (тимьян, розмарин, кориандр), маринад (вино красное сухое, мёд), соль поваренная пищевая',
-                nutrition: 'белки - 22 г, жиры - 6 г',
-                calories: '160 ккал/620 кДж',
-                storage: '20 суток',
-                available: true
-            }
-        ],
-        'zamorozhennye': [
-            {
-                id: 'pelmeni-severnye',
-                name: 'Пельмени «Северные» с трюфелем',
-                price: 758,
-                unit: '/500 гр.',
-                maxQty: 8,
-                image: '❄️',
-                imageUrl: 'images/products/zamorozhennye/pelmeni-severnye.jpg',
-                composition: 'фарш - оленина, соль, перец, трюфельное масло, Тесто - мука пшеничная в/с, вода, соль, яичный меланж, масло растительное',
-                nutrition: 'белки - 16 г, жиры - 12 г, углеводы - 28 г',
-                calories: '220 ккал/921 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'pelmeni-taymyrskie',
-                name: 'Пельмени «Таймырские»',
-                price: 758,
-                unit: '/500 гр.',
-                maxQty: 8,
-                image: '❄️',
-                imageUrl: 'images/products/zamorozhennye/pelmeni-taymyrskie.jpg',
-                composition: 'оленина, лук, вода, соль поваренная, перец чёрный молотый. Тесто – мука пшеничная в/с, вода, соль, яичный меланж, масло растительное',
-                nutrition: 'белки - 22 г, жиры - 6 г, углеводы - 28 г',
-                calories: '220 ккал/921 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'pelmeni-los-griby',
-                name: 'Пельмени с мясом лося и грибами',
-                price: 780,
-                unit: '/500 гр.',
-                maxQty: 8,
-                image: '❄️',
-                imageUrl: 'images/products/zamorozhennye/pelmeni-los-griby.jpg',
-                composition: 'мясо лося, говяжий жир, лук, вода, перец черный молотый, соль поваренная, грибы шампиньоны. Тесто: мука в/с, вода, яичный меланж, соль поваренная, масло растительное',
-                nutrition: 'белки - 16 г, жиры - 12 г, углеводы - 28 г',
-                calories: '220 ккал/921 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'pelmeni-chernye',
-                name: 'Пельмени чёрные из оленины с трюфелем (ручная лепка)',
-                price: 960,
-                unit: '/500 гр.',
-                maxQty: 6,
-                image: '❄️',
-                imageUrl: 'images/products/zamorozhennye/pelmeni-chernye.jpg',
-                composition: 'фарш - оленина, масло сливочное, ежевика, соль, мускатный орех, орегано, трюфель -0,02%, Тесто – мука пшеничная в/с, вода, соль, яичный меланж, чернила каракатицы',
-                nutrition: 'белки - 22 г, жиры - 6 г, углеводы - 28 г',
-                calories: '220 ккал/921 кДж',
-                storage: '10 месяцев',
-                available: true
-            }
-        ],
-        'polufabrikaty': [
-            {
-                id: 'okorok-olene',
-                name: 'Окорок оленя',
-                price: 1970,
-                unit: '/кг',
-                maxQty: 6,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/okorok-olene.jpg',
-                composition: 'оленина окорок высший сорт',
-                nutrition: 'белки - 22 г, жиры - 11 г',
-                calories: '260 ккал/1190 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'vyrezka-olene',
-                name: 'Вырезка оленя',
-                price: 3160,
-                unit: '/кг',
-                maxQty: 4,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/vyrezka-olene.jpg',
-                composition: 'вырезка оленя высший сорт',
-                nutrition: 'Белки - 22 г, Жиры - 11 г',
-                calories: '260 ккал/1190 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'koreyka-kost',
-                name: 'Корейка оленя на кости',
-                price: 3310,
-                unit: '/кг',
-                maxQty: 4,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/koreyka-kost.jpg',
-                composition: 'корейка оленя высший сорт',
-                nutrition: 'Белки - 22 г, Жиры - 11 г',
-                calories: '260 ккал/1190 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'kupaty-piknik',
-                name: 'Купаты "Пикник"',
-                price: 1268,
-                unit: '/кг',
-                maxQty: 8,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/kupaty-piknik.jpg',
-                composition: 'оленина, шпик, чеснок, сахар, экстракты пряностей, кориандр, черный перец, соль поваренная пищевая',
-                nutrition: 'белки - 15,0 г, жиры - 21,0 г, углеводы - 1,5 г',
-                calories: '260 ккал/1090 кДж',
-                storage: '12 месяцев',
-                available: true
-            },
-            {
-                id: 'kupaty-tundra',
-                name: 'Купаты "Тундра"',
-                price: 1268,
-                unit: '/кг',
-                maxQty: 8,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/kupaty-tundra.jpg',
-                composition: 'оленина, шпик, лук, сахар, экстракты пряностей, соль поваренная пищевая',
-                nutrition: 'белки - 15 г, жиры - 21 г, углеводы - 1 г',
-                calories: '250 ккал/1050 кДж',
-                storage: '12 месяцев',
-                available: true
-            },
-            {
-                id: 'kotleti-burger',
-                name: 'Котлеты для бургера из мяса северного оленя',
-                price: 290,
-                unit: '/300 гр. (2 штуки)',
-                maxQty: 10,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/kotleti-burger.jpg',
-                composition: 'мясо северного оленя рубленное, жир олений',
-                nutrition: 'Белки - 17 г, Жиры - 12 г',
-                calories: '270 ккал/980 кДж',
-                storage: '10 месяцев',
-                available: true
-            },
-            {
-                id: 'lopatka-olene',
-                name: 'Лопатка оленя без кости',
-                price: 1770,
-                unit: '/кг',
-                maxQty: 6,
-                image: '🥓',
-                imageUrl: 'images/products/polufabrikaty/lopatka-olene.jpg',
-                composition: 'оленина лопаточная часть без кости',
-                nutrition: 'Белки - 19 г, Жиры - 4 г',
-                calories: '112 ккал/780 кДж',
-                storage: '10 месяцев',
-                available: true
-            }
-        ],
-        'pirogi-sytnye': [
-            {
-                id: 'pirog-ohotnichiy',
-                name: 'Пирог с олениной охотничий',
-                price: 880,
-                unit: '/550 гр.',
-                maxQty: 8,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-ohotnichiy.jpg',
-                composition: 'мука в/с, оленина в/с, томаты вяленые, масло оливковое, соль, сахар, яйцо, вода, дрожжи хлебопекарные, лук репчатый, морковь, специи',
-                nutrition: 'Белки 11.55 г, Жиры 9.32 г, Углеводы 25.24 г',
-                calories: '232.8 ккал/974.1 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-brusnika',
-                name: 'Пирог с олениной и брусникой',
-                price: 880,
-                unit: '/550 гр.',
-                maxQty: 8,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-brusnika.jpg',
-                composition: 'мука в/с, оленина в/с, брусника, соевый соус, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
-                nutrition: 'Белки 14.02 г, Жиры 9.12 г, Углеводы 23.42 г',
-                calories: '233.2 ккал/917.6 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-griby-trufel',
-                name: 'Пирог с олениной, грибами и трюфелем',
-                price: 880,
-                unit: '/550 гр.',
-                maxQty: 8,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-griby-trufel.jpg',
-                composition: 'мука в/с, оленина в/с, шампиньоны свежие, трюфельная паста, масло оливковое, соль, сахар, яйцо, вода, дрожжи хлебопекарные, лук репчатый, специи',
-                nutrition: 'Белки 13.02 г, Жиры 9.31 г, Углеводы 25.42 г',
-                calories: '235.2 ккал/921.4 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-gribnoy',
-                name: 'Пирог с грибным жюльеном',
-                price: 964,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-gribnoy.jpg',
-                composition: 'мука в/с, шампиньоны свежие, сливки натуральные, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
-                nutrition: 'Белки 8.8 г, Жиры 8.9 г, Углеводы 22.6 г',
-                calories: '241.2 ккал/1009.68 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-kuritsa-griby',
-                name: 'Пирог с курицей и грибами',
-                price: 980,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-kuritsa-griby.jpg',
-                composition: 'мука в/с, куриное филе, шампиньоны свежие, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
-                nutrition: 'Белки 11.4 г, Жиры 2.8 г, Углеводы 24.5 г',
-                calories: '255.3 ккал/1085 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-kartofel-griby',
-                name: 'Пирог с картофелем и грибами',
-                price: 922,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-kartofel-griby.jpg',
-                composition: 'мука в/с, картофель, шампиньоны свежие, соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
-                nutrition: 'Белки 4.6 г, Жиры 7.8 г, Углеводы 18.4 г',
-                calories: '154.8 ккал/904 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-krasnaya-ryba',
-                name: 'Пирог с красной рыбой',
-                price: 2460,
-                unit: '/700 гр.',
-                maxQty: 4,
-                image: '🥧',
-                imageUrl: 'images/products/pirogi-sytnye/pirog-krasnaya-ryba.jpg',
-                composition: 'мука в/с, семга (лосось), соль, сахар, яйцо, вода, дрожжи хлебопекарные, масло растительное, лук репчатый, специи',
-                nutrition: 'Белки 14.9 г, Жиры 13 г, Углеводы 24.6 г',
-                calories: '274.7 ккал/1150.4 кДж',
-                storage: '6 месяцев',
-                available: true
-            }
-        ],
-        'pirogi-sladkie': [
-            {
-                id: 'pirog-yabloko-smorodina',
-                name: 'Пирог с яблоком и черной смородиной',
-                price: 860,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko-smorodina.jpg',
-                composition: 'мука в/с, яблоки натуральные, черная смородина натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 6.2 г, Жиры 5.4 г, Углеводы 52.8 г',
-                calories: '251.4 ккал/1163.3 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-vishnya',
-                name: 'Пирог с вишней',
-                price: 885,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-vishnya.jpg',
-                composition: 'мука в/с, вишня натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 6.5 г, Жиры 5.8 г, Углеводы 52.4 г',
-                calories: '285.4 ккал/1195.4 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-tvorog-klubnika',
-                name: 'Пирог с творогом и клубникой',
-                price: 874,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-klubnika.jpg',
-                composition: 'мука в/с, клубника натуральная, крем ванильно-сливочный заварной, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 8.3 г, Жиры 7.1 г, Углеводы 38.4 г',
-                calories: '285.6 ккал/1049.2 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-tvorog-chernika',
-                name: 'Пирог с творогом и черникой',
-                price: 878,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-chernika.jpg',
-                composition: 'мука в/с, черника натуральная, крем ванильно-сливочный заварной соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 8.2 г, Жиры 6.8 г, Углеводы 37.8 г',
-                calories: '258.6 ккал/1049.2 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-tvorog-malina',
-                name: 'Пирог с творогом и малиной',
-                price: 880,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-tvorog-malina.jpg',
-                composition: 'мука в/с, малина натуральная, крем ванильно-сливочный заварной, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 8.4 г, Жиры 7.2 г, Углеводы 38.1 г',
-                calories: '250.8 ккал/1050 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-chernika',
-                name: 'Пирог с черникой',
-                price: 885,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-chernika.jpg',
-                composition: 'мука в/с, черника натуральная, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 2.7 г, Жиры 9.9 г, Углеводы 33.4 г',
-                calories: '245.8 ккал/1026.18 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-yabloko-brusnika',
-                name: 'Пирог с яблоком и брусникой',
-                price: 868,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko-brusnika.jpg',
-                composition: 'мука в/с, брусника натуральная, яблоки натуральные, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 3.5 г, Жиры 4 г, Углеводы 35.7 г',
-                calories: '192.3 ккал/805.25 кДж',
-                storage: '6 месяцев',
-                available: true
-            },
-            {
-                id: 'pirog-yabloko',
-                name: 'Пирог с яблоком',
-                price: 860,
-                unit: '/700 гр.',
-                maxQty: 6,
-                image: '🧁',
-                imageUrl: 'images/products/pirogi-sladkie/pirog-yabloko.jpg',
-                composition: 'мука в/с, яблоки натуральные, соль, сахар, яйцо, вода, масло растительное, дрожжи хлебопекарные',
-                nutrition: 'Белки 9.2 г, Жиры 5.4 г, Углеводы 52.8 г',
-                calories: '258.4 ккал/1184.3 кДж',
-                storage: '6 месяцев',
-                available: true
-            }
-        ]
-        // ✅ ГОТОВО! ВСЕ 8 КАТЕГОРИЙ, 49 ТОВАРОВ!
-    };
+    
+    updateCartBadge();
+    localStorage.setItem('tundra_cart', JSON.stringify(cart));
 }
 
-// 📞 ФУНКЦИЯ ФОРМАТИРОВАНИЯ НОМЕРА ТЕЛЕФОНА ДЛЯ YOOKASSA
-function formatPhoneForYooKassa(phone) {
-    if (!phone) return '+79000000000';
+function showProductDetail(categoryId, productId) {
+    currentProduct = { categoryId, productId };
+    const product = products[categoryId].find(p => p.id === productId);
     
-    // Убираем все символы кроме цифр
-    let cleanPhone = phone.replace(/\D/g, '');
+    // Определяем, что отображать: изображение или эмодзи
+    let detailImageContent = '';
+    let detailEmojiContent = '';
     
-    // Если номер начинается с 8, заменяем на 7
-    if (cleanPhone.startsWith('8')) {
-        cleanPhone = '7' + cleanPhone.substring(1);
+    if (product.imageUrl) {
+        detailImageContent = `<img src="${product.imageUrl}" alt="${product.name}" class="detail-image-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; console.log('Detail image failed to load:', product.imageUrl);">`;
+        detailEmojiContent = `<div class="detail-image-emoji" style="display: none;">${product.image}</div>`;
+    } else {
+        detailImageContent = '';
+        detailEmojiContent = `<div class="detail-image-emoji">${product.image}</div>`;
     }
     
-    // Если номер начинается с 7 и имеет 11 цифр, добавляем +
-    if (cleanPhone.startsWith('7') && cleanPhone.length === 11) {
-        return '+' + cleanPhone;
-    }
-    
-    // Если номер начинается с 7 и имеет 10 цифр, добавляем +7
-    if (cleanPhone.startsWith('7') && cleanPhone.length === 10) {
-        return '+7' + cleanPhone;
-    }
-    
-    // Если номер не соответствует формату, возвращаем fallback
-    logger.warn(`⚠️ Некорректный формат номера телефона: ${phone}, используем fallback`);
-    return '+79000000000';
-}
-
-// 💳 ФУНКЦИЯ СОЗДАНИЯ ПЛАТЕЖА В YOOKASSA
-async function createYooKassaPayment(orderId, amount, description, customerInfo) {
-    try {
-        const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
-        logger.debug('💳 Создаем платеж ЮKassa с параметрами:', {
-            amount: amount.toFixed(2) + ' RUB',
-            description: description,
-            customer: customerInfo.customerName,
-            originalPhone: customerInfo.phone,
-            formattedPhone: formattedPhone
-        });
-        
-        const paymentData = {
-            amount: {
-                value: amount.toFixed(2),
-                currency: 'RUB'
-            },
-            confirmation: {
-                type: 'redirect',
-                return_url: `https://tundra-miniapp-production.up.railway.app/payment/success?order=${orderId}`
-            },
-            capture: true,
-            description: description,
-            receipt: {
-                customer: {
-                    email: customerInfo.email || 'customer@example.com',
-                    phone: formattedPhone
-                },
-                items: [
-                    {
-                        description: description,
-                        quantity: '1',
-                        amount: {
-                            value: amount.toFixed(2),
-                            currency: 'RUB'
-                        },
-                        vat_code: 1, // НДС 20%
-                        payment_mode: 'full_payment',
-                        payment_subject: 'commodity'
-                    }
-                ]
-            },
-            metadata: {
-                orderId: orderId,
-                customerName: customerInfo.customerName || 'Клиент',
-                phone: customerInfo.phone || ''
-            }
-        };
-        
-        // Создаем уникальный ключ идемпотентности
-        const idempotenceKey = crypto.randomUUID();
-        logger.debug('🔑 Idempotence Key:', idempotenceKey);
-        logger.debug('📋 Данные платежа для YooKassa:', JSON.stringify(paymentData, null, 2));
-        
-        const payment = await checkout.createPayment(paymentData, idempotenceKey);
-
-        logger.info(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
-        logger.debug(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
-        return payment;
-    } catch (error) {
-        logger.error('❌ Ошибка создания платежа ЮKassa:', error.message);
-        if (error.response) {
-            logger.error('📋 Детали ошибки YooKassa:', {
-                status: error.response.status,
-                statusText: error.response.statusText,
-                data: error.response.data
-            });
-        }
-        throw error;
-    }
-}
-
-// 🔢 ИНИЦИАЛИЗАЦИЯ СЧЕТЧИКА ЗАКАЗОВ ИЗ БД
-async function initializeOrderCounter() {
-    try {
-        // Получаем максимальный ID заказа из БД
-        const result = await OrdersDB.getMaxOrderId();
-        if (result && result.max_id) {
-            orderCounter = parseInt(result.max_id);
-            logger.info(`🔢 Счетчик заказов инициализирован: ${orderCounter}`);
-        } else {
-            orderCounter = 0;
-            logger.info('🔢 Счетчик заказов инициализирован: 0 (нет заказов в БД)');
-        }
-    } catch (error) {
-        logger.error('❌ Ошибка инициализации счетчика заказов:', error.message);
-        orderCounter = 0; // Fallback
-    }
-}
-
-// Функции для работы с заказами
-async function createOrder(orderData) {
-    orderCounter++;
-    const orderId = orderCounter.toString();
-    
-    const order = {
-        id: orderId,
-        status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
-        paymentStatus: 'pending', // pending, paid, cancelled, expired
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
-        ...orderData
-    };
-    
-    // 💾 СОХРАНЯЕМ В БД И В ПАМЯТЬ
-    orders.set(orderId, order);
-    
-    // Сохраняем в базу данных
-    try {
-        const dbOrder = {
-            orderId: order.id,
-            userId: order.userId || order.telegramUserId || 'unknown',
-            userName: order.customerName || 'Клиент',
-            phone: order.phone || '',
-            deliveryZone: order.deliveryZone || 'moscow',
-            address: JSON.stringify(order.address || {}),
-            items: JSON.stringify(order.cartItems || []),
-            totalAmount: order.totals?.total || 0,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-            paymentId: order.paymentId || null,
-            paymentUrl: order.paymentUrl || null
-        };
-        
-        await OrdersDB.create(dbOrder);
-        logger.debug(`💾 Заказ ${orderId} сохранен в БД`);
-    } catch (error) {
-        logger.error(`❌ Ошибка сохранения заказа ${orderId} в БД:`, error.message);
-    }
-    
-    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
-    const timer = setTimeout(() => {
-        autoExpireOrder(orderId);
-    }, 10 * 60 * 1000); // 10 минут
-    
-    orderTimers.set(orderId, timer);
-    
-    logger.debug(`🔥 Заказ ${orderId} создан. Автоотмена через 10 минут.`);
-    
-    return order;
-}
-
-function updateOrderStatus(orderId, newStatus) {
-    const order = orders.get(orderId);
-    if (order) {
-        order.status = newStatus;
-        order.updatedAt = new Date();
-        orders.set(orderId, order);
-        return order;
-    }
-    return null;
-}
-
-function getOrder(orderId) {
-    return orders.get(orderId);
-}
-
-function getAllOrders() {
-    return Array.from(orders.values()).sort((a, b) => b.createdAt - a.createdAt);
-}
-
-// 🔥 ФУНКЦИЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗА
-function autoExpireOrder(orderId) {
-    const order = orders.get(orderId);
-    if (!order) {
-        logger.warn(`⚠️ Заказ ${orderId} не найден для автоотмены`);
-        return;
-    }
-    
-    // Проверяем, не был ли заказ уже оплачен
-    if (order.paymentStatus === 'paid') {
-        logger.debug(`✅ Заказ ${orderId} уже оплачен, отмена отменена`);
-        clearOrderTimer(orderId);
-        return;
-    }
-    
-    // Отменяем заказ
-    order.status = 'expired';
-    order.paymentStatus = 'expired';
-    order.updatedAt = new Date();
-    orders.set(orderId, order);
-    
-    // Очищаем таймер
-    clearOrderTimer(orderId);
-    
-    logger.info(`⏰ Заказ ${orderId} автоматически отменен (время истекло)`);
-}
-
-// Функция очистки таймера заказа
-function clearOrderTimer(orderId) {
-    const timer = orderTimers.get(orderId);
-    if (timer) {
-        clearTimeout(timer);
-        orderTimers.delete(orderId);
-    }
-}
-
-// Функция отмены таймера при оплате
-function cancelOrderTimer(orderId) {
-    clearOrderTimer(orderId);
-    logger.debug(`🔥 Таймер заказа ${orderId} отменен (заказ оплачен)`);
-}
-
-// Настройка статических файлов (ПОЛНОСТЬЮ БЕЗ ОГРАНИЧЕНИЙ)
-const webRoot = path.join(__dirname, 'webapp');
-app.use(express.static(webRoot));
-
-// Применяем CORS и rate limiting только к API
-app.use('/api', cors(corsOptions));
-app.use('/api', limiter);
-app.use('/webhook', cors(corsOptions));
-app.use('/webhook', limiter);
-
-// Health check endpoints
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
-});
-
-app.get('/ping', (req, res) => {
-    res.status(200).send('pong');
-});
-
-// Тестовый эндпоинт для проверки ЮKassa
-app.get('/test-yookassa', async (req, res) => {
-    try {
-        logger.info('🧪 Тестируем ЮKassa API...');
-        
-        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
-            return res.status(500).json({ 
-                ok: false, 
-                error: 'Ключи ЮKassa не настроены',
-                shopId: config.YOOKASSA_SHOP_ID,
-                secretKey: config.YOOKASSA_SECRET_KEY ? 'ЕСТЬ' : 'НЕТ'
-            });
-        }
-        
-        // Тест 1: Проверка доступности API
-        const meResponse = await axios.get('https://api.yookassa.ru/v3/me', {
-            auth: {
-                username: config.YOOKASSA_SHOP_ID,
-                password: config.YOOKASSA_SECRET_KEY
-            },
-            timeout: 10000
-        });
-        
-        logger.info('✅ API доступен');
-        
-        // Тест 2: Создание тестового платежа
-        const testPaymentData = {
-            amount: {
-                value: "1.00",
-                currency: "RUB"
-            },
-            confirmation: {
-                type: "redirect",
-                return_url: "https://tundra-miniapp-production.up.railway.app"
-            },
-            description: "Тестовый платеж для проверки API",
-            metadata: {
-                test: "true"
-            }
-        };
-        
-        const testIdempotenceKey = crypto.randomUUID();
-        const paymentResponse = await axios.post('https://api.yookassa.ru/v3/payments', testPaymentData, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Idempotence-Key': testIdempotenceKey
-            },
-            auth: {
-                username: config.YOOKASSA_SHOP_ID,
-                password: config.YOOKASSA_SECRET_KEY
-            },
-            timeout: 30000
-        });
-        
-        logger.info('✅ Тестовый платеж создан:', paymentResponse.data.id);
-        
-        res.json({
-            ok: true,
-            message: 'ЮKassa работает корректно',
-            accountInfo: meResponse.data,
-            testPayment: {
-                id: paymentResponse.data.id,
-                status: paymentResponse.data.status,
-                confirmationUrl: paymentResponse.data.confirmation?.confirmation_url
-            }
-        });
-        
-    } catch (error) {
-        logger.error('❌ Тест ЮKassa провалился:', error.message);
-        
-        res.status(500).json({
-            ok: false,
-            error: error.message,
-            details: error.response?.data || null,
-            status: error.response?.status || null,
-            shopId: config.YOOKASSA_SHOP_ID,
-            secretKeyLength: config.YOOKASSA_SECRET_KEY?.length || 0
-        });
-    }
-});
-
-// Webhook для обработки уведомлений от ЮKassa
-app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
-    try {
-        logger.debug('🔔 Получено уведомление от ЮKassa');
-        
-        const notification = JSON.parse(req.body.toString());
-        
-        // Проверяем тип уведомления
-        if (notification.type === 'payment.succeeded') {
-            const payment = notification.object;
-            logger.info('✅ Платеж успешно завершен:', payment.id);
-            
-            // Обновляем статус заказа в базе данных
-            if (payment.metadata && payment.metadata.orderId) {
-                const orderId = payment.metadata.orderId;
-                logger.info('🔄 Обновляем статус заказа:', orderId);
-                
-                try {
-                    // Обновляем статус заказа
-                    await OrdersDB.update(orderId, { 
-                        status: 'accepted',
-                        paymentStatus: 'paid',
-                        paymentId: payment.id,
-                        paidAt: new Date().toISOString()
-                    });
-                    
-                    // Получаем данные заказа для создания записи в истории покупок
-                    const order = await OrdersDB.getById(orderId);
-                    if (order) {
-                        // Создаем запись в истории покупок
-                        await PurchaseHistoryDB.create({
-                            order_id: orderId,
-                            user_id: order.user_id,
-                            customer_name: order.user_name,
-                            phone: order.phone,
-                            total_amount: parseFloat(payment.amount.value),
-                            items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
-                            items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
-                            payment_id: payment.id,
-                            delivery_zone: order.delivery_zone,
-                            address_data: order.address, // address уже строка JSON
-                            created_at: new Date().toISOString()
-                        });
-                        
-                        logger.info('✅ Заказ обновлен и добавлен в историю покупок');
-                        logger.debug('📊 Данные для истории покупок:', {
-                            orderId: orderId,
-                            userId: order.user_id,
-                            totalAmount: parseFloat(payment.amount.value),
-                            itemsCount: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length
-                        });
-                        
-                        // Отправляем уведомление в Telegram (если настроен бот)
-                        if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
-                            try {
-                                // Парсим адрес из JSON строки
-                                const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
-                                
-                                const message = `🎉 НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!\n\n` +
-                                    `📋 Заказ #${orderId}\n` +
-                                    `👤 Клиент: ${order.user_name}\n` +
-                                    `📞 Телефон: ${order.phone}\n` +
-                                    `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
-                                    `💳 ID платежа: ${payment.id}\n` +
-                                    `📍 Зона доставки: ${order.delivery_zone}\n` +
-                                    `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
-                                
-                                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                                    chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
-                                    text: message,
-                                    parse_mode: 'HTML'
-                                });
-                                
-                                logger.info('📱 Уведомление отправлено в Telegram');
-                            } catch (telegramError) {
-                                logger.error('❌ Ошибка отправки в Telegram:', telegramError.message);
-                            }
-                        }
-                    }
-                } catch (dbError) {
-                    logger.error('❌ Ошибка обновления заказа в БД:', dbError.message);
-                }
-            }
-        } else if (notification.type === 'payment.canceled') {
-            const payment = notification.object;
-            logger.info('❌ Платеж отменен:', payment.id);
-            
-            // Обновляем статус заказа
-            if (payment.metadata && payment.metadata.orderId) {
-                await OrdersDB.update(payment.metadata.orderId, { 
-                    status: 'canceled',
-                    paymentId: payment.id
-                });
-                logger.info('🔄 Статус заказа обновлен на "отменен"');
-            }
-        }
-        
-        res.status(200).send('OK');
-    } catch (error) {
-        logger.error('❌ Ошибка обработки webhook:', error.message);
-        res.status(500).send('Error');
-    }
-});
-
-// API для заказов
-app.post('/api/orders', validateOrderData, async (req, res) => {
-    logger.info('🔥 Создание нового заказа');
-    let order = null;
-    
-    try {
-        const orderData = req.body;
-        
-        // Создаем заказ
-        order = await createOrder(orderData);
-        logger.info(`✅ Заказ #${order.id} создан, сумма: ${order.totals?.total || 0}₽`);
-        
-        // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
-        const totalAmount = order.totals?.total || 0;
-        const description = `Заказ #${order.id} в Tundra Gourmet`;
-        
-        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
-            logger.error('❌ ЮKassa ключи не настроены');
-            throw new Error('ЮKassa ключи не настроены');
-        }
-        
-        if (!checkout) {
-            logger.error('❌ ЮKassa не инициализирована');
-            throw new Error('ЮKassa недоступна');
-        }
-        
-        const customerInfo = {
-            customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
-            phone: order.phone || ''
-        };
-        
-        // Добавляем customerName в заказ
-        order.customerName = customerInfo.customerName;
-        
-        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
-        
-        // Сохраняем ID платежа в заказе
-        order.paymentId = payment.id;
-        order.paymentUrl = payment.confirmation.confirmation_url;
-        orders.set(order.id, order);
-        
-        // Обновляем в БД
-        try {
-            const updateData = {
-                paymentId: order.paymentId,
-                paymentUrl: order.paymentUrl,
-                status: order.status
-            };
-            await OrdersDB.update(order.id, updateData);
-        } catch (dbError) {
-            logger.error(`❌ Ошибка обновления заказа в БД:`, dbError.message);
-        }
-        
-        logger.info(`✅ Заказ #${order.id} и платеж созданы успешно`);
-        
-        const response = { 
-            ok: true, 
-            orderId: order.id,
-            paymentUrl: payment.confirmation.confirmation_url,
-            paymentId: payment.id,
-            amount: totalAmount
-        };
-        
-        res.json(response);
-    } catch (error) {
-        logger.error('❌ Ошибка обработки заказа:', error.message);
-        
-        // Если ошибка ЮKassa, отправим заказ в ДЕМО РЕЖИМЕ
-        logger.warn('⚠️ ЮKassa недоступна, включаем ДЕМО РЕЖИМ');
-        
-        // Проверяем, что order был создан
-        if (order && order.id) {
-            // В демо-режиме сразу помечаем заказ как оплаченный
-            order.paymentStatus = 'paid';
-            order.status = 'accepted';
-            orders.set(order.id, order);
-            
-            // Обновляем в БД
-            try {
-                await OrdersDB.update(order.id, {
-                    status: 'accepted',
-                    paymentStatus: 'paid'
-                });
-            } catch (dbError) {
-                logger.error(`❌ Ошибка обновления заказа в БД:`, dbError.message);
-            }
-            
-            // Возвращаем успешный ответ без редиректа на оплату
-            res.json({ 
-                ok: true, 
-                orderId: order.id,
-                paymentUrl: null, // Нет URL для редиректа
-                paymentId: 'demo_payment_' + order.id,
-                amount: order.totals?.total || 0,
-                isTestMode: true,
-                isPaid: true, // Помечаем как оплаченный
-                message: 'ДЕМО РЕЖИМ: Заказ автоматически оплачен'
-            });
-        } else {
-            // Если заказ не был создан, возвращаем ошибку
-            logger.error('❌ Заказ не был создан');
-            res.status(500).json({ 
-                ok: false, 
-                error: 'Ошибка создания заказа',
-                message: 'Не удалось создать заказ'
-            });
-        }
-    }
-});
-
-// API для получения истории покупок клиента
-app.get('/api/purchases/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        
-        // Загружаем историю покупок из БД
-        const purchases = await PurchaseHistoryDB.getByUserId(userId);
-        
-        // Подсчитываем статистику лояльности
-        const totalPurchases = purchases.length;
-        const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
-        
-        // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
-        let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
-        
-        if (totalSpent < 10000) {
-            // 💜 0₽ - 9,999₽ → 0% скидка
-            loyaltyLevel = 0;
-            currentDiscount = 0;
-            nextLevelTarget = 10000;
-            nextLevelProgress = (totalSpent / 10000) * 100;
-        } else if (totalSpent < 25000) {
-            // ⭐ 10,000₽ - 24,999₽ → 3% скидка
-            loyaltyLevel = 1;
-            currentDiscount = 3;
-            nextLevelTarget = 25000;
-            nextLevelProgress = ((totalSpent - 10000) / (25000 - 10000)) * 100;
-        } else if (totalSpent < 50000) {
-            // ⭐ 25,000₽ - 49,999₽ → 5% скидка
-            loyaltyLevel = 2;
-            currentDiscount = 5;
-            nextLevelTarget = 50000;
-            nextLevelProgress = ((totalSpent - 25000) / (50000 - 25000)) * 100;
-        } else {
-            // ⭐ 50,000₽+ → 10% скидка
-            loyaltyLevel = 3;
-            currentDiscount = 10;
-            nextLevelTarget = null; // максимальный уровень
-            nextLevelProgress = 100;
-        }
-        
-        res.json({
-            ok: true,
-            purchases,
-            stats: {
-                totalPurchases,
-                totalSpent,
-                loyaltyLevel,
-                currentDiscount,
-                nextLevelProgress: Math.round(nextLevelProgress),
-                nextLevelTarget,
-                levelName: loyaltyLevel === 0 ? "Новичок" : 
-                          loyaltyLevel === 1 ? "Бронза" :
-                          loyaltyLevel === 2 ? "Серебро" : "Золото"
-            }
-        });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка получения истории покупок:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// API для получения всех заказов
-app.get('/api/orders', (req, res) => {
-    try {
-        const allOrders = getAllOrders();
-        res.json({ ok: true, orders: allOrders });
-    } catch (error) {
-        logger.error('Ошибка получения заказов:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// API для получения конкретного заказа
-app.get('/api/orders/:orderId', (req, res) => {
-    try {
-        const order = getOrder(req.params.orderId);
-        if (order) {
-            res.json({ ok: true, order });
-        } else {
-            res.status(404).json({ ok: false, error: 'Заказ не найден' });
-        }
-    } catch (error) {
-        logger.error('Ошибка получения заказа:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// API для обновления статуса заказа
-app.put('/api/orders/:orderId/status', (req, res) => {
-    try {
-        const { status } = req.body;
-        const orderId = req.params.orderId;
-        
-        // 🔥 ОБРАБАТЫВАЕМ СПЕЦИАЛЬНЫЕ СТАТУСЫ
-        if (status === 'cancelled' || status === 'expired') {
-            // Отменяем таймер при ручной отмене или истечении времени
-            clearOrderTimer(orderId);
-        }
-        
-        const order = updateOrderStatus(orderId, status);
-        
-        if (order) {
-            logger.info(`📝 Статус заказа ${orderId} изменен на: ${status}`);
-            res.json({ ok: true, order });
-        } else {
-            res.status(404).json({ ok: false, error: 'Заказ не найден' });
-        }
-    } catch (error) {
-        logger.error('Ошибка обновления статуса:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Webhook для Telegram
-app.post('/api/telegram/webhook', (req, res) => {
-    try {
-        const { message, callback_query } = req.body;
-        
-        if (callback_query) {
-            // Обрабатываем нажатие на inline-кнопку
-            handleCallbackQuery(callback_query);
-        } else if (message) {
-            // Обрабатываем обычные сообщения
-            logger.debug('Получено сообщение:', message.text);
-        }
-        
-        res.json({ ok: true });
-    } catch (error) {
-        logger.error('Ошибка обработки Telegram webhook:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Функция обработки callback query (нажатия на кнопки)
-async function handleCallbackQuery(callbackQuery) {
-    try {
-        const { data, message, from } = callbackQuery;
-        const [action, orderId] = data.split('_');
-        
-        logger.debug(`Обработка действия: ${action} для заказа ${orderId}`);
-        
-        let order = getOrder(orderId);
-        if (!order) {
-            logger.error(`Заказ ${orderId} не найден`);
-            return;
-        }
-        
-        let newStatus, statusText, statusEmoji;
-        
-        switch (action) {
-            case 'accept':
-                newStatus = 'accepted';
-                statusText = 'Принят';
-                statusEmoji = '🟡';
-                break;
-            case 'cancel':
-                newStatus = 'cancelled';
-                statusText = 'Отменен';
-                statusEmoji = '🔴';
-                break;
-            case 'preparing':
-                newStatus = 'preparing';
-                statusText = 'Готовится';
-                statusEmoji = '🔵';
-                break;
-            case 'delivering':
-                newStatus = 'delivering';
-                statusText = 'В доставке';
-                statusEmoji = '🚚';
-                break;
-            case 'completed':
-                newStatus = 'completed';
-                statusText = 'Доставлен';
-                statusEmoji = '✅';
-                break;
-            default:
-                logger.error(`Неизвестное действие: ${action}`);
-                return;
-        }
-        
-        // Обновляем статус заказа
-        order = updateOrderStatus(orderId, newStatus);
-        
-        // Обновляем сообщение в админ-группе
-        await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
-        
-        // Отправляем подтверждение
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
-            callback_query_id: callbackQuery.id,
-            text: `Статус заказа #${orderId} изменен на "${statusText}"`
-        });
-        
-        logger.info(`Статус заказа ${orderId} изменен на ${newStatus}`);
-        
-    } catch (error) {
-        logger.error('Ошибка обработки callback query:', error.message);
-    }
-}
-
-// Функция обновления сообщения с заказом
-async function updateOrderMessage(chatId, messageId, order, newStatus) {
-    try {
-        const statusEmojis = {
-            'new': '⏳',
-            'accepted': '🟡',
-            'preparing': '🔵',
-            'delivering': '🚚',
-            'completed': '✅',
-            'cancelled': '🔴'
-        };
-        
-        const statusTexts = {
-            'new': 'Новый',
-            'accepted': 'Принят',
-            'preparing': 'Готовится',
-            'delivering': 'В доставке',
-            'completed': 'Доставлен',
-            'cancelled': 'Отменен'
-        };
-        
-        // Формируем обновленное сообщение
-        const message = `🆕 ЗАКАЗ #${order.id} - ${statusEmojis[newStatus]} ${statusTexts[newStatus]}
-
-👤 ${order.customerName || 'Клиент'}
-📍 ${order.address.street}, ${order.address.house}${order.address.apartment ? `, кв.${order.address.apartment}` : ''} (${order.deliveryZone === 'moscow' ? 'Москва' : 'МО'})
-💰 ${order.totals?.total || 0}₽
-📦 ${order.cartItems?.length || 0} товаров
-
-📋 Состав заказа:
-${order.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n')}
-
-📱 Телефон: ${order.phone}
-💬 Комментарий: ${order.comment || 'нет'}
-
-[🟡 Принять] [🔵 Готовится] [🚚 Доставке] [✅ Доставлен]`;
-
-        // Создаем обновленные кнопки в зависимости от статуса
-        let inlineKeyboard;
-        if (newStatus === 'new') {
-            inlineKeyboard = {
-                inline_keyboard: [
-                    [
-                        { text: '🟡 Принять', callback_data: `accept_${order.id}` },
-                        { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
-                    ]
-                ]
-            };
-        } else if (newStatus === 'accepted') {
-            inlineKeyboard = {
-                inline_keyboard: [
-                    [
-                        { text: '🔵 Готовится', callback_data: `preparing_${order.id}` },
-                        { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
-                    ]
-                ]
-            };
-        } else if (newStatus === 'preparing') {
-            inlineKeyboard = {
-                inline_keyboard: [
-                    [
-                        { text: '🚚 В доставку', callback_data: `delivering_${order.id}` }
-                    ]
-                ]
-            };
-        } else if (newStatus === 'delivering') {
-            inlineKeyboard = {
-                inline_keyboard: [
-                    [
-                        { text: '✅ Доставлен', callback_data: `completed_${order.id}` }
-                    ]
-                ]
-            };
-        } else {
-            // Для завершенных или отмененных заказов убираем кнопки
-            inlineKeyboard = { inline_keyboard: [] };
-        }
-        
-        // Обновляем сообщение
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
-            chat_id: chatId,
-            message_id: messageId,
-            text: message,
-            parse_mode: 'HTML',
-            reply_markup: inlineKeyboard
-        });
-        
-    } catch (error) {
-        logger.error('Ошибка обновления сообщения:', error.message);
-    }
-}
-
-// Webhook для ЮKassa - УДАЛЕН (дублирует /webhook/yookassa)
-
-// Функции обработки платежей - УДАЛЕНЫ (логика перенесена в основной webhook)
-
-// API для создания платежа через ЮKassa - УДАЛЕН (дублирует /api/orders)
-
-// 🔧 MIDDLEWARE ДЛЯ ЗАЩИТЫ АДМИН API
-function requireAdminAuth(req, res, next) {
-    const providedPassword = req.headers['x-admin-password'] || req.query.password;
-    const adminPassword = config.ADMIN_PASSWORD;
-    
-    if (providedPassword !== adminPassword) {
-        return res.status(401).json({ 
-            ok: false, 
-            error: 'Unauthorized. Admin password required.' 
-        });
-    }
-    
-    next();
-}
-
-// 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ
-function validateOrderData(req, res, next) {
-    const { cartItems, address, phone, customerName, deliveryZone } = req.body;
-    
-    // Логируем входящие данные для отладки
-    logger.debug('🔍 Валидация заказа:', {
-        cartItems: cartItems?.length || 0,
-        address: address ? 'есть' : 'нет',
-        phone: phone ? 'есть' : 'нет',
-        customerName: customerName ? 'есть' : 'нет',
-        deliveryZone: deliveryZone || 'нет'
-    });
-    
-    // Проверяем обязательные поля
-    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
-        logger.error('❌ Валидация: Корзина пуста');
-        return res.status(400).json({
-            ok: false,
-            error: 'Корзина не может быть пустой'
-        });
-    }
-    
-    if (!address || !address.street || !address.house) {
-        logger.error('❌ Валидация: Адрес неполный:', address);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать адрес доставки'
-        });
-    }
-    
-    if (!phone || typeof phone !== 'string' || phone.trim().length < 10) {
-        logger.error('❌ Валидация: Телефон некорректный:', phone);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать корректный номер телефона'
-        });
-    }
-    
-    // Имя клиента не обязательно (не отправляется из frontend)
-    // if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
-    //     logger.error('❌ Валидация: Имя клиента некорректное:', customerName);
-    //     return res.status(400).json({
-    //         ok: false,
-    //         error: 'Необходимо указать имя клиента'
-    //     });
-    // }
-    
-    if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
-        logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо выбрать зону доставки'
-        });
-    }
-    
-    // Валидируем товары в корзине
-    for (const item of cartItems) {
-        if (!item.productId || !item.name || !item.price || !item.quantity) {
-            logger.error('❌ Валидация: Товар некорректный:', item);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректные данные товара в корзине'
-            });
-        }
-        
-        if (typeof item.price !== 'number' || item.price <= 0) {
-            logger.error('❌ Валидация: Цена товара некорректная:', item.price);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректная цена товара'
-            });
-        }
-        
-        if (typeof item.quantity !== 'number' || item.quantity <= 0 || item.quantity > 50) {
-            logger.error('❌ Валидация: Количество товара некорректное:', item.quantity);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректное количество товара'
-            });
-        }
-    }
-    
-    logger.info('✅ Валидация заказа прошла успешно');
-    next();
-}
-
-// Middleware для валидации админских запросов
-function validateAdminData(req, res, next) {
-    const { products } = req.body;
-    
-    if (!products || typeof products !== 'object') {
-        return res.status(400).json({ 
-            ok: false, 
-            error: 'Некорректные данные товаров' 
-        });
-    }
-    
-    next();
-}
-
-// Middleware для валидации ID товара
-function validateProductId(req, res, next) {
-    const { productId } = req.params;
-    
-    if (!productId || typeof productId !== 'string' || productId.trim().length === 0) {
-        return res.status(400).json({ 
-            ok: false, 
-            error: 'Некорректный ID товара' 
-        });
-    }
-    
-    next();
-}
-
-// 🔧 API ДЛЯ ОСНОВНОГО ПРИЛОЖЕНИЯ
-
-// Получение товаров для основного приложения (публичный API)
-app.get('/api/products', async (req, res) => {
-    try {
-        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
-        let allProducts = await AdminProductsDB.loadAll();
-        
-        // Если в БД нет товаров, используем данные из памяти
-        if (Object.keys(allProducts).length === 0 && adminProducts.size > 0) {
-            allProducts = Object.fromEntries(adminProducts);
-        }
-        
-        // Фильтруем только доступные товары для клиентов
-        const productsObj = {};
-        for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
-            const availableProducts = categoryProducts.filter(product => product.available !== false);
-            if (availableProducts.length > 0) {
-                productsObj[categoryId] = availableProducts;
-            }
-        }
-        
-        res.json({ ok: true, products: productsObj });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка получения товаров:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// 🔧 API ДЛЯ АДМИН ПАНЕЛИ
-
-// Получение всех товаров для админ панели
-app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
-    try {
-        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
-        let products = await AdminProductsDB.loadAll();
-        
-        // 🔄 ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ЕСЛИ БД ПОЛНОСТЬЮ ПУСТА (ПЕРВЫЙ ЗАПУСК)
-        if (Object.keys(products).length === 0) {
-            logger.info('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
-            
-            // Полный ассортимент товаров (все 49 товаров)
-            const fullProducts = await loadFullProductCatalog();
-            
-            // Сохраняем в БД ТОЛЬКО ОДИН РАЗ
-            try {
-                await AdminProductsDB.saveAll(fullProducts);
-                logger.info('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
-                products = fullProducts;
-                
-                // Заполняем локальный кэш
-                Object.entries(fullProducts).forEach(([categoryId, categoryProducts]) => {
-                    adminProducts.set(categoryId, categoryProducts);
-                });
-            } catch (error) {
-                logger.error('❌ Ошибка сохранения полного каталога:', error.message);
-                products = fullProducts; // Используем как fallback
-            }
-        } else {
-            // ✅ ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ДАННЫЕ ИЗ БД (с изменениями пользователя)
-            logger.info('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
-        }
-        
-        res.json({ ok: true, products });
-    } catch (error) {
-        logger.error('Ошибка получения товаров:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Обновление товаров через админ панель
-app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, res) => {
-    try {
-        const { products } = req.body;
-        
-        // 🗄️ СОХРАНЯЕМ В БАЗУ ДАННЫХ
-        await AdminProductsDB.saveAll(products);
-        
-        // Обновляем локальный кэш для совместимости
-        adminProducts.clear();
-        Object.entries(products).forEach(([categoryId, categoryProducts]) => {
-            adminProducts.set(categoryId, categoryProducts);
-        });
-        
-        logger.info('🔧 Товары обновлены через админ панель и сохранены в БД');
-        res.json({ ok: true, message: 'Товары успешно обновлены и сохранены в базе данных' });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка обновления товаров:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Переключение доступности товара
-app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, validateProductId, async (req, res) => {
-    try {
-        const { categoryId, productId } = req.params;
-        
-        // 🗄️ ЗАГРУЖАЕМ ВСЕ ТОВАРЫ ИЗ БД
-        let allProducts = await AdminProductsDB.loadAll();
-        
-        // Если в БД пусто, используем память
-        if (Object.keys(allProducts).length === 0) {
-            allProducts = Object.fromEntries(adminProducts);
-        }
-        
-        const categoryProducts = allProducts[categoryId];
-        if (!categoryProducts) {
-            return res.status(404).json({ ok: false, error: 'Категория не найдена' });
-        }
-        
-        const product = categoryProducts.find(p => p.id === productId);
-        if (!product) {
-            return res.status(404).json({ ok: false, error: 'Товар не найден' });
-        }
-        
-        // Переключаем доступность
-        product.available = !product.available;
-        
-        // 💾 СОХРАНЯЕМ ВСЕ ТОВАРЫ ОБРАТНО В БД
-        await AdminProductsDB.saveAll(allProducts);
-        
-        // Обновляем локальный кэш
-        if (adminProducts.has(categoryId)) {
-            const localProducts = adminProducts.get(categoryId);
-            const localProduct = localProducts.find(p => p.id === productId);
-            if (localProduct) {
-                localProduct.available = product.available;
-            }
-        }
-        
-        logger.info(`🔧 Товар ${productId} ${product.available ? 'показан' : 'скрыт'} и сохранен в БД`);
-        res.json({ ok: true, product, available: product.available });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка переключения товара:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// SPA fallback - все остальные маршруты ведут на index.html
-app.get(/^\/(?!api).*/, (req, res) => {
-    const requestedPath = req.path;
-    
-    // Если запрашивается admin.html, проверяем пароль
-    if (requestedPath === '/admin' || requestedPath === '/admin.html') {
-        const adminPassword = config.ADMIN_PASSWORD;
-        const providedPassword = req.query.password;
-        
-        if (providedPassword !== adminPassword) {
-            res.status(401).send(`
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход в админ панель</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0b5c56, #2C5530);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-        .login-container {
-            background: rgba(255,255,255,0.1);
-            padding: 40px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-        .login-icon { font-size: 60px; margin-bottom: 20px; }
-        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
-        .login-subtitle { opacity: 0.9; margin-bottom: 30px; }
-        .login-form { margin-top: 30px; }
-        .login-input {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            margin-bottom: 20px;
-            background: rgba(255,255,255,0.9);
-            color: #2c3e50;
-        }
-        .login-btn {
-            width: 100%;
-            background: #D4A574;
-            color: #1A1F2E;
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .login-btn:hover { background: #c19660; transform: translateY(-2px); }
-        .error-msg {
-            background: rgba(231, 76, 60, 0.2);
-            color: #ff6b6b;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(231, 76, 60, 0.3);
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-icon">🔐</div>
-        <div class="login-title">Админ панель</div>
-        <div class="login-subtitle">Tundra Gourmet</div>
-        
-        ${providedPassword ? '<div class="error-msg">❌ Неверный пароль</div>' : ''}
-        
-        <form class="login-form" method="GET">
-            <input type="password" 
-                   name="password" 
-                   class="login-input" 
-                   placeholder="Введите пароль" 
-                   required 
-                   autofocus>
-            <button type="submit" class="login-btn">🚀 Войти</button>
-        </form>
-        
-        <div style="margin-top: 30px; font-size: 14px; opacity: 0.7;">
-            💡 Если забыли пароль, обратитесь к разработчику
+    document.getElementById('product-detail').innerHTML = `
+        <div class="detail-image">
+            ${detailImageContent}
+            ${detailEmojiContent}
         </div>
-    </div>
-</body>
-</html>
-            `);
-            return;
+        <div class="detail-name">${product.name}</div>
+        <div class="detail-price">${product.price}₽${product.unit}</div>
+        
+        <div class="detail-info">
+            <h4>Состав:</h4>
+            <p>${product.composition}</p>
+            
+            <h4>Пищевая ценность:</h4>
+            <p>${product.nutrition}</p>
+            
+            <h4>Калорийность:</h4>
+            <p>${product.calories}</p>
+            
+            <h4>Срок хранения:</h4>
+            <p>${product.storage}</p>
+        </div>
+        
+        <div class="product-actions">
+            <div class="quantity-selector" id="detail-qty-selector" style="display: none;">
+                <button class="qty-btn" onclick="changeDetailQuantity(-1)" id="qty-minus">-</button>
+                <div class="qty-display" id="detail-quantity">1</div>
+                <button class="qty-btn" onclick="changeDetailQuantity(1)" id="qty-plus">+</button>
+            </div>
+            <button class="add-to-cart-btn" id="detail-add-btn" onclick="addFromDetail()">
+                Добавить в корзину
+            </button>
+        </div>
+    `;
+
+    // Проверяем, есть ли товар в корзине
+    const cartKey = `${categoryId}_${productId}`;
+    const currentQty = cart[cartKey] ? cart[cartKey].quantity : 0;
+    
+    if (currentQty > 0) {
+        // Товар уже в корзине - показываем счетчик
+        document.getElementById('detail-qty-selector').style.display = 'flex';
+        document.getElementById('detail-add-btn').style.display = 'none';
+        document.getElementById('detail-quantity').textContent = currentQty;
+    } else {
+        // Товара нет в корзине - показываем кнопку
+        document.getElementById('detail-qty-selector').style.display = 'none';
+        document.getElementById('detail-add-btn').style.display = 'block';
+        document.getElementById('detail-quantity').textContent = 1;
+    }
+
+    showScreen('product-detail-screen');
+}
+
+// Функция изменения количества в детальной карточке
+function changeDetailQuantity(delta) {
+    const cartKey = `${currentProduct.categoryId}_${currentProduct.productId}`;
+    const product = products[currentProduct.categoryId].find(p => p.id === currentProduct.productId);
+    
+    if (!cart[cartKey]) {
+        cart[cartKey] = { ...product, quantity: 0, categoryId: currentProduct.categoryId, productId: currentProduct.productId };
+    }
+    
+    const newQty = Math.max(0, Math.min(product.maxQty, cart[cartKey].quantity + delta));
+    
+    if (newQty === 0) {
+        // Удаляем товар из корзины
+        delete cart[cartKey];
+        
+        // Скрываем счетчик, показываем кнопку
+        document.getElementById('detail-qty-selector').style.display = 'none';
+        document.getElementById('detail-add-btn').style.display = 'block';
+        document.getElementById('detail-quantity').textContent = 1;
+    } else {
+        // Обновляем количество
+        cart[cartKey].quantity = newQty;
+        document.getElementById('detail-quantity').textContent = newQty;
+        
+        // Показываем счетчик, скрываем кнопку
+        document.getElementById('detail-qty-selector').style.display = 'flex';
+        document.getElementById('detail-add-btn').style.display = 'none';
+    }
+    
+    updateCartBadge();
+    localStorage.setItem('tundra_cart', JSON.stringify(cart));
+}
+
+// Функция добавления из детальной карточки
+function addFromDetail() {
+    const qty = parseInt(document.getElementById('detail-quantity').textContent);
+    addToCart(currentProduct.categoryId, currentProduct.productId, qty);
+    
+    // Переключаем интерфейс на счетчик
+    document.getElementById('detail-qty-selector').style.display = 'flex';
+    document.getElementById('detail-add-btn').style.display = 'none';
+    
+    // Обновляем отображение количества
+    const cartKey = `${currentProduct.categoryId}_${currentProduct.productId}`;
+    const currentQty = cart[cartKey] ? cart[cartKey].quantity : qty;
+    document.getElementById('detail-quantity').textContent = currentQty;
+}
+
+// Функция возврата из детальной карточки
+function goBackFromProduct() {
+    if (currentCategory) {
+        showCategory(currentCategory);
+    } else {
+        showMain();
+    }
+}
+
+// Функция добавления товара в корзину
+function addToCart(categoryId, productId, quantity) {
+    if (!isWorkingHours()) {
+        showNotification('К сожалению, сейчас мы не работаем. Заказы принимаются ежедневно с 10:00 до 21:00', 'warning');
+        return;
+    }
+
+    const cartKey = `${categoryId}_${productId}`;
+    const product = products[categoryId].find(p => p.id === productId);
+
+    if (!cart[cartKey]) {
+        cart[cartKey] = {
+            categoryId,
+            productId,
+            name: product.name,
+            price: product.price,
+            unit: product.unit,
+            image: product.image,
+            imageUrl: product.imageUrl,
+            maxQty: product.maxQty,
+            quantity: 0
+        };
+    }
+
+    const newQuantity = cart[cartKey].quantity + quantity;
+    if (newQuantity > product.maxQty) {
+        showNotification(`Максимальное количество: ${product.maxQty} шт.`, 'warning');
+        return;
+    }
+
+    cart[cartKey].quantity = newQuantity;
+    localStorage.setItem('tundra_cart', JSON.stringify(cart));
+    updateCartBadge();
+    
+    // Обновляем интерфейс карточки товара
+    const qtySelector = document.getElementById(`qty-${cartKey}`);
+    const addBtn = document.getElementById(`add-btn-${cartKey}`);
+    
+    if (qtySelector && addBtn) {
+        const qtyDisplay = qtySelector.querySelector('.qty-display');
+        if (qtyDisplay) qtyDisplay.textContent = newQuantity;
+        
+        // Показываем счетчик, скрываем кнопку
+        qtySelector.style.display = 'flex';
+        addBtn.style.display = 'none';
+    }
+}
+
+// Функция обновления счетчика корзины
+function updateCartBadge() {
+    const totalItems = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
+    
+    // Обновляем главный счетчик
+    const mainCartBadge = document.getElementById('cart-badge');
+    if (mainCartBadge) mainCartBadge.textContent = totalItems;
+    
+    // Обновляем счетчик на экране категории
+    const categoryCartBadge = document.getElementById('category-cart-badge');
+    if (categoryCartBadge) categoryCartBadge.textContent = totalItems;
+}
+
+// Функция показа корзины
+function showCart() {
+    const cartContent = document.getElementById('cart-content');
+    const cartItems = Object.values(cart).filter(item => item.quantity > 0);
+
+    if (cartItems.length === 0) {
+        cartContent.innerHTML = `
+            <div class="empty-cart">
+                <div class="empty-cart-icon">🛒</div>
+                <div class="empty-cart-title">Корзина пуста</div>
+                <div class="empty-cart-desc">Добавьте товары из каталога</div>
+                <button class="go-shopping-btn" onclick="showMain()">
+                    Перейти к покупкам
+                </button>
+            </div>
+        `;
+    } else {
+        let cartHTML = '<div style="padding: 20px;">';
+
+        cartItems.forEach(item => {
+            // Определяем, что отображать: изображение или эмодзи
+            let cartImageContent = '';
+            let cartEmojiContent = '';
+            
+            if (item.imageUrl) {
+                cartImageContent = `<img src="${item.imageUrl}" alt="${item.name}" class="cart-item-image-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
+                cartEmojiContent = `<div class="cart-item-image-emoji" style="display: none;">${item.image}</div>`;
+            } else {
+                cartImageContent = '';
+                cartEmojiContent = `<div class="cart-item-image-emoji">${item.image}</div>`;
+            }
+            
+            cartHTML += `
+                <div class="cart-item">
+                    <div class="cart-item-header">
+                                        <div class="cart-item-image">
+                    ${cartImageContent}
+                    ${cartEmojiContent}
+                </div>
+                        <div class="cart-item-info">
+                            <div class="cart-item-name">${item.name}</div>
+                            <div class="cart-item-price">${item.price}₽${item.unit}</div>
+                        </div>
+                    </div>
+                    <div class="cart-item-controls">
+                        <div class="cart-qty-controls">
+                            <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', -1)">-</button>
+                            <span class="qty-display">${item.quantity}</span>
+                            <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', 1)">+</button>
+                        </div>
+                        <div class="cart-item-total">${item.price * item.quantity}₽</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        const { rawSubtotal, loyaltyDiscount, subtotal, delivery, total } = calculateCartTotal();
+        const loyalty = calculateLoyalty(userProfile.totalSpent);
+        
+        cartHTML += `
+            <div class="cart-summary">
+                <div class="summary-row">
+                    <span>Товары:</span>
+                    <span>${rawSubtotal}₽</span>
+                </div>`;
+        
+        // Показываем скидку лояльности если она есть
+        if (loyaltyDiscount > 0) {
+            cartHTML += `
+                <div class="summary-row loyalty-discount">
+                    <span>🔥 Скидка лояльности (${loyalty.discount}%):</span>
+                    <span>-${loyaltyDiscount}₽</span>
+                </div>`;
         }
         
-        res.sendFile(path.join(webRoot, 'admin.html'));
+        cartHTML += `
+                <div class="summary-row">
+                    <span>Доставка:</span>
+                    <span>${delivery}₽</span>
+                </div>
+                <div class="summary-row summary-total">
+                    <span>Итого:</span>
+                    <span>${total}₽</span>
+                </div>
+                <button class="checkout-btn" onclick="proceedToOrder()" ${subtotal < 3500 ? 'disabled' : ''}>
+                    Оформить заказ
+                </button>
+                ${subtotal < 3500 ? '<div class="min-order-notice">Минимальная сумма заказа: 3,500₽</div>' : ''}
+            </div>
+        </div>`;
+
+        cartContent.innerHTML = cartHTML;
+    }
+    
+    showScreen('cart-screen');
+}
+
+// Функция изменения количества в корзине
+function changeCartQuantity(cartKey, delta) {
+    const item = cart[cartKey];
+    if (!item) return;
+
+    const newQuantity = item.quantity + delta;
+    if (newQuantity <= 0) {
+        delete cart[cartKey];
+    } else if (newQuantity > item.maxQty) {
+        showNotification(`Максимальное количество: ${item.maxQty} шт.`, 'warning');
+        return;
+    } else {
+        item.quantity = newQuantity;
+    }
+
+    localStorage.setItem('tundra_cart', JSON.stringify(cart));
+    updateCartBadge();
+    showCart(); // Перерисовываем корзину
+}
+
+// Функция расчета итогов корзины
+function calculateCartTotal() {
+    const rawSubtotal = Object.values(cart).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    // 🔥 ПРИМЕНЯЕМ СКИДКУ ЛОЯЛЬНОСТИ (используем локальные данные)
+    const loyalty = calculateLoyalty(userProfile.totalSpent);
+    const loyaltyDiscount = Math.round(rawSubtotal * (loyalty.discount / 100));
+    const subtotal = rawSubtotal - loyaltyDiscount;
+    
+    const deliveryZone = document.getElementById('delivery-zone')?.value;
+    
+    let delivery = 0;
+    if (deliveryZone === 'moscow') {
+        delivery = subtotal >= 5000 ? 0 : 400;
+    } else if (deliveryZone === 'mo') {
+        delivery = 700;
+    }
+    
+    const total = subtotal + delivery;
+    
+    return { 
+        rawSubtotal,        // Сумма без скидки
+        loyaltyDiscount,    // Размер скидки
+        subtotal,           // Сумма со скидкой  
+        delivery, 
+        total 
+    };
+}
+
+// Функция перехода к оформлению заказа
+function proceedToOrder() {
+    const { subtotal } = calculateCartTotal();
+    if (subtotal < 3500) {
+        showNotification('Минимальная сумма заказа: 3,500₽', 'warning');
         return;
     }
     
-    // Остальные маршруты ведут на основное приложение
-    res.sendFile(path.join(webRoot, 'index.html'));
+    // Проверяем, есть ли товары в корзине
+    const cartItems = Object.values(cart).filter(item => item.quantity > 0);
+    if (cartItems.length === 0) {
+        showNotification('Корзина пуста', 'warning');
+        return;
+    }
+    
+    showScreen('order-form-screen');
+}
+
+// Функция показа профиля
+function showProfile() {
+    showScreen('profile-screen');
+    
+    // Обновляем карту лояльности
+    updateLoyaltyCard();
+    
+    // Обновляем состояние переключателя уведомлений
+    const toggle = document.querySelector('.notification-toggle');
+    if (toggle) {
+        toggle.classList.toggle('active', userProfile.notificationsEnabled);
+    }
+}
+
+// 📋 ФУНКЦИЯ ЗАГРУЗКИ ИСТОРИИ ПОКУПОК
+async function loadPurchaseHistory() {
+    try {
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.purchases || [];
+        } else {
+            console.warn('Не удалось загрузить историю покупок');
+            return [];
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки истории покупок:', error);
+        return [];
+    }
+}
+
+// 💳 ФУНКЦИЯ ОБРАБОТКИ УСПЕШНОЙ ОПЛАТЫ
+function handlePaymentSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order');
+    
+    if (orderId) {
+        console.log(`✅ Обрабатываем успешную оплату заказа #${orderId}`);
+        
+        // Получаем данные заказа из localStorage
+        const pendingOrder = localStorage.getItem('pending_order');
+        if (pendingOrder) {
+            try {
+                const orderData = JSON.parse(pendingOrder);
+                
+                // Показываем экран успешной оплаты
+                document.getElementById('success-order-id').textContent = orderId;
+                document.getElementById('success-amount').textContent = orderData.amount || 0;
+                showScreen('payment-success-screen');
+                
+                // Обновляем профиль пользователя
+                if (orderData.cartTotal) {
+                    userProfile.totalSpent += orderData.cartTotal.total || 0;
+                    userProfile.completedOrders += 1;
+                    localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
+                    console.log('✅ Профиль пользователя обновлен после оплаты');
+                }
+                
+                // Удаляем данные ожидающего заказа
+                localStorage.removeItem('pending_order');
+                
+                // Обновляем карту лояльности
+                updateLoyaltyCard();
+                
+                // Очищаем URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+            } catch (error) {
+                console.error('Ошибка обработки данных заказа:', error);
+                showMain();
+            }
+        } else {
+            console.warn('Данные заказа не найдены в localStorage');
+            showMain();
+        }
+    }
+}
+
+// Функция быстрого перехода к истории покупок
+function viewPurchaseHistory() {
+    showProfile();
+    setTimeout(() => {
+        showMyOrders();
+    }, 100);
+}
+
+// Функция показа моих заказов
+async function showMyOrders() {
+    showScreen('my-orders-screen');
+    
+    // Находим контейнер для истории заказов
+    const ordersContainer = document.querySelector('#my-orders-screen');
+    if (!ordersContainer) return;
+    
+    // Показываем загрузку
+    ordersContainer.innerHTML = `
+        <div class="page-header">
+            <button class="back-btn" onclick="showProfile()">←</button>
+            <div class="page-title">Мои заказы</div>
+        </div>
+        <div class="loading-orders">
+            <div class="loading-text">Загрузка истории заказов...</div>
+        </div>
+    `;
+    
+    // Загружаем историю покупок
+    const purchases = await loadPurchaseHistory();
+    
+    if (purchases.length === 0) {
+        // Показываем пустое состояние
+        ordersContainer.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" onclick="showProfile()">←</button>
+                <div class="page-title">Мои заказы</div>
+            </div>
+            <div class="empty-orders">
+                <div class="empty-orders-icon">📋</div>
+                <div class="empty-orders-title">История заказов пуста</div>
+                <div class="empty-orders-desc">У вас пока нет оплаченных заказов. Сделайте первый заказ в каталоге!</div>
+                <button class="go-shopping-btn" onclick="showMain()">
+                    Перейти к покупкам
+                </button>
+            </div>
+        `;
+    } else {
+        // Отображаем историю покупок
+        const ordersHtml = purchases.map((purchase, index) => {
+            const date = new Date(purchase.purchase_date).toLocaleDateString('ru-RU');
+            const time = new Date(purchase.purchase_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            
+            return `
+                <div class="order-item">
+                    <div class="order-header">
+                        <div class="order-number">Заказ #${purchase.order_id}</div>
+                        <div class="order-date">${date} ${time}</div>
+                    </div>
+                    <div class="order-details">
+                        <div class="order-amount">${purchase.totalAmount.toLocaleString()}₽</div>
+                        <div class="order-items-count">${purchase.itemsCount} товаров</div>
+                    </div>
+                    <div class="order-items">
+                        ${purchase.items.map(item => `
+                            <div class="order-item-detail">
+                                <span class="item-name">${item.name}</span>
+                                <span class="item-qty">x${item.quantity}</span>
+                                <span class="item-price">${(item.price * item.quantity).toLocaleString()}₽</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="order-status completed">✅ Оплачен</div>
+                </div>
+            `;
+        }).join('');
+        
+        ordersContainer.innerHTML = `
+            <div class="page-header">
+                <button class="back-btn" onclick="showProfile()">←</button>
+                <div class="page-title">Мои заказы</div>
+            </div>
+            <div class="orders-list">
+                ${ordersHtml}
+            </div>
+        `;
+    }
+}
+
+// Функция проверки рабочих часов
+function isWorkingHours() {
+    const now = new Date();
+    const hour = now.getHours();
+    return hour >= 10 && hour < 21;
+}
+
+// Функция обновления статуса работы
+function updateWorkStatus() {
+    const statusEl = document.getElementById('work-status');
+    if (isWorkingHours()) {
+        statusEl.textContent = 'Работаем';
+        statusEl.style.color = '#27ae60';
+    } else {
+        statusEl.textContent = 'Закрыто';
+        statusEl.style.color = '#e74c3c';
+    }
+}
+
+// Функция показа уведомлений
+function showNotification(message, type = 'info') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.opacity = '1';
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 300); // Даем время для анимации
+    }, 3000);
+}
+
+// Функции для модального окна с часами работы
+function showWorkHours() {
+    const modal = document.getElementById('work-hours-modal');
+    modal.classList.add('active');
+}
+
+function hideWorkHours() {
+    const modal = document.getElementById('work-hours-modal');
+    modal.classList.remove('active');
+}
+
+// Функция открытия поддержки
+function openSupport() {
+    if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.openTelegramLink('https://t.me/nextleveluppp');
+    } else {
+        window.open('https://t.me/nextleveluppp', '_blank');
+    }
+}
+
+// Функция обновления информации о доставке
+function updateDeliveryInfo() {
+    const deliveryZone = document.getElementById('delivery-zone').value;
+    const deliveryInfo = document.querySelector('.delivery-info');
+    
+    if (deliveryZone === 'moscow') {
+        deliveryInfo.innerHTML = `
+            <h4>Информация о доставке</h4>
+            <div class="delivery-rules">
+                <div class="delivery-rule">
+                    <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
+                </div>
+                <div class="delivery-rule">
+                    <strong>Минимальный заказ:</strong> 3500₽
+                </div>
+            </div>
+        `;
+    } else if (deliveryZone === 'mo') {
+        deliveryInfo.innerHTML = `
+            <h4>Информация о доставке</h4>
+            <div class="delivery-rules">
+                <div class="delivery-rule">
+                    <strong>Московская область:</strong> минималка 5000₽, доставка 700₽
+                </div>
+                <div class="delivery-rule">
+                    <strong>Минимальный заказ:</strong> 5000₽
+                </div>
+            </div>
+        `;
+    } else {
+        deliveryInfo.innerHTML = `
+            <h4>Информация о доставке</h4>
+            <div class="delivery-rules">
+                <div class="delivery-rule">
+                    <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
+                </div>
+                <div class="delivery-rule">
+                    <strong>МО:</strong> минималка 5000₽, доставка 700₽
+                </div>
+                <div class="delivery-rule">
+                    <strong>Минимальный заказ:</strong> 3500₽
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Функция старта из приветственного экрана
+function startFromWelcome() {
+    showScreen('main-screen');
+    updateWorkStatus();
+    setInterval(updateWorkStatus, 60000);
+}
+
+// Обработчик отправки формы заказа
+document.addEventListener('DOMContentLoaded', () => {
+    const orderForm = document.getElementById('orderForm');
+    if (orderForm) {
+        orderForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Проверяем минимальный заказ в зависимости от зоны доставки
+            const deliveryZone = document.getElementById('delivery-zone').value;
+            const { subtotal } = calculateCartTotal();
+            
+            if (deliveryZone === 'mo' && subtotal < 5000) {
+                showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
+                return;
+            } else if (deliveryZone === 'moscow' && subtotal < 3500) {
+                showNotification('Для Москвы минимальный заказ: 3,500₽', 'warning');
+                return;
+            } else if (!deliveryZone) {
+                showNotification('Выберите зону доставки', 'warning');
+                return;
+            }
+            
+            // Проверяем обязательные поля
+            const street = document.getElementById('street').value.trim();
+            const house = document.getElementById('house').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            
+            if (!street || !house || !phone) {
+                showNotification('Заполните все обязательные поля', 'warning');
+                return;
+            }
+            
+            const formData = {
+                userId: getUserId(), // Добавляем ID пользователя
+                deliveryZone: deliveryZone,
+                address: {
+                    street: document.getElementById('street').value.trim(),
+                    house: document.getElementById('house').value.trim(),
+                    apartment: document.getElementById('apartment').value.trim(),
+                    floor: document.getElementById('floor').value.trim(),
+                    intercom: document.getElementById('intercom').value.trim()
+                },
+                phone: document.getElementById('phone').value.trim(),
+                comment: document.getElementById('comment').value.trim(),
+                cartItems: Object.values(cart).filter(i => i.quantity > 0),
+                totals: calculateCartTotal()
+            };
+
+            // Показываем индикатор загрузки
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Отправляем заказ...';
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                
+                const result = await response.json();
+                console.log('📥 Ответ от сервера:', result);
+                
+                if (result.ok) {
+                    // 🔥 ЗАКАЗ СОЗДАН - ПОЛУЧАЕМ URL ДЛЯ ОПЛАТЫ
+                    currentOrderId = parseInt(result.orderId);
+                    orderCounter = currentOrderId;
+                    localStorage.setItem('tundra_order_counter', orderCounter.toString());
+                    
+                    // Сохраняем данные заказа для обновления профиля ПОСЛЕ оплаты
+                    const orderData = {
+                        orderId: currentOrderId,
+                        cartTotal: calculateCartTotal(),
+                        cartItems: Object.values(cart).filter(i => i.quantity > 0),
+                        timestamp: Date.now(),
+                        paymentId: result.paymentId,
+                        paymentUrl: result.paymentUrl,
+                        amount: result.amount
+                    };
+                    localStorage.setItem('pending_order', JSON.stringify(orderData));
+                    
+                    console.log(`💳 Заказ #${currentOrderId} создан, перенаправляем на оплату ЮKassa...`);
+                    
+                    // Очищаем корзину
+                    cart = {};
+                    localStorage.setItem('tundra_cart', JSON.stringify(cart));
+                    updateCartBadge();
+                    
+                    // 💳 ОБРАБАТЫВАЕМ ОТВЕТ ОТ СЕРВЕРА
+                    if (result.isTestMode && result.isPaid) {
+                        // ДЕМО РЕЖИМ: Заказ автоматически оплачен
+                        console.log(`🎭 ДЕМО РЕЖИМ: Заказ автоматически оплачен`);
+                        showNotification('Заказ успешно создан! (Демо-режим)', 'success');
+                        
+                        // Показываем экран успешной оплаты
+                        setTimeout(() => {
+                            handleSuccessfulPayment({
+                                id: currentOrderId,
+                                status: 'accepted',
+                                paymentStatus: 'paid',
+                                totals: { total: result.amount }
+                            });
+                        }, 1000);
+                        
+                    } else if (result.paymentUrl) {
+                        // ОБЫЧНЫЙ РЕЖИМ: Перенаправляем на оплату
+                        console.log(`🚀 Открываем страницу оплаты: ${result.paymentUrl}`);
+                        console.log(`🤖 Telegram WebApp доступен:`, !!window.Telegram?.WebApp);
+                        
+                        // Проверяем, запускается ли в Telegram
+                        if (window.Telegram?.WebApp) {
+                            console.log(`📱 Открываем через Telegram WebApp...`);
+                            // В Telegram Web App открываем через openLink
+                            window.Telegram.WebApp.openLink(result.paymentUrl);
+                        } else {
+                            console.log(`🌐 Открываем в браузере...`);
+                            // В обычном браузере открываем в том же окне
+                            window.location.href = result.paymentUrl;
+                        }
+                        
+                        // Показываем экран ожидания оплаты как fallback
+                        setTimeout(() => {
+                            startPaymentTimer(currentOrderId);
+                        }, 1000);
+                    } else {
+                        // Fallback: показываем экран ожидания оплаты
+                        console.warn('⚠️ PaymentUrl не получен, показываем экран ожидания');
+                        startPaymentTimer(currentOrderId);
+                    }
+                    
+                    return; // Выходим из функции
+                }
+            } catch (err) {
+                console.error('Ошибка отправки заказа:', err);
+                showNotification('Ошибка отправки заказа. Попробуйте еще раз.', 'error');
+            } finally {
+                // Восстанавливаем кнопку
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+
+            // Fallback - если что-то пошло не так
+            showNotification('Заказ не был отправлен. Попробуйте еще раз.', 'error');
+
+            // ❌ НЕ ОБНОВЛЯЕМ ПРОФИЛЬ В FALLBACK! 
+            // Профиль обновляется ТОЛЬКО при реальной оплате!
+            
+            console.log('❌ Заказ не отправлен. Профиль НЕ обновлен.');
+            
+            // Возвращаемся к корзине для повторной попытки
+            showCart();
+            // Убираем уведомление "заказ отправлен ожидайте подтверждения"
+        });
+    }
 });
 
-// Запуск сервера с инициализацией БД
-async function startServer() {
-    try {
-        // 🗄️ ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БД (если установлена переменная)
-        if (process.env.CLEAR_DATABASE === 'true') {
-            logger.warn('🚨 ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БАЗЫ ДАННЫХ...');
-            try {
-                const { Pool } = require('pg');
-                const pool = new Pool({ connectionString: config.DATABASE_URL });
-                await pool.query('DELETE FROM admin_products');
-                await pool.end();
-                logger.info('✅ Таблица admin_products очищена');
-            } catch (error) {
-                logger.error('❌ Ошибка очистки БД:', error.message);
+// Функция рендеринга категорий
+function renderCategories() {
+    const grid = document.getElementById('categories-grid');
+    grid.innerHTML = '';
+
+    categories.forEach(category => {
+        const card = document.createElement('div');
+        card.className = 'category-card';
+        card.onclick = () => showCategory(category.id);
+
+        console.log('Loading category:', category.name, 'with imageUrl:', category.imageUrl);
+        
+        card.innerHTML = `
+            <div class="category-image">
+                <img src="${category.imageUrl}" alt="${category.name}" onerror="console.error('Category image failed to load:', '${category.imageUrl}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="category-icon" style="display: none;">${category.icon}</div>
+            </div>
+            <div class="category-name">${category.name}</div>
+        `;
+
+        grid.appendChild(card);
+    });
+}
+
+// Инициализация приложения
+async function initApp() {
+    // 💳 ПРОВЕРЯЕМ ВОЗВРАТ С ОПЛАТЫ (делаем это первым)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('order')) {
+        handlePaymentSuccess();
+        return; // Выходим, т.к. обработка успешной оплаты покажет нужный экран
+    }
+    
+    // Загружаем товары с сервера (неблокирующе)
+    loadProductsFromServer().catch(error => {
+        console.error('❌ Ошибка загрузки товаров:', error);
+        // Продолжаем работу с локальными товарами
+    });
+    
+    // 🔄 ПЕРИОДИЧЕСКИ ОБНОВЛЯЕМ ТОВАРЫ (каждые 30 секунд)
+    setInterval(async () => {
+        await loadProductsFromServer();
+        // Обновляем отображение категорий если на главной странице
+        const currentScreen = document.querySelector('.screen.active');
+        if (currentScreen && currentScreen.id === 'main-screen') {
+            renderCategories();
+        }
+    }, 30000); // 30 секунд
+    
+    // Показываем приветственный экран
+    // Сразу показываем каталог
+    showMain();
+
+    // Рендерим категории
+    renderCategories();
+
+    // Обновляем счетчик корзины
+    updateCartBadge();
+    
+    // 🔥 Синхронизируем профиль с сервером при запуске (неблокирующе)
+    syncProfileWithServer().then(() => {
+        // Обновляем карту лояльности после синхронизации
+        updateLoyaltyCard();
+    }).catch(error => {
+        console.error('❌ Ошибка синхронизации профиля:', error);
+        // Продолжаем работу с локальными данными
+    });
+
+    // Инициализируем Telegram Web App
+    if (window.Telegram?.WebApp) {
+        const user = window.Telegram.WebApp.initDataUnsafe?.user;
+        if (user) {
+            const profileName = document.querySelector('.profile-name');
+            if (profileName) {
+                profileName.textContent = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
             }
         }
+    }
+}
+
+// Запуск приложения
+document.addEventListener('DOMContentLoaded', initApp);
+
+// Обработчик клика вне модального окна для закрытия
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('work-hours-modal');
+    if (e.target === modal) {
+        hideWorkHours();
+    }
+});
+
+// Функция расчета уровня лояльности
+function calculateLoyalty(totalSpent) {
+    if (totalSpent >= 50000) {
+        return { level: 'VIP', discount: 10, nextLevel: null, progress: 100 };
+    } else if (totalSpent >= 25000) {
+        return { level: 'Gold', discount: 5, nextLevel: 50000, progress: ((totalSpent - 25000) / 25000) * 100 };
+    } else if (totalSpent >= 10000) {
+        return { level: 'Silver', discount: 3, nextLevel: 25000, progress: ((totalSpent - 10000) / 15000) * 100 };
+    } else {
+        return { level: 'Bronze', discount: 0, nextLevel: 10000, progress: (totalSpent / 10000) * 100 };
+    }
+}
+
+// 🏆 ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ЛОЯЛЬНОСТИ С СЕРВЕРА
+async function loadLoyaltyData() {
+    try {
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
         
-        // Инициализируем базу данных
-        await initializeDatabase();
+        if (response.ok) {
+            const data = await response.json();
+            return data.stats || null;
+        } else {
+            console.warn('Не удалось загрузить данные лояльности с сервера');
+            return null;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных лояльности:', error);
+        return null;
+    }
+}
+
+// Функция обновления отображения лояльности
+function updateLoyaltyDisplay() {
+    // Обновляем карту лояльности если открыт профиль
+    const profileScreen = document.getElementById('profile-screen');
+    if (profileScreen && profileScreen.classList.contains('active')) {
+        updateLoyaltyCard();
+    }
+}
+
+// Функция обновления карты лояльности
+async function updateLoyaltyCard() {
+    const loyaltyCard = document.querySelector('.loyalty-card');
+    if (!loyaltyCard) return;
+
+    // Показываем загрузку
+    loyaltyCard.innerHTML = `
+        <div class="loyalty-header">
+            <div class="loyalty-icon">🔥</div>
+            <div class="loyalty-title">Программа лояльности</div>
+        </div>
+        <div class="loading-text">Загрузка данных...</div>
+    `;
+
+    // Загружаем данные с сервера
+    const serverStats = await loadLoyaltyData();
+    
+    let stats;
+    if (serverStats) {
+        // Используем данные с сервера
+        stats = {
+            totalSpent: serverStats.totalSpent,
+            totalPurchases: serverStats.totalPurchases,
+            currentDiscount: serverStats.currentDiscount,
+            nextLevelTarget: serverStats.nextLevelTarget,
+            nextLevelProgress: serverStats.nextLevelProgress,
+            levelName: serverStats.levelName
+        };
+    } else {
+        // Fallback: используем локальные данные
+        const loyalty = calculateLoyalty(userProfile.totalSpent);
+        stats = {
+            totalSpent: userProfile.totalSpent,
+            totalPurchases: userProfile.completedOrders,
+            currentDiscount: loyalty.discount,
+            nextLevelTarget: loyalty.nextLevel,
+            nextLevelProgress: loyalty.progress,
+            levelName: loyalty.level
+        };
+    }
+
+    // Определяем следующую скидку
+    const nextDiscount = stats.nextLevelTarget ? 
+        (stats.currentDiscount === 0 ? 3 : 
+         stats.currentDiscount === 3 ? 5 : 
+         stats.currentDiscount === 5 ? 10 : 'максимальная') : 'максимальная';
+
+    // Отображаем карту лояльности
+    loyaltyCard.innerHTML = `
+        <div class="loyalty-header">
+            <div class="loyalty-icon">🔥</div>
+            <div class="loyalty-title">Программа лояльности</div>
+        </div>
+        <div class="loyalty-stats">
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.totalSpent.toLocaleString()}₽</div>
+                <div class="stat-label">Потрачено всего</div>
+            </div>
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.totalPurchases}</div>
+                <div class="stat-label">Заказов сделано</div>
+            </div>
+            <div class="loyalty-stat">
+                <div class="stat-value">${stats.currentDiscount}%</div>
+                <div class="stat-label">Текущая скидка</div>
+            </div>
+        </div>
+        <div class="loyalty-progress">
+            <div class="progress-text">До скидки ${nextDiscount} осталось: ${stats.nextLevelTarget ? (stats.nextLevelTarget - stats.totalSpent).toLocaleString() : '0'}₽</div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${stats.nextLevelProgress}%"></div>
+            </div>
+        </div>
+        <div class="loyalty-tiers">
+            <div class="tier-item ${stats.currentDiscount === 0 ? 'current' : ''}">
+                <div class="tier-icon">💜</div>
+                <div class="tier-info">0₽ - 9,999₽ → 0%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 3 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 5 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
+            </div>
+            <div class="tier-item ${stats.currentDiscount === 10 ? 'current' : ''}">
+                <div class="tier-icon">⭐</div>
+                <div class="tier-info">50,000₽+ → 10%</div>
+            </div>
+        </div>
+    `;
+}
+
+// Функция получения следующей скидки
+function getNextDiscount(currentLevel) {
+    switch (currentLevel) {
+        case 'Bronze': return '3%';
+        case 'Silver': return '5%';
+        case 'Gold': return '10%';
+        default: return 'максимальной';
+    }
+}
+
+// 🧪 ТЕСТОВАЯ ФУНКЦИЯ ДЛЯ ПРОВЕРКИ СИСТЕМЫ ЛОЯЛЬНОСТИ (только для разработки)
+function testLoyaltySystem() {
+    console.log('🧪 Тестирование системы лояльности...');
+    
+    // Сохраняем текущий профиль
+    const originalProfile = { ...userProfile };
+    
+    // Тест 1: Bronze уровень (0₽)
+    userProfile.totalSpent = 0;
+    let loyalty = calculateLoyalty(userProfile.totalSpent);
+    console.log('Test 1 - Bronze (0₽):', loyalty);
+    
+    // Тест 2: Silver уровень (15000₽)
+    userProfile.totalSpent = 15000;
+    loyalty = calculateLoyalty(userProfile.totalSpent);
+    console.log('Test 2 - Silver (15000₽):', loyalty);
+    
+    // Тест 3: Gold уровень (30000₽)
+    userProfile.totalSpent = 30000;
+    loyalty = calculateLoyalty(userProfile.totalSpent);
+    console.log('Test 3 - Gold (30000₽):', loyalty);
+    
+    // Тест 4: VIP уровень (60000₽)
+    userProfile.totalSpent = 60000;
+    loyalty = calculateLoyalty(userProfile.totalSpent);
+    console.log('Test 4 - VIP (60000₽):', loyalty);
+    
+    // Тест корзины со скидкой
+    cart = {
+        'kolbasy_1': { categoryId: 'kolbasy', productId: '1', name: 'Тест товар', price: 1000, quantity: 2 }
+    };
+    
+    userProfile.totalSpent = 15000; // Silver уровень
+    const cartTotal = calculateCartTotal();
+    console.log('Test - Корзина со скидкой Silver (3%):', cartTotal);
+    
+    // Восстанавливаем профиль
+    userProfile = originalProfile;
+    cart = {};
+    console.log('✅ Тестирование завершено. Профиль восстановлен.');
+}
+
+// 🧪 ФУНКЦИЯ СБРОСА ПРОФИЛЯ (только для разработки/тестирования)
+function resetUserProfile() {
+    const confirmed = confirm('⚠️ Сбросить профиль пользователя? (Обнулить потрачено и заказы)');
+    if (!confirmed) return;
+    
+    userProfile = {
+        totalSpent: 0,
+        completedOrders: 0,
+        notificationsEnabled: true
+    };
+    
+    localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+    localStorage.removeItem('pending_order');
+    
+    // Обновляем карту лояльности если открыт профиль
+    const profileScreen = document.getElementById('profile-screen');
+    if (profileScreen && profileScreen.classList.contains('active')) {
+        updateLoyaltyCard();
+    }
+    
+    showNotification('🔄 Профиль сброшен', 'info');
+    console.log('🔄 Профиль пользователя сброшен:', userProfile);
+}
+
+// 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ПРОФИЛЯ С СЕРВЕРОМ
+async function syncProfileWithServer() {
+    try {
+        const userId = getUserId();
+        if (!userId) {
+            console.log('⚠️ ID пользователя не найден, пропускаем синхронизацию');
+            return false;
+        }
         
-        // Инициализируем счетчик заказов из БД
-        await initializeOrderCounter();
+        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
         
-        // Инициализируем ЮKassa
-        await initializeYooKassa();
+        if (response.ok) {
+            const data = await response.json();
+            if (data.stats) {
+                // Обновляем локальный профиль данными с сервера
+                userProfile.totalSpent = data.stats.totalSpent || 0;
+                userProfile.completedOrders = data.stats.totalPurchases || 0;
+                localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+                
+                console.log('✅ Профиль синхронизирован с сервером:', userProfile);
+                return true;
+            }
+        }
+        return false;
+    } catch (error) {
+        console.error('❌ Ошибка синхронизации профиля:', error);
+        return false;
+    }
+}
+
+// Добавляем тестовые функции в window для вызова из консоли
+if (typeof window !== 'undefined') {
+    window.testLoyaltySystem = testLoyaltySystem;
+    window.resetUserProfile = resetUserProfile;
+    window.syncProfileWithServer = syncProfileWithServer;
+}
+
+// 🔥 ФУНКЦИИ ДЛЯ ТАЙМЕРА ОПЛАТЫ
+
+// Запуск таймера оплаты
+function startPaymentTimer(orderId) {
+    console.log('🔥 Запуск таймера оплаты для заказа:', orderId);
+    
+    currentOrderId = orderId;
+    paymentTimeLeft = 10 * 60; // 10 минут
+    
+    // Обновляем UI
+    document.getElementById('payment-order-number').textContent = `Заказ #${orderId}`;
+    showScreen('payment-waiting-screen');
+    
+    // Запускаем таймер обратного отсчета
+    paymentTimer = setInterval(() => {
+        paymentTimeLeft--;
+        updateTimerDisplay();
         
-        // Загружаем товары из БД если есть
+        if (paymentTimeLeft <= 0) {
+            cancelPaymentTimer();
+            autoExpireOrder();
+        }
+    }, 1000);
+    
+    // Запускаем проверку статуса оплаты
+    startPaymentStatusChecker(orderId);
+    
+    updateTimerDisplay();
+}
+
+// Обновление отображения таймера
+function updateTimerDisplay() {
+    const minutes = Math.floor(paymentTimeLeft / 60);
+    const seconds = paymentTimeLeft % 60;
+    const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    const timerElement = document.getElementById('payment-timer');
+    if (timerElement) {
+        timerElement.textContent = display;
+        
+        // Изменяем цвет таймера при критичном времени
+        if (paymentTimeLeft <= 300) { // 5 минут
+            timerElement.style.color = '#ff6b6b';
+            timerElement.style.animation = 'blink 1s infinite';
+        } else if (paymentTimeLeft <= 600) { // 10 минут
+            timerElement.style.color = '#ffa500';
+        }
+    }
+}
+
+// Проверка статуса оплаты
+function startPaymentStatusChecker(orderId) {
+    paymentStatusChecker = setInterval(async () => {
         try {
-            const dbProducts = await AdminProductsDB.loadAll();
-            if (Object.keys(dbProducts).length > 0) {
-                logger.info('✅ Товары загружены из базы данных');
-                // Преобразуем в Map для совместимости с текущим кодом
-                adminProducts.clear();
-                for (const [categoryId, products] of Object.entries(dbProducts)) {
-                    adminProducts.set(categoryId, products);
+            const response = await fetch(`${API_BASE}/api/orders/${orderId}`);
+            if (response.ok) {
+                const result = await response.json();
+                if (result.ok && result.order) {
+                    const order = result.order;
+                    
+                    if (order.paymentStatus === 'paid') {
+                        // Оплата прошла успешно!
+                        handleSuccessfulPayment(order);
+                        return;
+                    }
+                    
+                    // Обновляем статус
+                    const statusElement = document.getElementById('payment-status');
+                    if (statusElement) {
+                        const statusTexts = {
+                            'new': 'Ожидаем оплату...',
+                            'pending': 'Обрабатываем платеж...',
+                            'paid': 'Оплата получена!',
+                            'cancelled': 'Заказ отменен'
+                        };
+                        statusElement.textContent = statusTexts[order.paymentStatus] || 'Проверяем статус...';
+                    }
                 }
             }
         } catch (error) {
-            logger.warn('⚠️ Товары из БД не загружены, используем fallback');
+            console.error('Ошибка проверки статуса:', error);
         }
-        
-        // Запускаем сервер
-        app.listen(PORT, () => {
-            logger.info(`🚀 Сервер запущен на порту ${PORT}`);
-            logger.info(`📁 Статические файлы из: ${webRoot}`);
-            logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
-            logger.info(`🗄️ База данных подключена`);
+    }, 5000); // Проверяем каждые 5 секунд
+}
+
+// Успешная оплата
+function handleSuccessfulPayment(order) {
+    console.log('✅ Оплата успешна:', order);
+    
+    // Останавливаем таймер и проверки
+    cancelPaymentTimer();
+    
+    // 🔥 ОБНОВЛЯЕМ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ДЛЯ СИСТЕМЫ ЛОЯЛЬНОСТИ
+    const pendingOrder = JSON.parse(localStorage.getItem('pending_order') || '{}');
+    const orderAmount = order.totals?.total || pendingOrder.cartTotal?.subtotal || 0;
+    
+    if (orderAmount > 0) {
+        userProfile.totalSpent += orderAmount;
+        userProfile.completedOrders += 1;
+        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+        console.log('✅ Профиль обновлен после оплаты:', {
+            orderAmount: orderAmount,
+            totalSpent: userProfile.totalSpent,
+            completedOrders: userProfile.completedOrders
         });
         
-    } catch (error) {
-        logger.error('❌ Ошибка запуска сервера:', error.message);
-        process.exit(1);
+        // Обновляем отображение лояльности
+        updateLoyaltyDisplay();
     }
+    
+    // Очищаем pending order
+    localStorage.removeItem('pending_order');
+    
+    // Показываем экран успеха
+    document.getElementById('order-number').textContent = `Номер заказа: #${order.id}`;
+    showScreen('order-success-screen');
+    
+    showNotification('🎉 Заказ успешно оплачен!', 'success');
 }
 
-// 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
-process.on('uncaughtException', (error) => {
-    logger.error('💥 Неперехваченная ошибка:', error.message);
-    logger.debug('Stack:', error.stack);
-    // НЕ завершаем процесс, логируем и продолжаем
-});
+// Отмена таймера
+function cancelPaymentTimer() {
+    if (paymentTimer) {
+        clearInterval(paymentTimer);
+        paymentTimer = null;
+    }
+    
+    if (paymentStatusChecker) {
+        clearInterval(paymentStatusChecker);
+        paymentStatusChecker = null;
+    }
+    
+    currentOrderId = null;
+}
 
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('💥 Неперехваченное отклонение промиса:', reason);
-    // НЕ завершаем процесс, логируем и продолжаем
-});
-
-startServer();
-
-// Keep-alive механизм для Railway
-setInterval(() => {
-    const uptime = process.uptime();
-    const memory = process.memoryUsage();
-    logger.debug(`💓 Keep-alive: Uptime: ${Math.floor(uptime)}s, Memory: ${Math.round(memory.heapUsed / 1024 / 1024)}MB`);
-}, 5 * 60 * 1000); // Каждые 5 минут
-
-// 🧹 ПЕРИОДИЧЕСКАЯ ОЧИСТКА ПАМЯТИ
-setInterval(async () => {
+// Автоматическая отмена заказа по истечении времени
+async function autoExpireOrder() {
+    console.log('⏰ Время оплаты истекло, отменяем заказ:', currentOrderId);
+    
     try {
-        logger.debug('🧹 Запуск очистки памяти...');
-        
-        // Очищаем старые заказы из памяти (старше 24 часов)
-        const now = Date.now();
-        const oneDayAgo = now - (24 * 60 * 60 * 1000);
-        
-        let cleanedOrders = 0;
-        for (const [orderId, order] of orders.entries()) {
-            if (order.createdAt && new Date(order.createdAt).getTime() < oneDayAgo) {
-                // Очищаем таймер если есть
-                clearOrderTimer(orderId);
-                orders.delete(orderId);
-                cleanedOrders++;
-            }
+        if (currentOrderId) {
+            // Отменяем заказ на сервере
+            await fetch(`${API_BASE}/api/orders/${currentOrderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'expired' })
+            });
         }
-        
-        // Очищаем старые заказы из БД (старше 30 дней)
+    } catch (error) {
+        console.error('Ошибка отмены заказа:', error);
+    }
+    
+    // ⚠️ ВАЖНО: При истечении времени профиль НЕ обновляется!
+    // Очищаем все данные о заказе
+    localStorage.removeItem('pending_order');
+    
+    console.log('❌ Заказ отменен по истечении времени. Профиль НЕ обновлен.');
+    
+    // Показываем сообщение и возвращаем к каталогу
+    showNotification('⏰ Время оплаты истекло. Заказ отменен.', 'warning');
+    showMain();
+}
+
+// Ручная отмена оплаты
+async function cancelPayment() {
+    if (!currentOrderId) return;
+    
+    const confirmed = confirm('Вы уверены, что хотите отменить заказ?');
+    if (!confirmed) return;
+    
+    console.log('❌ Ручная отмена заказа:', currentOrderId);
+    
+    try {
+        // Отменяем заказ на сервере
+        await fetch(`${API_BASE}/api/orders/${currentOrderId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'cancelled' })
+        });
+    } catch (error) {
+        console.error('Ошибка отмены заказа:', error);
+    }
+    
+    // Останавливаем таймер
+    cancelPaymentTimer();
+    
+    // ⚠️ ВАЖНО: При ручной отмене профиль НЕ обновляется!
+    // Очищаем данные о заказе
+    localStorage.removeItem('pending_order');
+    
+    console.log('❌ Заказ отменен вручную. Профиль НЕ обновлен.');
+    
+    showNotification('❌ Заказ отменен', 'info');
+    showMain();
+}
+
+// Переход к оплате
+function redirectToPayment() {
+    if (!currentOrderId) return;
+    
+    showNotification('🔄 Перенаправляем на оплату...', 'info');
+    
+    // Получаем URL оплаты из localStorage
+    const pendingOrder = localStorage.getItem('pending_order');
+    if (pendingOrder) {
         try {
-            const deletedCount = await OrdersDB.cleanupOldOrders();
-            if (cleanedOrders > 0 || deletedCount > 0) {
-                logger.info(`🗑️ Очищено ${cleanedOrders} заказов из памяти, ${deletedCount} из БД`);
+            const orderData = JSON.parse(pendingOrder);
+            if (orderData.paymentUrl) {
+                console.log('💳 Переход к оплате заказа:', currentOrderId);
+                console.log('🔗 Payment URL:', orderData.paymentUrl);
+                
+                // Открываем страницу оплаты
+                if (window.Telegram?.WebApp) {
+                    window.Telegram.WebApp.openLink(orderData.paymentUrl);
+                } else {
+                    window.location.href = orderData.paymentUrl;
+                }
+                return;
             }
         } catch (error) {
-            logger.error('❌ Ошибка очистки БД:', error.message);
+            console.error('Ошибка получения paymentUrl:', error);
         }
-        
-        // Логируем статистику памяти только если есть изменения
-        if (cleanedOrders > 0) {
-            const memory = process.memoryUsage();
-            logger.info(`📊 Память: ${Math.round(memory.heapUsed / 1024 / 1024)}MB, Заказов: ${orders.size}, Таймеров: ${orderTimers.size}`);
-        }
-        
-    } catch (error) {
-        logger.error('❌ Ошибка очистки памяти:', error.message);
-    }
-}, 60 * 60 * 1000); // Каждый час
-
-// Graceful shutdown с очисткой ресурсов
-process.on('SIGTERM', () => {
-    logger.info('🛑 Получен сигнал SIGTERM, завершаем работу...');
-    cleanup();
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    logger.info('🛑 Получен сигнал SIGINT, завершаем работу...');
-    cleanup();
-    process.exit(0);
-});
-
-// Функция очистки ресурсов
-function cleanup() {
-    logger.info('🧹 Очистка ресурсов...');
-    
-    // Очищаем все таймеры заказов
-    let clearedTimers = 0;
-    for (const [orderId, timer] of orderTimers.entries()) {
-        clearTimeout(timer);
-        clearedTimers++;
-    }
-    orderTimers.clear();
-    
-    if (clearedTimers > 0) {
-        logger.info(`🗑️ Очищено ${clearedTimers} таймеров заказов`);
     }
     
-    logger.info('✅ Ресурсы очищены');
+    showNotification('❌ Ошибка: URL оплаты не найден', 'error');
 }
+
+// Функция переключения уведомлений
+function toggleNotifications() {
+    userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
+    localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+
+    // Обновляем UI
+    const toggle = document.querySelector('.notification-toggle');
+    if (toggle) {
+        toggle.classList.toggle('active', userProfile.notificationsEnabled);
+    }
+}
+
+
+
+
