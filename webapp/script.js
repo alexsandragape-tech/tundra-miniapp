@@ -45,14 +45,21 @@ function getTelegramUserData() {
         };
         
         console.log('📋 Обработанные данные:', userData);
+        
+        // Сохраняем данные в localStorage для будущего использования
+        localStorage.setItem('tundra_telegram_user', JSON.stringify(userData));
+        
         return userData;
     }
     
     // Способ 2: initData (если initDataUnsafe недоступен)
     if (window.Telegram?.WebApp?.initData) {
         try {
+            console.log('🔍 Пытаемся получить данные через initData:', window.Telegram.WebApp.initData);
             const initData = new URLSearchParams(window.Telegram.WebApp.initData);
             const userParam = initData.get('user');
+            console.log('🔍 userParam из initData:', userParam);
+            
             if (userParam) {
                 const user = JSON.parse(decodeURIComponent(userParam));
                 console.log('👤 Данные пользователя Telegram (initData):', user);
@@ -70,6 +77,41 @@ function getTelegramUserData() {
             }
         } catch (error) {
             console.error('❌ Ошибка парсинга initData:', error);
+        }
+    }
+    
+    // Способ 3: Пытаемся получить данные из URL параметров
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tgUser = urlParams.get('tg_user');
+        if (tgUser) {
+            const user = JSON.parse(decodeURIComponent(tgUser));
+            console.log('👤 Данные пользователя Telegram (URL):', user);
+            
+            const userData = {
+                id: user.id.toString(),
+                username: user.username || null,
+                first_name: user.first_name || null,
+                last_name: user.last_name || null,
+                full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
+            };
+            
+            console.log('📋 Обработанные данные:', userData);
+            return userData;
+        }
+    } catch (error) {
+        console.error('❌ Ошибка парсинга URL параметров:', error);
+    }
+    
+    // Способ 4: Пытаемся получить сохраненные данные
+    const savedUserData = localStorage.getItem('tundra_telegram_user');
+    if (savedUserData) {
+        try {
+            const userData = JSON.parse(savedUserData);
+            console.log('👤 Данные пользователя Telegram (сохраненные):', userData);
+            return userData;
+        } catch (error) {
+            console.error('❌ Ошибка парсинга сохраненных данных:', error);
         }
     }
     
@@ -1866,6 +1908,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const telegramUser = getTelegramUserData();
             
             console.log('🔍 Данные Telegram пользователя:', telegramUser);
+            
+            // Если данные Telegram недоступны, используем fallback
+            if (!telegramUser || !telegramUser.full_name) {
+                console.log('⚠️ Telegram данные недоступны, используем fallback');
+                // Можно добавить поле для ввода имени в форму
+            }
             
             const formData = {
                 userId: getUserId(), // Добавляем ID пользователя
