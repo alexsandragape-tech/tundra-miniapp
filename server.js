@@ -1467,7 +1467,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     
                     // Формируем информацию о клиенте
                     const clientInfo = [
-                        order.user_name || 'Клиент',
+                        customerName || 'Клиент',
                         telegramUser?.username && `@${telegramUser.username}`
                     ].filter(Boolean).join(' ');
                     
