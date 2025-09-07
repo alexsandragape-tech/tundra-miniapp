@@ -1275,19 +1275,28 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             customer_name: order.user_name,
                             phone: order.phone,
                             total_amount: parseFloat(payment.amount.value),
-                            items_count: order.items.length,
-                            items_data: JSON.stringify(order.items),
+                            items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
+                            items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
                             payment_id: payment.id,
                             delivery_zone: order.delivery_zone,
-                            address_data: JSON.stringify(order.address),
+                            address_data: order.address, // address уже строка JSON
                             created_at: new Date().toISOString()
                         });
                         
                         logger.info('✅ Заказ обновлен и добавлен в историю покупок');
+                        logger.debug('📊 Данные для истории покупок:', {
+                            orderId: orderId,
+                            userId: order.user_id,
+                            totalAmount: parseFloat(payment.amount.value),
+                            itemsCount: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length
+                        });
                         
                         // Отправляем уведомление в Telegram (если настроен бот)
                         if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
                             try {
+                                // Парсим адрес из JSON строки
+                                const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
+                                
                                 const message = `🎉 НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!\n\n` +
                                     `📋 Заказ #${orderId}\n` +
                                     `👤 Клиент: ${order.user_name}\n` +
@@ -1295,7 +1304,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                     `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
                                     `💳 ID платежа: ${payment.id}\n` +
                                     `📍 Зона доставки: ${order.delivery_zone}\n` +
-                                    `🏠 Адрес: ${order.address.street}, ${order.address.house}`;
+                                    `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
                                 
                                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                                     chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
