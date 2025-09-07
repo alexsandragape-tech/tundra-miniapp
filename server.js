@@ -32,6 +32,9 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 // 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
 class YooKassaAPI {
     constructor(shopId, secretKey) {
@@ -105,6 +108,25 @@ const app = express();
 const PORT = config.PORT;
 const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
+
+// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ
+// Безопасность заголовков
+app.use(helmet());
+
+// CORS для Telegram
+const corsOrigins = config.CORS_ORIGIN.split(',');
+app.use(cors({
+    origin: corsOrigins,
+    credentials: true
+}));
+
+// Защита от DDoS
+const limiter = rateLimit({
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    max: config.RATE_LIMIT_MAX_REQUESTS,
+    message: 'Слишком много запросов, попробуйте позже'
+});
+app.use(limiter);
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
 logger.info('🔧 Инициализация ЮKassa...');
@@ -1704,6 +1726,34 @@ function validateOrderData(req, res, next) {
     next();
 }
 
+// Middleware для валидации админских запросов
+function validateAdminData(req, res, next) {
+    const { products } = req.body;
+    
+    if (!products || typeof products !== 'object') {
+        return res.status(400).json({ 
+            ok: false, 
+            error: 'Некорректные данные товаров' 
+        });
+    }
+    
+    next();
+}
+
+// Middleware для валидации ID товара
+function validateProductId(req, res, next) {
+    const { productId } = req.params;
+    
+    if (!productId || typeof productId !== 'string' || productId.trim().length === 0) {
+        return res.status(400).json({ 
+            ok: false, 
+            error: 'Некорректный ID товара' 
+        });
+    }
+    
+    next();
+}
+
 // 🔧 API ДЛЯ ОСНОВНОГО ПРИЛОЖЕНИЯ
 
 // Получение товаров для основного приложения (публичный API)
@@ -1776,7 +1826,7 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 });
 
 // Обновление товаров через админ панель
-app.put('/api/admin/products', requireAdminAuth, async (req, res) => {
+app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, res) => {
     try {
         const { products } = req.body;
         
@@ -1799,7 +1849,7 @@ app.put('/api/admin/products', requireAdminAuth, async (req, res) => {
 });
 
 // Переключение доступности товара
-app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, async (req, res) => {
+app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, validateProductId, async (req, res) => {
     try {
         const { categoryId, productId } = req.params;
         
