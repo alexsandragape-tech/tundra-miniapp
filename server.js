@@ -904,13 +904,43 @@ async function loadFullProductCatalog() {
     };
 }
 
+// 📞 ФУНКЦИЯ ФОРМАТИРОВАНИЯ НОМЕРА ТЕЛЕФОНА ДЛЯ YOOKASSA
+function formatPhoneForYooKassa(phone) {
+    if (!phone) return '+79000000000';
+    
+    // Убираем все символы кроме цифр
+    let cleanPhone = phone.replace(/\D/g, '');
+    
+    // Если номер начинается с 8, заменяем на 7
+    if (cleanPhone.startsWith('8')) {
+        cleanPhone = '7' + cleanPhone.substring(1);
+    }
+    
+    // Если номер начинается с 7 и имеет 11 цифр, добавляем +
+    if (cleanPhone.startsWith('7') && cleanPhone.length === 11) {
+        return '+' + cleanPhone;
+    }
+    
+    // Если номер начинается с 7 и имеет 10 цифр, добавляем +7
+    if (cleanPhone.startsWith('7') && cleanPhone.length === 10) {
+        return '+7' + cleanPhone;
+    }
+    
+    // Если номер не соответствует формату, возвращаем fallback
+    logger.warn(`⚠️ Некорректный формат номера телефона: ${phone}, используем fallback`);
+    return '+79000000000';
+}
+
 // 💳 ФУНКЦИЯ СОЗДАНИЯ ПЛАТЕЖА В YOOKASSA
 async function createYooKassaPayment(orderId, amount, description, customerInfo) {
     try {
+        const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
         logger.debug('💳 Создаем платеж ЮKassa с параметрами:', {
             amount: amount.toFixed(2) + ' RUB',
             description: description,
-            customer: customerInfo.customerName
+            customer: customerInfo.customerName,
+            originalPhone: customerInfo.phone,
+            formattedPhone: formattedPhone
         });
         
         const paymentData = {
@@ -927,7 +957,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             receipt: {
                 customer: {
                     email: customerInfo.email || 'customer@example.com',
-                    phone: customerInfo.phone || '+79000000000'
+                    phone: formattedPhone
                 },
                 items: [
                     {
