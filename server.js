@@ -2283,7 +2283,7 @@ async function startServer() {
         
         // Функция для получения Chat ID (группы или личного чата)
         async function getTelegramChatId() {
-            if (!config.TELEGRAM_BФOT_TOKEN) {
+            if (!config.TELEGRAM_BOT_TOKEN) {
                 logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен');
                 return null;
             }
@@ -2365,9 +2365,18 @@ async function startServer() {
             logger.info(`🗄️ База данных подключена`);
             
             // Проверяем настройки Telegram
+            logger.info('🔍 Проверка настроек Telegram:');
+            logger.info(`   Токен бота: ${config.TELEGRAM_BOT_TOKEN ? '✅ Настроен' : '❌ Не настроен'}`);
+            logger.info(`   Chat ID: ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
+            
             if (config.TELEGRAM_BOT_TOKEN && !config.TELEGRAM_ADMIN_CHAT_ID) {
                 logger.info('🔍 Ищем Chat ID для Telegram бота...');
                 await getTelegramChatId();
+            } else if (!config.TELEGRAM_BOT_TOKEN) {
+                logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен в Railway');
+                logger.info('💡 Добавьте переменную TELEGRAM_BOT_TOKEN в Railway');
+            } else {
+                logger.info('✅ Telegram настроен полностью');
             }
         });
         
