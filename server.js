@@ -1411,13 +1411,16 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                 const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
                 const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
                 
+                // Проверяем, что items существует и является массивом
+                const itemsArray = Array.isArray(items) ? items : [];
+                
                 await PurchaseHistoryDB.create({
                     user_id: order.user_id,
                     user_name: order.user_name,
                     order_id: order.id,
                     total_amount: order.totals?.total || 0,
-                    items_count: items.length,
-                    items_data: JSON.stringify(items),
+                    items_count: itemsArray.length,
+                    items_data: JSON.stringify(itemsArray),
                     address: JSON.stringify(address),
                     phone: order.phone,
                     created_at: new Date().toISOString()
@@ -1430,8 +1433,36 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             
             // Отправляем уведомление в Telegram
             try {
-                await sendTelegramNotification(order);
-                logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
+                logger.debug('🔍 Проверка настроек Telegram:', {
+                    hasToken: !!config.TELEGRAM_BOT_TOKEN,
+                    tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
+                    hasChatId: !!config.TELEGRAM_ADMIN_CHAT_ID,
+                    chatId: config.TELEGRAM_ADMIN_CHAT_ID
+                });
+                
+                if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+                    // Парсим адрес из JSON строки
+                    const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
+                    
+                    const message = 
+                        `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
+                        `📋 Номер: #${order.id}\n` +
+                        `👤 Клиент: ${order.user_name || 'Клиент'}\n` +
+                        `📞 Телефон: ${order.phone}\n` +
+                        `💰 Сумма: ${order.totals?.total || 0}₽\n` +
+                        `📍 Зона доставки: ${order.deliveryZone}\n` +
+                        `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
+                    
+                    await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+                        text: message,
+                        parse_mode: 'HTML'
+                    });
+                    
+                    logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
+                } else {
+                    logger.warn('⚠️ Telegram бот не настроен - уведомления не отправляются');
+                }
             } catch (error) {
                 logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
             }
