@@ -42,7 +42,7 @@ function updateMainButton(screenId) {
         case 'cart-screen':
             const cartItems = Object.values(cart).filter(item => item.quantity > 0);
             const { subtotal } = calculateCartTotal();
-            const minOrderAmount = 3500;
+            const minOrderAmount = getMinOrderAmount();
             if (cartItems.length > 0 && subtotal >= minOrderAmount) {
                 tg.MainButton.setText('Оформить заказ');
                 tg.MainButton.show();
@@ -118,7 +118,65 @@ let orderCounter = parseInt(localStorage.getItem('tundra_order_counter') || '0')
 let paymentTimer = null;
 let paymentTimeLeft = 10 * 60; // 10 минут в секундах
 let currentOrderId = null;
+
+// 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
+const TEST_MODE = true; // Установите false для продакшена
+const TEST_MIN_ORDER = 100; // Минимальная сумма для тестов
+const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
 let paymentStatusChecker = null;
+
+// Функция получения минимальной суммы заказа
+function getMinOrderAmount() {
+    return TEST_MODE ? TEST_MIN_ORDER : PROD_MIN_ORDER;
+}
+
+// Функция проверки тестового режима
+function isTestMode() {
+    return TEST_MODE;
+}
+
+// Функция показа индикатора тестового режима
+function showTestModeIndicator() {
+    // Создаем индикатор тестового режима
+    const testIndicator = document.createElement('div');
+    testIndicator.id = 'test-mode-indicator';
+    testIndicator.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10000;
+            box-shadow: 0 2px 10px rgba(255, 107, 107, 0.3);
+            animation: pulse 2s infinite;
+        ">
+            🧪 ТЕСТОВЫЙ РЕЖИМ
+        </div>
+    `;
+    
+    // Добавляем стили для анимации
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(testIndicator);
+    
+    // Показываем уведомление о тестовом режиме
+    setTimeout(() => {
+        showNotification('🧪 Включен тестовый режим. Минимальный заказ: 100₽', 'info');
+    }, 1000);
+}
 
 // Данные категорий
 const categories = [
@@ -1267,10 +1325,10 @@ function showCart() {
                     <span>Итого:</span>
                     <span>${total}₽</span>
                 </div>
-                <button class="checkout-btn" onclick="proceedToOrder()" ${subtotal < 3500 ? 'disabled' : ''}>
+                <button class="checkout-btn" onclick="proceedToOrder()" ${subtotal < getMinOrderAmount() ? 'disabled' : ''}>
                     Оформить заказ
                 </button>
-                ${subtotal < 3500 ? '<div class="min-order-notice">Минимальная сумма заказа: 3,500₽</div>' : ''}
+                ${subtotal < getMinOrderAmount() ? `<div class="min-order-notice">Минимальная сумма заказа: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}</div>` : ''}
             </div>
         </div>`;
 
@@ -1359,8 +1417,13 @@ function validatePhoneNumber(phone) {
 // Функция перехода к оформлению заказа
 function proceedToOrder() {
     const { subtotal } = calculateCartTotal();
-    if (subtotal < 3500) {
-        showNotification('Минимальная сумма заказа: 3,500₽', 'warning');
+    const minOrder = getMinOrderAmount();
+    
+    if (subtotal < minOrder) {
+        const message = TEST_MODE 
+            ? `Минимальная сумма заказа: ${minOrder}₽ (тестовый режим)`
+            : `Минимальная сумма заказа: ${minOrder}₽`;
+        showNotification(message, 'warning');
         return;
     }
     
@@ -1610,7 +1673,7 @@ function updateDeliveryInfo() {
                     <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
                 </div>
                 <div class="delivery-rule">
-                    <strong>Минимальный заказ:</strong> 3500₽
+                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}
                 </div>
             </div>
         `;
@@ -1637,7 +1700,7 @@ function updateDeliveryInfo() {
                     <strong>МО:</strong> минималка 5000₽, доставка 700₽
                 </div>
                 <div class="delivery-rule">
-                    <strong>Минимальный заказ:</strong> 3500₽
+                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}
                 </div>
             </div>
         `;
@@ -1689,8 +1752,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deliveryZone === 'mo' && subtotal < 5000) {
                 showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
                 return;
-            } else if (deliveryZone === 'moscow' && subtotal < 3500) {
-                showNotification('Для Москвы минимальный заказ: 3,500₽', 'warning');
+            } else if (deliveryZone === 'moscow' && subtotal < getMinOrderAmount()) {
+                showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}`, 'warning');
                 return;
             } else if (!deliveryZone) {
                 showNotification('Выберите зону доставки', 'warning');
@@ -1884,6 +1947,11 @@ async function initApp() {
     if (urlParams.get('order')) {
         handlePaymentSuccess();
         return; // Выходим, т.к. обработка успешной оплаты покажет нужный экран
+    }
+    
+    // 🧪 Показываем индикатор тестового режима
+    if (TEST_MODE) {
+        showTestModeIndicator();
     }
     
     // Загружаем товары с сервера (неблокирующе)
