@@ -1217,10 +1217,7 @@ function goBackFromProduct() {
 
 // Функция добавления товара в корзину
 function addToCart(categoryId, productId, quantity) {
-    if (!isWorkingHours()) {
-        showNotification('К сожалению, сейчас мы не работаем. Заказы принимаются ежедневно с 10:00 до 21:00', 'warning');
-        return;
-    }
+    // Временно убрана проверка времени работы
 
     const cartKey = `${categoryId}_${productId}`;
     const product = products[categoryId].find(p => p.id === productId);
@@ -1774,13 +1771,9 @@ function isWorkingHours() {
 // Функция обновления статуса работы
 function updateWorkStatus() {
     const statusEl = document.getElementById('work-status');
-    if (isWorkingHours()) {
-        statusEl.textContent = 'Работаем';
-        statusEl.style.color = '#27ae60';
-    } else {
-        statusEl.textContent = 'Закрыто';
-        statusEl.style.color = '#e74c3c';
-    }
+    // Временно всегда показываем "Работаем"
+    statusEl.textContent = 'Работаем';
+    statusEl.style.color = '#27ae60';
 }
 
 // Функция показа уведомлений
