@@ -24,98 +24,18 @@ function getUserId() {
 
 // Функция получения данных пользователя Telegram
 function getTelegramUserData() {
-    console.log('🔍 Проверяем Telegram WebApp:', {
-        hasTelegram: !!window.Telegram,
-        hasWebApp: !!window.Telegram?.WebApp,
-        hasInitDataUnsafe: !!window.Telegram?.WebApp?.initDataUnsafe,
-        hasUser: !!window.Telegram?.WebApp?.initDataUnsafe?.user
-    });
-    
-    // Способ 1: initDataUnsafe
+    // Пытаемся получить данные из Telegram WebApp
     if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
         const user = window.Telegram.WebApp.initDataUnsafe.user;
-        console.log('👤 Данные пользователя Telegram (initDataUnsafe):', user);
-        
-        const userData = {
+        return {
             id: user.id.toString(),
             username: user.username || null,
             first_name: user.first_name || null,
             last_name: user.last_name || null,
             full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
         };
-        
-        console.log('📋 Обработанные данные:', userData);
-        
-        // Сохраняем данные в localStorage для будущего использования
-        localStorage.setItem('tundra_telegram_user', JSON.stringify(userData));
-        
-        return userData;
     }
     
-    // Способ 2: initData (если initDataUnsafe недоступен)
-    if (window.Telegram?.WebApp?.initData) {
-        try {
-            console.log('🔍 Пытаемся получить данные через initData:', window.Telegram.WebApp.initData);
-            const initData = new URLSearchParams(window.Telegram.WebApp.initData);
-            const userParam = initData.get('user');
-            console.log('🔍 userParam из initData:', userParam);
-            
-            if (userParam) {
-                const user = JSON.parse(decodeURIComponent(userParam));
-                console.log('👤 Данные пользователя Telegram (initData):', user);
-                
-                const userData = {
-                    id: user.id.toString(),
-                    username: user.username || null,
-                    first_name: user.first_name || null,
-                    last_name: user.last_name || null,
-                    full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
-                };
-                
-                console.log('📋 Обработанные данные:', userData);
-                return userData;
-            }
-        } catch (error) {
-            console.error('❌ Ошибка парсинга initData:', error);
-        }
-    }
-    
-    // Способ 3: Пытаемся получить данные из URL параметров
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tgUser = urlParams.get('tg_user');
-        if (tgUser) {
-            const user = JSON.parse(decodeURIComponent(tgUser));
-            console.log('👤 Данные пользователя Telegram (URL):', user);
-            
-            const userData = {
-                id: user.id.toString(),
-                username: user.username || null,
-                first_name: user.first_name || null,
-                last_name: user.last_name || null,
-                full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
-            };
-            
-            console.log('📋 Обработанные данные:', userData);
-            return userData;
-        }
-    } catch (error) {
-        console.error('❌ Ошибка парсинга URL параметров:', error);
-    }
-    
-    // Способ 4: Пытаемся получить сохраненные данные
-    const savedUserData = localStorage.getItem('tundra_telegram_user');
-    if (savedUserData) {
-        try {
-            const userData = JSON.parse(savedUserData);
-            console.log('👤 Данные пользователя Telegram (сохраненные):', userData);
-            return userData;
-        } catch (error) {
-            console.error('❌ Ошибка парсинга сохраненных данных:', error);
-        }
-    }
-    
-    console.log('❌ Telegram данные недоступны');
     return null;
 }
 
@@ -1885,6 +1805,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
+            // Проверяем имя клиента
+            const customerName = document.getElementById('customerName').value.trim();
+            if (!customerName) {
+                showNotification('Введите имя клиента', 'error');
+                
+                // Подсвечиваем поле имени красным
+                const nameInput = document.getElementById('customerName');
+                nameInput.style.borderColor = '#ff6b6b';
+                nameInput.style.backgroundColor = '#ffe6e6';
+                
+                // Убираем подсветку через 3 секунды
+                setTimeout(() => {
+                    nameInput.style.borderColor = '';
+                    nameInput.style.backgroundColor = '';
+                }, 3000);
+                
+                return;
+            }
+            
             // Валидируем номер телефона
             const phoneValidation = validatePhoneNumber(phone);
             if (!phoneValidation.valid) {
@@ -1907,17 +1846,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Получаем данные пользователя Telegram
             const telegramUser = getTelegramUserData();
             
-            console.log('🔍 Данные Telegram пользователя:', telegramUser);
-            
-            // Если данные Telegram недоступны, используем fallback
-            if (!telegramUser || !telegramUser.full_name) {
-                console.log('⚠️ Telegram данные недоступны, используем fallback');
-                // Можно добавить поле для ввода имени в форму
-            }
-            
             const formData = {
                 userId: getUserId(), // Добавляем ID пользователя
                 telegramUser: telegramUser, // Данные Telegram профиля
+                customerName: document.getElementById('customerName').value.trim(), // Имя из формы
                 deliveryZone: deliveryZone,
                 address: {
                     street: document.getElementById('street').value.trim(),
