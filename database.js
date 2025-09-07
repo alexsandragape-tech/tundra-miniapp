@@ -51,11 +51,25 @@ async function initializeDatabase() {
                 items JSONB NOT NULL,
                 total_amount INTEGER NOT NULL,
                 status VARCHAR(50) DEFAULT 'pending',
+                payment_status VARCHAR(50) DEFAULT 'pending',
                 payment_id VARCHAR(100),
                 payment_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        `);
+        
+        // Добавляем колонку payment_status если её нет
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'orders' AND column_name = 'payment_status'
+                ) THEN
+                    ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'pending';
+                END IF;
+            END $$;
         `);
         
         // Создаем таблицу товаров админки
@@ -154,8 +168,8 @@ class OrdersDB {
     static async create(orderData) {
         return await retryDbOperation(async () => {
             const query = `
-                INSERT INTO orders (order_id, user_id, user_name, phone, delivery_zone, address, items, total_amount, status, payment_id, payment_url)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                INSERT INTO orders (order_id, user_id, user_name, phone, delivery_zone, address, items, total_amount, status, payment_status, payment_id, payment_url)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 RETURNING *
             `;
             const values = [
@@ -168,6 +182,7 @@ class OrdersDB {
                 JSON.stringify(orderData.items),
                 orderData.totalAmount,
                 orderData.status || 'pending',
+                orderData.paymentStatus || 'pending',
                 orderData.paymentId,
                 orderData.paymentUrl
             ];
@@ -218,6 +233,8 @@ class OrdersDB {
                 fields.push(`payment_id = $${paramCounter}`);
             } else if (key === 'paymentUrl') {
                 fields.push(`payment_url = $${paramCounter}`);
+            } else if (key === 'paymentStatus') {
+                fields.push(`payment_status = $${paramCounter}`);
             } else {
                 fields.push(`${key} = $${paramCounter}`);
             }
