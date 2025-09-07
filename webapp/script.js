@@ -1617,20 +1617,21 @@ function displayOrders(orders) {
     emptyOrders.style.display = 'none';
 }
 
+// Глобальные тексты статусов
+const ORDER_STATUS_TEXTS = {
+    'new': '⏳ Новый',
+    'accepted': '🟡 Принят',
+    'preparing': '🔵 Готовится',
+    'delivering': '🚚 В доставке',
+    'completed': '✅ Доставлен',
+    'cancelled': '🔴 Отменен'
+};
+
 // Создание элемента заказа
 function createOrderItem(order) {
     const orderItem = document.createElement('div');
     orderItem.className = 'order-item';
     orderItem.onclick = () => showOrderDetails(order.order_id);
-    
-    const statusTexts = {
-        'new': '⏳ Новый',
-        'accepted': '🟡 Принят',
-        'preparing': '🔵 Готовится',
-        'delivering': '🚚 В доставке',
-        'completed': '✅ Доставлен',
-        'cancelled': '🔴 Отменен'
-    };
     
     const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
     const addressText = `${address?.street || ''}, ${address?.house || ''}`;
@@ -1638,7 +1639,7 @@ function createOrderItem(order) {
     orderItem.innerHTML = `
         <div class="order-header">
             <div class="order-date">${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
-            <div class="order-status ${order.status}">${statusTexts[order.status] || order.status}</div>
+            <div class="order-status ${order.status}">${ORDER_STATUS_TEXTS[order.status] || order.status}</div>
         </div>
         <div class="order-info">
             <div>${addressText}</div>
@@ -1704,15 +1705,6 @@ async function showOrderDetails(orderId) {
 function displayOrderDetails(order) {
     const content = document.getElementById('order-details-content');
     
-    const statusTexts = {
-        'new': '⏳ Новый',
-        'accepted': '🟡 Принят',
-        'preparing': '🔵 Готовится',
-        'delivering': '🚚 В доставке',
-        'completed': '✅ Доставлен',
-        'cancelled': '🔴 Отменен'
-    };
-    
     const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
     const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
     
@@ -1728,7 +1720,7 @@ function displayOrderDetails(order) {
     content.innerHTML = `
         <div class="order-detail-section">
             <div class="order-detail-title">📦 Статус заказа</div>
-            <div class="order-status-badge ${order.status}">${statusTexts[order.status] || order.status}</div>
+            <div class="order-status-badge ${order.status}">${ORDER_STATUS_TEXTS[order.status] || order.status}</div>
         </div>
         
         <div class="order-detail-section">
