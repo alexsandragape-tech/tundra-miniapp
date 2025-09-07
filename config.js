@@ -43,6 +43,10 @@ module.exports = {
     DB_RETRY_DELAY_MS: parseInt(process.env.DB_RETRY_DELAY_MS) || 1000,
     
     // 📝 ЛОГИРОВАНИЕ
-    LOG_LEVEL: process.env.LOG_LEVEL || 'INFO' // ERROR, WARN, INFO, DEBUG
+    LOG_LEVEL: process.env.LOG_LEVEL || 'INFO', // ERROR, WARN, INFO, DEBUG
+    
+    // 🛡️ БЕЗОПАСНОСТЬ
+    CORS_ORIGIN: process.env.CORS_ORIGIN || 'https://t.me,https://web.telegram.org',
+    RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 минут
+    RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
 };
-
