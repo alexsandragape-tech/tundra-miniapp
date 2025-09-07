@@ -1715,8 +1715,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('tundra_cart', JSON.stringify(cart));
                     updateCartBadge();
                     
-                    // 💳 ПЕРЕНАПРАВЛЯЕМ НА ОПЛАТУ YOOKASSA
-                    if (result.paymentUrl) {
+                    // 💳 ОБРАБАТЫВАЕМ ОТВЕТ ОТ СЕРВЕРА
+                    if (result.isTestMode && result.isPaid) {
+                        // ДЕМО РЕЖИМ: Заказ автоматически оплачен
+                        console.log(`🎭 ДЕМО РЕЖИМ: Заказ автоматически оплачен`);
+                        showNotification('Заказ успешно создан! (Демо-режим)', 'success');
+                        
+                        // Показываем экран успешной оплаты
+                        setTimeout(() => {
+                            handleSuccessfulPayment({
+                                id: currentOrderId,
+                                status: 'accepted',
+                                paymentStatus: 'paid',
+                                totals: { total: result.amount }
+                            });
+                        }, 1000);
+                        
+                    } else if (result.paymentUrl) {
+                        // ОБЫЧНЫЙ РЕЖИМ: Перенаправляем на оплату
                         console.log(`🚀 Открываем страницу оплаты: ${result.paymentUrl}`);
                         console.log(`🤖 Telegram WebApp доступен:`, !!window.Telegram?.WebApp);
                         
