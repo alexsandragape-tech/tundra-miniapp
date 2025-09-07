@@ -129,6 +129,11 @@
                 </div>
 
                 <div class="form-group">
+                <label class="form-label">Подъезд</label>
+                <input type="text" id="entrance" class="form-input" placeholder="Номер подъезда">
+                </div>
+
+                <div class="form-group">
                 <label class="form-label">Домофон</label>
                 <input type="text" id="intercom" class="form-input">
                 </div>
@@ -147,15 +152,15 @@
                 <div class="form-group">
                 <label class="form-label">Комментарий к заказу</label>
                 <textarea id="comment" class="form-textarea" placeholder="Дополнительные пожелания"></textarea>
-                </div>
+                    </div>
 
                 <div class="form-group">
                 <button type="submit" class="checkout-btn" style="width: 100%; margin-top: 20px;">
                     Оформить заказ
                 </button>
-            </div>
+                    </div>
             </form>
-                </div>
+                    </div>
 
     <!-- Экран ожидания оплаты -->
     <div id="payment-waiting-screen" class="screen">
@@ -168,8 +173,8 @@
                 <div class="timer-title">Время на оплату:</div>
                 <div class="timer-display" id="payment-timer">30:00</div>
                 <div class="timer-warning">Заказ будет автоматически отменен</div>
-                    </div>
-            
+                </div>
+
             <div class="payment-actions">
                 <button class="payment-btn primary" id="pay-now-btn" onclick="redirectToPayment()">
                     💳 Оплатить сейчас
@@ -192,7 +197,7 @@
     <div id="order-success-screen" class="screen">
         <div class="welcome-title">Заказ оплачен!</div>
         <div class="welcome-subtitle" id="order-number">Номер заказа: #0</div>
-        <div class="success-message">Спасибо за покупку! Ваш заказ принят в обработку.</div>
+        <div class="success-message">Спасибо за покупку! Ваш заказ принят в обработку. Статус заказа Вы можете отследить в профиле - мои заказы!</div>
         <button class="welcome-btn" onclick="showMain()">Вернуться в каталог</button>
     </div>
 
@@ -240,15 +245,31 @@
             <div class="page-title">Мои заказы</div>
         </div>
 
-        <div class="empty-orders">
+        <div id="orders-list" class="orders-list">
+            <!-- Заказы будут загружены динамически -->
+        </div>
+
+        <div id="empty-orders" class="empty-orders" style="display: none;">
             <div class="empty-orders-icon">📋</div>
             <div class="empty-orders-title">История заказов пуста</div>
             <div class="empty-orders-desc">У вас пока нет заказов. Сделайте первый заказ в каталоге!</div>
             <button class="go-shopping-btn" onclick="showMain()">
                 Перейти к покупкам
-                    </button>
-                </div>
-            </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Детали заказа -->
+    <div id="order-details-screen" class="screen">
+        <div class="page-header">
+            <button class="back-btn" onclick="showMyOrders()">←</button>
+            <div class="page-title">Детали заказа</div>
+        </div>
+
+        <div id="order-details-content" class="order-details">
+            <!-- Детали заказа будут загружены динамически -->
+        </div>
+    </div>
 
     <!-- Экран успешной оплаты -->
     <div id="payment-success-screen" class="screen">
