@@ -1564,6 +1564,15 @@ function viewPurchaseHistory() {
 async function showMyOrders() {
     showScreen('my-orders-screen');
     await loadUserOrders();
+    
+    // 🔄 АВТООБНОВЛЕНИЕ СТАТУСА КАЖДЫЕ 30 СЕКУНД
+    if (window.orderStatusInterval) {
+        clearInterval(window.orderStatusInterval);
+    }
+    
+    window.orderStatusInterval = setInterval(async () => {
+        await loadUserOrders();
+    }, 30000); // 30 секунд
 }
 
 // Загрузка заказов пользователя
@@ -1662,6 +1671,26 @@ async function showOrderDetails(orderId) {
             if (result.ok) {
                 displayOrderDetails(result.order);
                 showScreen('order-details-screen');
+                
+                // 🔄 АВТООБНОВЛЕНИЕ ДЕТАЛЕЙ ЗАКАЗА
+                if (window.orderDetailsInterval) {
+                    clearInterval(window.orderDetailsInterval);
+                }
+                
+                window.orderDetailsInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/orders/${orderId}`);
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.ok) {
+                                displayOrderDetails(result.order);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Ошибка автообновления деталей:', error);
+                    }
+                }, 30000); // 30 секунд
+                
             } else {
                 showNotification('Ошибка загрузки деталей заказа', 'error');
             }
