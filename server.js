@@ -1032,7 +1032,7 @@ async function createOrder(orderData) {
         paymentStatus: 'pending', // pending, paid, cancelled, expired
         createdAt: new Date(),
         updatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 минут
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
         ...orderData
     };
     
@@ -1062,14 +1062,14 @@ async function createOrder(orderData) {
         logger.error(`❌ Ошибка сохранения заказа ${orderId} в БД:`, error.message);
     }
     
-    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 30 МИНУТ
+    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
     const timer = setTimeout(() => {
         autoExpireOrder(orderId);
-    }, 30 * 60 * 1000); // 30 минут
+    }, 10 * 60 * 1000); // 10 минут
     
     orderTimers.set(orderId, timer);
     
-    logger.debug(`🔥 Заказ ${orderId} создан. Автоотмена через 30 минут.`);
+    logger.debug(`🔥 Заказ ${orderId} создан. Автоотмена через 10 минут.`);
     
     return order;
 }
@@ -1259,7 +1259,8 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 try {
                     // Обновляем статус заказа
                     await OrdersDB.update(orderId, { 
-                        status: 'paid',
+                        status: 'accepted',
+                        paymentStatus: 'paid',
                         paymentId: payment.id,
                         paidAt: new Date().toISOString()
                     });
@@ -1271,7 +1272,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                         await PurchaseHistoryDB.create({
                             order_id: orderId,
                             user_id: order.user_id,
-                            customer_name: order.customer_name,
+                            customer_name: order.user_name,
                             phone: order.phone,
                             total_amount: parseFloat(payment.amount.value),
                             items_count: order.items.length,
@@ -1289,7 +1290,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             try {
                                 const message = `🎉 НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!\n\n` +
                                     `📋 Заказ #${orderId}\n` +
-                                    `👤 Клиент: ${order.customer_name}\n` +
+                                    `👤 Клиент: ${order.user_name}\n` +
                                     `📞 Телефон: ${order.phone}\n` +
                                     `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
                                     `💳 ID платежа: ${payment.id}\n` +
