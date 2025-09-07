@@ -1423,7 +1423,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     items_data: JSON.stringify(itemsArray),
                     address: JSON.stringify(address),
                     phone: order.phone,
-                    created_at: new Date().toISOString()
+                    purchase_date: new Date().toISOString()
                 });
                 
                 logger.info(`✅ Запись в истории покупок создана для заказа ${order.id}`);
@@ -1453,7 +1453,13 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         `📍 Зона доставки: ${order.deliveryZone}\n` +
                         `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
                     
-                    await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    logger.debug('📱 Отправляем уведомление в Telegram:', {
+                        chatId: config.TELEGRAM_ADMIN_CHAT_ID,
+                        tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
+                        messageLength: message.length
+                    });
+                    
+                    const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
                         text: message,
                         parse_mode: 'HTML'
@@ -1464,7 +1470,15 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     logger.warn('⚠️ Telegram бот не настроен - уведомления не отправляются');
                 }
             } catch (error) {
-                logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+                if (error.response?.status === 401) {
+                    logger.error('❌ Ошибка авторизации Telegram: неверный токен бота');
+                    logger.info('💡 Проверьте токен бота в Railway: TELEGRAM_BOT_TOKEN');
+                } else if (error.response?.status === 400) {
+                    logger.error('❌ Ошибка Telegram: неверный Chat ID');
+                    logger.info('💡 Проверьте Chat ID в Railway: TELEGRAM_ADMIN_CHAT_ID');
+                } else {
+                    logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+                }
             }
             
             // Отправляем ответ клиенту
