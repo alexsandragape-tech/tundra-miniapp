@@ -22,6 +22,21 @@ function getUserId() {
     return currentUserId;
 }
 
+// Функция получения данных пользователя Telegram
+function getTelegramUserData() {
+    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        return {
+            id: user.id.toString(),
+            username: user.username || null,
+            first_name: user.first_name || null,
+            last_name: user.last_name || null,
+            full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
+        };
+    }
+    return null;
+}
+
 function updateMainButton(screenId) {
     if (!tg) return;
 
@@ -1807,8 +1822,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
+            // Получаем данные пользователя Telegram
+            const telegramUser = getTelegramUserData();
+            
             const formData = {
                 userId: getUserId(), // Добавляем ID пользователя
+                telegramUser: telegramUser, // Данные Telegram профиля
                 deliveryZone: deliveryZone,
                 address: {
                     street: document.getElementById('street').value.trim(),
