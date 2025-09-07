@@ -1490,6 +1490,11 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         telegramUser?.username && `@${telegramUser.username}`
                     ].filter(Boolean).join(' ');
                     
+                    // Формируем состав заказа
+                    const orderItems = order.items.map(item => 
+                        `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
+                    ).join('\n');
+                    
                     const message = 
                         `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
                         `📋 Номер: #${order.id}\n` +
@@ -1497,7 +1502,8 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         `📞 Телефон: ${order.phone}\n` +
                         `💰 Сумма: ${order.totals?.total || 0}₽\n` +
                         `📍 Зона доставки: ${order.deliveryZone}\n` +
-                        `🏠 Адрес: ${fullAddress}` +
+                        `🏠 Адрес: ${fullAddress}\n` +
+                        `📦 <b>Состав заказа:</b>\n${orderItems}` +
                         (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
                     
                     
