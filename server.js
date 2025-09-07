@@ -1348,6 +1348,12 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     logger.info('🔥 Создание нового заказа');
     let order = null;
     
+    // 🧪 ПРОВЕРЯЕМ ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ
+    const forceDemoMode = req.body.forceDemoMode || false;
+    if (forceDemoMode) {
+        logger.info('🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ активирован');
+    }
+    
     try {
         const orderData = req.body;
         
@@ -1377,6 +1383,76 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         // Добавляем customerName в заказ
         order.customerName = customerInfo.customerName;
         
+        // 🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание реального платежа
+        if (forceDemoMode) {
+            logger.info('🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание платежа ЮKassa');
+            
+            // В демо-режиме сразу помечаем заказ как оплаченный
+            order.paymentStatus = 'paid';
+            order.status = 'accepted';
+            order.paymentId = 'demo_payment_' + order.id;
+            order.paymentUrl = null;
+            orders.set(order.id, order);
+            
+            // Обновляем заказ в БД
+            try {
+                await OrdersDB.update(order.id, {
+                    paymentStatus: 'paid',
+                    status: 'accepted',
+                    paymentId: order.paymentId
+                });
+                logger.info(`✅ Заказ ${order.id} обновлен в БД (демо-режим)`);
+            } catch (error) {
+                logger.error('❌ Ошибка обновления заказа в БД:', error.message);
+            }
+            
+            // Создаем запись в истории покупок
+            try {
+                const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
+                const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+                
+                await PurchaseHistoryDB.create({
+                    user_id: order.user_id,
+                    user_name: order.user_name,
+                    order_id: order.id,
+                    total_amount: order.totals?.total || 0,
+                    items_count: items.length,
+                    items_data: JSON.stringify(items),
+                    address: JSON.stringify(address),
+                    phone: order.phone,
+                    created_at: new Date().toISOString()
+                });
+                
+                logger.info(`✅ Запись в истории покупок создана для заказа ${order.id}`);
+            } catch (error) {
+                logger.error('❌ Ошибка создания записи в истории покупок:', error.message);
+            }
+            
+            // Отправляем уведомление в Telegram
+            try {
+                await sendTelegramNotification(order);
+                logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
+            } catch (error) {
+                logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+            }
+            
+            // Отправляем ответ клиенту
+            const response = {
+                ok: true, 
+                orderId: order.id,
+                paymentUrl: null, // Нет URL для редиректа
+                paymentId: 'demo_payment_' + order.id,
+                amount: order.totals?.total || 0,
+                isTestMode: true,
+                isPaid: true, // Помечаем как оплаченный
+                message: 'ДЕМО РЕЖИМ: Заказ автоматически оплачен'
+            };
+            
+            res.json(response);
+            return;
+        }
+        
+        // Обычный режим: создаем платеж через ЮKassa
         const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
         
         // Сохраняем ID платежа в заказе
