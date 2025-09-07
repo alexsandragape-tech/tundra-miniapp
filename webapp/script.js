@@ -24,16 +24,56 @@ function getUserId() {
 
 // Функция получения данных пользователя Telegram
 function getTelegramUserData() {
+    console.log('🔍 Проверяем Telegram WebApp:', {
+        hasTelegram: !!window.Telegram,
+        hasWebApp: !!window.Telegram?.WebApp,
+        hasInitDataUnsafe: !!window.Telegram?.WebApp?.initDataUnsafe,
+        hasUser: !!window.Telegram?.WebApp?.initDataUnsafe?.user
+    });
+    
+    // Способ 1: initDataUnsafe
     if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
         const user = window.Telegram.WebApp.initDataUnsafe.user;
-        return {
+        console.log('👤 Данные пользователя Telegram (initDataUnsafe):', user);
+        
+        const userData = {
             id: user.id.toString(),
             username: user.username || null,
             first_name: user.first_name || null,
             last_name: user.last_name || null,
             full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
         };
+        
+        console.log('📋 Обработанные данные:', userData);
+        return userData;
     }
+    
+    // Способ 2: initData (если initDataUnsafe недоступен)
+    if (window.Telegram?.WebApp?.initData) {
+        try {
+            const initData = new URLSearchParams(window.Telegram.WebApp.initData);
+            const userParam = initData.get('user');
+            if (userParam) {
+                const user = JSON.parse(decodeURIComponent(userParam));
+                console.log('👤 Данные пользователя Telegram (initData):', user);
+                
+                const userData = {
+                    id: user.id.toString(),
+                    username: user.username || null,
+                    first_name: user.first_name || null,
+                    last_name: user.last_name || null,
+                    full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null
+                };
+                
+                console.log('📋 Обработанные данные:', userData);
+                return userData;
+            }
+        } catch (error) {
+            console.error('❌ Ошибка парсинга initData:', error);
+        }
+    }
+    
+    console.log('❌ Telegram данные недоступны');
     return null;
 }
 
@@ -1824,6 +1864,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Получаем данные пользователя Telegram
             const telegramUser = getTelegramUserData();
+            
+            console.log('🔍 Данные Telegram пользователя:', telegramUser);
             
             const formData = {
                 userId: getUserId(), // Добавляем ID пользователя
