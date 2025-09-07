@@ -116,7 +116,7 @@ let orderCounter = parseInt(localStorage.getItem('tundra_order_counter') || '0')
 
 // 🔥 ПЕРЕМЕННЫЕ ДЛЯ ТАЙМЕРА ОПЛАТЫ
 let paymentTimer = null;
-let paymentTimeLeft = 30 * 60; // 30 минут в секундах
+let paymentTimeLeft = 10 * 60; // 10 минут в секундах
 let currentOrderId = null;
 let paymentStatusChecker = null;
 
@@ -1897,6 +1897,15 @@ async function loadLoyaltyData() {
     }
 }
 
+// Функция обновления отображения лояльности
+function updateLoyaltyDisplay() {
+    // Обновляем карту лояльности если открыт профиль
+    const profileScreen = document.getElementById('profile-screen');
+    if (profileScreen && profileScreen.classList.contains('active')) {
+        updateLoyaltyCard();
+    }
+}
+
 // Функция обновления карты лояльности
 async function updateLoyaltyCard() {
     const loyaltyCard = document.querySelector('.loyalty-card');
@@ -2080,7 +2089,7 @@ function startPaymentTimer(orderId) {
     console.log('🔥 Запуск таймера оплаты для заказа:', orderId);
     
     currentOrderId = orderId;
-    paymentTimeLeft = 30 * 60; // 30 минут
+    paymentTimeLeft = 10 * 60; // 10 минут
     
     // Обновляем UI
     document.getElementById('payment-order-number').textContent = `Заказ #${orderId}`;
@@ -2167,11 +2176,20 @@ function handleSuccessfulPayment(order) {
     
     // 🔥 ОБНОВЛЯЕМ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ДЛЯ СИСТЕМЫ ЛОЯЛЬНОСТИ
     const pendingOrder = JSON.parse(localStorage.getItem('pending_order') || '{}');
-    if (pendingOrder.cartTotal) {
-        userProfile.totalSpent += pendingOrder.cartTotal.subtotal;
+    const orderAmount = order.totals?.total || pendingOrder.cartTotal?.subtotal || 0;
+    
+    if (orderAmount > 0) {
+        userProfile.totalSpent += orderAmount;
         userProfile.completedOrders += 1;
         localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
-        console.log('✅ Профиль обновлен после оплаты:', userProfile);
+        console.log('✅ Профиль обновлен после оплаты:', {
+            orderAmount: orderAmount,
+            totalSpent: userProfile.totalSpent,
+            completedOrders: userProfile.completedOrders
+        });
+        
+        // Обновляем отображение лояльности
+        updateLoyaltyDisplay();
     }
     
     // Очищаем pending order
