@@ -268,6 +268,13 @@ class OrdersDB {
         const result = await pool.query(query);
         return result.rowCount;
     }
+    
+    // Получить максимальный ID заказа
+    static async getMaxOrderId() {
+        const query = 'SELECT MAX(CAST(order_id AS INTEGER)) as max_id FROM orders';
+        const result = await pool.query(query);
+        return result.rows[0];
+    }
 }
 
 // 🛒 ФУНКЦИИ ДЛЯ ИСТОРИИ ПОКУПОК
