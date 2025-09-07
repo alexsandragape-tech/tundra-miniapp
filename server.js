@@ -109,6 +109,9 @@ const PORT = config.PORT;
 const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
+// Настройка для работы с прокси (Railway)
+app.set('trust proxy', 1);
+
 // 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ
 // Безопасность заголовков для Telegram Web App
 app.use(helmet({
@@ -136,7 +139,19 @@ const corsOptions = {
 const limiter = rateLimit({
     windowMs: config.RATE_LIMIT_WINDOW_MS,
     max: config.RATE_LIMIT_MAX_REQUESTS,
-    message: 'Слишком много запросов, попробуйте позже'
+    message: 'Слишком много запросов, попробуйте позже',
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Настройка для работы с прокси
+    trustProxy: true,
+    // Игнорируем X-Forwarded-For для статических файлов
+    skip: (req) => {
+        // Пропускаем статические файлы
+        return req.path.startsWith('/images/') || 
+               req.path.endsWith('.css') || 
+               req.path.endsWith('.js') || 
+               req.path.endsWith('.html');
+    }
 });
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
