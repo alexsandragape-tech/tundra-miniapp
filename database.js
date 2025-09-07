@@ -13,6 +13,26 @@ const pool = new Pool({
     idleTimeoutMillis: 30000, // 30 секунд до отключения idle соединения
 });
 
+// 🔄 ФУНКЦИЯ ДЛЯ ПОВТОРНЫХ ПОПЫТОК БД ОПЕРАЦИЙ
+async function retryDbOperation(operation, maxRetries = 3, delay = 1000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            console.error(`❌ Попытка ${attempt}/${maxRetries} провалилась:`, error.message);
+            
+            if (attempt === maxRetries) {
+                throw error; // Последняя попытка - выбрасываем ошибку
+            }
+            
+            // Ждем перед следующей попыткой (экспоненциальная задержка)
+            const waitTime = delay * Math.pow(2, attempt - 1);
+            console.log(`⏳ Ждем ${waitTime}ms перед следующей попыткой...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+    }
+}
+
 // 🔧 ИНИЦИАЛИЗАЦИЯ ТАБЛИЦ
 async function initializeDatabase() {
     try {
@@ -132,27 +152,29 @@ async function initializeDatabase() {
 class OrdersDB {
     // Создать заказ
     static async create(orderData) {
-        const query = `
-            INSERT INTO orders (order_id, user_id, user_name, phone, delivery_zone, address, items, total_amount, status, payment_id, payment_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING *
-        `;
-        const values = [
-            orderData.orderId,
-            orderData.userId,
-            orderData.userName,
-            orderData.phone,
-            orderData.deliveryZone,
-            orderData.address,
-            JSON.stringify(orderData.items),
-            orderData.totalAmount,
-            orderData.status || 'pending',
-            orderData.paymentId,
-            orderData.paymentUrl
-        ];
-        
-        const result = await pool.query(query, values);
-        return result.rows[0];
+        return await retryDbOperation(async () => {
+            const query = `
+                INSERT INTO orders (order_id, user_id, user_name, phone, delivery_zone, address, items, total_amount, status, payment_id, payment_url)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING *
+            `;
+            const values = [
+                orderData.orderId,
+                orderData.userId,
+                orderData.userName,
+                orderData.phone,
+                orderData.deliveryZone,
+                orderData.address,
+                JSON.stringify(orderData.items),
+                orderData.totalAmount,
+                orderData.status || 'pending',
+                orderData.paymentId,
+                orderData.paymentUrl
+            ];
+            
+            const result = await pool.query(query, values);
+            return result.rows[0];
+        });
     }
     
     // Получить заказ по ID
@@ -286,41 +308,41 @@ class PurchaseHistoryDB {
     // 💾 СОЗДАТЬ ЗАПИСЬ О ПОКУПКЕ (для интеграции с server.js)
     static async create(purchaseData) {
         const {
-            orderId,
-            userId,
-            customerName,
+            order_id,
+            user_id,
+            customer_name,
             phone,
-            totalAmount,
-            itemsCount,
-            items,
-            paymentId,
-            purchaseDate,
-            deliveryZone,
-            address
+            total_amount,
+            items_count,
+            items_data,
+            payment_id,
+            delivery_zone,
+            address_data,
+            created_at
         } = purchaseData;
         
         const query = `
             INSERT INTO purchase_history (
                 order_id, user_id, customer_name, phone, amount, 
-                items_count, items_data, payment_id, purchase_date, 
-                delivery_zone, address_data
+                items_count, items_data, payment_id, 
+                delivery_zone, address_data, created_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING *
         `;
         
         const values = [
-            orderId,
-            userId,
-            customerName,
+            order_id,
+            user_id,
+            customer_name,
             phone,
-            totalAmount,
-            itemsCount,
-            JSON.stringify(items),
-            paymentId,
-            purchaseDate,
-            deliveryZone,
-            JSON.stringify(address)
+            total_amount,
+            items_count,
+            items_data,
+            payment_id,
+            delivery_zone,
+            address_data,
+            created_at
         ];
         
         const result = await pool.query(query, values);
