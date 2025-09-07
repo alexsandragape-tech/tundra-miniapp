@@ -1329,17 +1329,31 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         // Проверяем, что order был создан
         if (order && order.id) {
-            // Генерируем демо-ссылку для тестирования интерфейса
-            const demoPaymentUrl = `https://demo.yookassa.ru/checkout?orderId=${order.id}&amount=${order.totals?.total || 0}&shopId=demo`;
+            // В демо-режиме сразу помечаем заказ как оплаченный
+            order.paymentStatus = 'paid';
+            order.status = 'accepted';
+            orders.set(order.id, order);
             
+            // Обновляем в БД
+            try {
+                await OrdersDB.update(order.id, {
+                    status: 'accepted',
+                    paymentStatus: 'paid'
+                });
+            } catch (dbError) {
+                logger.error(`❌ Ошибка обновления заказа в БД:`, dbError.message);
+            }
+            
+            // Возвращаем успешный ответ без редиректа на оплату
             res.json({ 
                 ok: true, 
                 orderId: order.id,
-                paymentUrl: demoPaymentUrl,
+                paymentUrl: null, // Нет URL для редиректа
                 paymentId: 'demo_payment_' + order.id,
                 amount: order.totals?.total || 0,
                 isTestMode: true,
-                message: 'ДЕМО РЕЖИМ: Тестирование интерфейса'
+                isPaid: true, // Помечаем как оплаченный
+                message: 'ДЕМО РЕЖИМ: Заказ автоматически оплачен'
             });
         } else {
             // Если заказ не был создан, возвращаем ошибку
