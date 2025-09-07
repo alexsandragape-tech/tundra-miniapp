@@ -1671,8 +1671,18 @@ function requireAdminAuth(req, res, next) {
 function validateOrderData(req, res, next) {
     const { cartItems, address, phone, customerName, deliveryZone } = req.body;
     
+    // Логируем входящие данные для отладки
+    logger.debug('🔍 Валидация заказа:', {
+        cartItems: cartItems?.length || 0,
+        address: address ? 'есть' : 'нет',
+        phone: phone ? 'есть' : 'нет',
+        customerName: customerName ? 'есть' : 'нет',
+        deliveryZone: deliveryZone || 'нет'
+    });
+    
     // Проверяем обязательные поля
     if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        logger.error('❌ Валидация: Корзина пуста');
         return res.status(400).json({
             ok: false,
             error: 'Корзина не может быть пустой'
@@ -1680,6 +1690,7 @@ function validateOrderData(req, res, next) {
     }
     
     if (!address || !address.street || !address.house) {
+        logger.error('❌ Валидация: Адрес неполный:', address);
         return res.status(400).json({
             ok: false,
             error: 'Необходимо указать адрес доставки'
@@ -1687,6 +1698,7 @@ function validateOrderData(req, res, next) {
     }
     
     if (!phone || typeof phone !== 'string' || phone.trim().length < 10) {
+        logger.error('❌ Валидация: Телефон некорректный:', phone);
         return res.status(400).json({
             ok: false,
             error: 'Необходимо указать корректный номер телефона'
@@ -1694,6 +1706,7 @@ function validateOrderData(req, res, next) {
     }
     
     if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
+        logger.error('❌ Валидация: Имя клиента некорректное:', customerName);
         return res.status(400).json({
             ok: false,
             error: 'Необходимо указать имя клиента'
@@ -1701,6 +1714,7 @@ function validateOrderData(req, res, next) {
     }
     
     if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
+        logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
         return res.status(400).json({
             ok: false,
             error: 'Необходимо выбрать зону доставки'
@@ -1710,6 +1724,7 @@ function validateOrderData(req, res, next) {
     // Валидируем товары в корзине
     for (const item of cartItems) {
         if (!item.id || !item.name || !item.price || !item.quantity) {
+            logger.error('❌ Валидация: Товар некорректный:', item);
             return res.status(400).json({
                 ok: false,
                 error: 'Некорректные данные товара в корзине'
@@ -1717,6 +1732,7 @@ function validateOrderData(req, res, next) {
         }
         
         if (typeof item.price !== 'number' || item.price <= 0) {
+            logger.error('❌ Валидация: Цена товара некорректная:', item.price);
             return res.status(400).json({
                 ok: false,
                 error: 'Некорректная цена товара'
@@ -1724,6 +1740,7 @@ function validateOrderData(req, res, next) {
         }
         
         if (typeof item.quantity !== 'number' || item.quantity <= 0 || item.quantity > 50) {
+            logger.error('❌ Валидация: Количество товара некорректное:', item.quantity);
             return res.status(400).json({
                 ok: false,
                 error: 'Некорректное количество товара'
@@ -1731,6 +1748,7 @@ function validateOrderData(req, res, next) {
         }
     }
     
+    logger.info('✅ Валидация заказа прошла успешно');
     next();
 }
 
