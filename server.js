@@ -1053,7 +1053,9 @@ async function createOrder(orderData) {
             status: order.status,
             paymentStatus: order.paymentStatus,
             paymentId: order.paymentId || null,
-            paymentUrl: order.paymentUrl || null
+            paymentUrl: order.paymentUrl || null,
+            comment: order.comment || '',
+            telegramUsername: order.telegramUsername || null
         };
         
         await OrdersDB.create(dbOrder);
@@ -1361,6 +1363,13 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         order = await createOrder(orderData);
         logger.info(`✅ Заказ #${order.id} создан, сумма: ${order.totals?.total || 0}₽`);
         
+        // Получаем данные клиента (приоритет: Telegram > форма > fallback)
+        const telegramUser = orderData.telegramUser;
+        const customerName = telegramUser?.full_name || 
+                           telegramUser?.first_name || 
+                           orderData.customerName || 
+                           'Клиент';
+        
         // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
         const totalAmount = order.totals?.total || 0;
         const description = `Заказ #${order.id} в Tundra Gourmet`;
@@ -1376,12 +1385,14 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         }
         
         const customerInfo = {
-            customerName: `${order.address?.street || ''} ${order.address?.house || ''}`.trim() || 'Клиент',
-            phone: order.phone || ''
+            customerName: customerName,
+            phone: order.phone || '',
+            telegramUsername: telegramUser?.username || null
         };
         
-        // Добавляем customerName в заказ
+        // Добавляем данные клиента в заказ
         order.customerName = customerInfo.customerName;
+        order.telegramUsername = customerInfo.telegramUsername;
         
         // 🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание реального платежа
         if (forceDemoMode) {
@@ -1444,14 +1455,30 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     // Парсим адрес из JSON строки
                     const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
                     
+                    // Формируем полный адрес
+                    const fullAddress = [
+                        addressData.street,
+                        addressData.house,
+                        addressData.apartment && `кв. ${addressData.apartment}`,
+                        addressData.floor && `эт. ${addressData.floor}`,
+                        addressData.intercom && `домофон: ${addressData.intercom}`
+                    ].filter(Boolean).join(', ');
+                    
+                    // Формируем информацию о клиенте
+                    const clientInfo = [
+                        order.user_name || 'Клиент',
+                        telegramUser?.username && `@${telegramUser.username}`
+                    ].filter(Boolean).join(' ');
+                    
                     const message = 
                         `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
                         `📋 Номер: #${order.id}\n` +
-                        `👤 Клиент: ${order.user_name || 'Клиент'}\n` +
+                        `👤 Клиент: ${clientInfo}\n` +
                         `📞 Телефон: ${order.phone}\n` +
                         `💰 Сумма: ${order.totals?.total || 0}₽\n` +
                         `📍 Зона доставки: ${order.deliveryZone}\n` +
-                        `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
+                        `🏠 Адрес: ${fullAddress}` +
+                        (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
                     
                     logger.debug('📱 Отправляем уведомление в Telegram:', {
                         chatId: config.TELEGRAM_ADMIN_CHAT_ID,
