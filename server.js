@@ -172,7 +172,7 @@ async function initializeYooKassa() {
 
 // Хранилище заказов (в продакшене заменить на базу данных)
 let orders = new Map();
-let orderCounter = 0; // Начинаем с 0 для нового пользователя
+let orderCounter = 0; // Будет инициализирован из БД
 
 // 🔥 ТАЙМЕРЫ ДЛЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗОВ (30 минут)
 let orderTimers = new Map();
@@ -934,6 +934,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
         // Создаем уникальный ключ идемпотентности
         const idempotenceKey = crypto.randomUUID();
         logger.debug('🔑 Idempotence Key:', idempotenceKey);
+        logger.debug('📋 Данные платежа для YooKassa:', JSON.stringify(paymentData, null, 2));
         
         const payment = await checkout.createPayment(paymentData, idempotenceKey);
 
@@ -942,7 +943,32 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
         return payment;
     } catch (error) {
         logger.error('❌ Ошибка создания платежа ЮKassa:', error.message);
+        if (error.response) {
+            logger.error('📋 Детали ошибки YooKassa:', {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data
+            });
+        }
         throw error;
+    }
+}
+
+// 🔢 ИНИЦИАЛИЗАЦИЯ СЧЕТЧИКА ЗАКАЗОВ ИЗ БД
+async function initializeOrderCounter() {
+    try {
+        // Получаем максимальный ID заказа из БД
+        const result = await OrdersDB.getMaxOrderId();
+        if (result && result.max_id) {
+            orderCounter = parseInt(result.max_id);
+            logger.info(`🔢 Счетчик заказов инициализирован: ${orderCounter}`);
+        } else {
+            orderCounter = 0;
+            logger.info('🔢 Счетчик заказов инициализирован: 0 (нет заказов в БД)');
+        }
+    } catch (error) {
+        logger.error('❌ Ошибка инициализации счетчика заказов:', error.message);
+        orderCounter = 0; // Fallback
     }
 }
 
@@ -2066,6 +2092,9 @@ async function startServer() {
         
         // Инициализируем базу данных
         await initializeDatabase();
+        
+        // Инициализируем счетчик заказов из БД
+        await initializeOrderCounter();
         
         // Инициализируем ЮKassa
         await initializeYooKassa();
