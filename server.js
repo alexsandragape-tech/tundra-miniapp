@@ -1705,13 +1705,14 @@ function validateOrderData(req, res, next) {
         });
     }
     
-    if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
-        logger.error('❌ Валидация: Имя клиента некорректное:', customerName);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать имя клиента'
-        });
-    }
+    // Имя клиента не обязательно (не отправляется из frontend)
+    // if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
+    //     logger.error('❌ Валидация: Имя клиента некорректное:', customerName);
+    //     return res.status(400).json({
+    //         ok: false,
+    //         error: 'Необходимо указать имя клиента'
+    //     });
+    // }
     
     if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
         logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
