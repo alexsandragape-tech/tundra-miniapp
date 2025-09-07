@@ -112,21 +112,8 @@ const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 // Настройка для работы с прокси (Railway)
 app.set('trust proxy', 1);
 
-// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ
-// Безопасность заголовков для Telegram Web App
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'", "https://telegram.org"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://api.yookassa.ru"],
-            frameSrc: ["'self'", "https://telegram.org"]
-        }
-    },
-    crossOriginEmbedderPolicy: false
-}));
+// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ (ОТКЛЮЧЕНЫ ДЛЯ TELEGRAM WEB APP)
+// Отключаем все ограничения безопасности для статических файлов
 
 // CORS только для API (не для статических файлов)
 const corsOrigins = config.CORS_ORIGIN.split(',');
@@ -135,23 +122,12 @@ const corsOptions = {
     credentials: true
 };
 
-// Защита от DDoS только для API
+// Защита от DDoS только для API (УПРОЩЕННАЯ)
 const limiter = rateLimit({
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    max: config.RATE_LIMIT_MAX_REQUESTS,
+    windowMs: 15 * 60 * 1000, // 15 минут
+    max: 100, // 100 запросов
     message: 'Слишком много запросов, попробуйте позже',
-    standardHeaders: true,
-    legacyHeaders: false,
-    // Настройка для работы с прокси
-    trustProxy: true,
-    // Игнорируем X-Forwarded-For для статических файлов
-    skip: (req) => {
-        // Пропускаем статические файлы
-        return req.path.startsWith('/images/') || 
-               req.path.endsWith('.css') || 
-               req.path.endsWith('.js') || 
-               req.path.endsWith('.html');
-    }
+    trustProxy: true
 });
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
@@ -1083,16 +1059,9 @@ function cancelOrderTimer(orderId) {
     logger.debug(`🔥 Таймер заказа ${orderId} отменен (заказ оплачен)`);
 }
 
-// Настройка статических файлов (БЕЗ ограничений безопасности)
+// Настройка статических файлов (ПОЛНОСТЬЮ БЕЗ ОГРАНИЧЕНИЙ)
 const webRoot = path.join(__dirname, 'webapp');
-app.use(express.static(webRoot, {
-    setHeaders: (res, path) => {
-        // Разрешаем загрузку всех ресурсов для Telegram
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    }
-}));
+app.use(express.static(webRoot));
 
 // Применяем CORS и rate limiting только к API
 app.use('/api', cors(corsOptions));
