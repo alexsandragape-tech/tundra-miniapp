@@ -1453,7 +1453,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     items_data: JSON.stringify(itemsArray),
                     address: JSON.stringify(address),
                     phone: order.phone,
-                    purchase_date: new Date().toISOString()
+                    created_at: new Date().toISOString()
                 });
                 
                 logger.info(`✅ Запись в истории покупок создана для заказа ${order.id}`);
@@ -1491,9 +1491,11 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     ].filter(Boolean).join(' ');
                     
                     // Формируем состав заказа
-                    const orderItems = order.items.map(item => 
-                        `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
-                    ).join('\n');
+                    const orderItems = order.items && Array.isArray(order.items) 
+                        ? order.items.map(item => 
+                            `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
+                          ).join('\n')
+                        : 'Состав заказа недоступен';
                     
                     const message = 
                         `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
