@@ -1394,6 +1394,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         // Добавляем данные клиента в заказ
         order.customerName = customerInfo.customerName;
         order.telegramUsername = customerInfo.telegramUsername;
+        order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
         
         // 🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание реального платежа
         if (forceDemoMode) {
@@ -1797,8 +1798,30 @@ async function handleCallbackQuery(callbackQuery) {
         // Обновляем сообщение в админ-группе
         await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
         
+        // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
+        if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
+            try {
+                const clientMessage = `📦 <b>Обновление заказа #${orderId}</b>\n\n` +
+                    `Статус изменен на: ${statusEmoji} <b>${statusText}</b>\n\n` +
+                    `💰 Сумма: ${order.totals?.total || 0}₽\n` +
+                    `📍 Адрес: ${order.address?.street}, ${order.address?.house}`;
+                
+                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: order.telegramUserId,
+                    text: clientMessage,
+                    parse_mode: 'HTML'
+                });
+                
+                logger.info(`📱 Уведомление клиенту отправлено для заказа ${orderId}`);
+            } catch (error) {
+                logger.error(`❌ Ошибка отправки уведомления клиенту:`, error.message);
+            }
+        } else {
+            logger.warn(`⚠️ Не удалось отправить уведомление клиенту: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
+        }
+        
         // Отправляем подтверждение
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
             callback_query_id: callbackQuery.id,
             text: `Статус заказа #${orderId} изменен на "${statusText}"`
         });
