@@ -1306,7 +1306,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                     `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
                                     `💳 ID платежа: ${payment.id}\n` +
                                     `📍 Зона доставки: ${order.delivery_zone}\n` +
-                                    `🏠 Адрес: ${addressData.street}, ${addressData.house}`;
+                                    `🏠 Адрес: ${addressData.street}, ${addressData.house}${addressData.apartment ? `, кв. ${addressData.apartment}` : ''}${addressData.floor ? `, эт. ${addressData.floor}` : ''}${addressData.entrance ? `, под. ${addressData.entrance}` : ''}${addressData.intercom ? `, домофон: ${addressData.intercom}` : ''}`;
                                 
                                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                                     chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
@@ -1462,6 +1462,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         addressData.house,
                         addressData.apartment && `кв. ${addressData.apartment}`,
                         addressData.floor && `эт. ${addressData.floor}`,
+                        addressData.entrance && `под. ${addressData.entrance}`,
                         addressData.intercom && `домофон: ${addressData.intercom}`
                     ].filter(Boolean).join(', ');
                     
@@ -1482,10 +1483,21 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
                     
                     
+                    // Создаем кнопки для нового заказа
+                    const inlineKeyboard = {
+                        inline_keyboard: [
+                            [
+                                { text: '🟡 Принять', callback_data: `accept_${order.id}` },
+                                { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
+                            ]
+                        ]
+                    };
+                    
                     const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
                         text: message,
-                        parse_mode: 'HTML'
+                        parse_mode: 'HTML',
+                        reply_markup: inlineKeyboard
                     });
                     
                     logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
@@ -2056,6 +2068,18 @@ app.get('/api/products', async (req, res) => {
 });
 
 // 🔧 API ДЛЯ АДМИН ПАНЕЛИ
+
+// Получение всех заказов для админ панели
+app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
+    try {
+        const orders = await OrdersDB.getAll();
+        logger.info(`📋 Загружено ${orders.length} заказов для админ панели`);
+        res.json({ ok: true, orders });
+    } catch (error) {
+        logger.error('❌ Ошибка загрузки заказов:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 
 // Получение всех товаров для админ панели
 app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
