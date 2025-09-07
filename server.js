@@ -1491,11 +1491,45 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     ].filter(Boolean).join(' ');
                     
                     // Формируем состав заказа
-                    const orderItems = order.items && Array.isArray(order.items) 
-                        ? order.items.map(item => 
+                    logger.debug('🔍 order.cartItems тип:', typeof order.cartItems);
+                    logger.debug('🔍 order.cartItems содержимое:', order.cartItems);
+                    logger.debug('🔍 order.items тип:', typeof order.items);
+                    logger.debug('🔍 order.items содержимое:', order.items);
+                    
+                    let orderItems = 'Состав заказа недоступен';
+                    
+                    // Пробуем получить items из разных источников
+                    let itemsArray = null;
+                    
+                    // 1. Пробуем order.cartItems (основной источник)
+                    if (order.cartItems && Array.isArray(order.cartItems)) {
+                        itemsArray = order.cartItems;
+                        logger.debug('✅ Используем order.cartItems');
+                    }
+                    // 2. Пробуем order.items
+                    else if (order.items) {
+                        if (typeof order.items === 'string') {
+                            try {
+                                itemsArray = JSON.parse(order.items);
+                                logger.debug('✅ Используем order.items (парсим JSON)');
+                            } catch (e) {
+                                logger.error('❌ Ошибка парсинга order.items:', e.message);
+                                itemsArray = [];
+                            }
+                        } else if (Array.isArray(order.items)) {
+                            itemsArray = order.items;
+                            logger.debug('✅ Используем order.items (массив)');
+                        }
+                    }
+                    
+                    if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+                        orderItems = itemsArray.map(item => 
                             `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
-                          ).join('\n')
-                        : 'Состав заказа недоступен';
+                        ).join('\n');
+                        logger.debug('✅ Состав заказа сформирован:', orderItems);
+                    } else {
+                        logger.warn('⚠️ Не удалось получить состав заказа');
+                    }
                     
                     const message = 
                         `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
