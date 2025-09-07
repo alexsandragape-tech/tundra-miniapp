@@ -1640,7 +1640,7 @@ function createOrderItem(order) {
     
     orderItem.innerHTML = `
         <div class="order-header">
-            <div class="order-number">Заказ #${order.order_id}</div>
+            <div class="order-date">${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
             <div class="order-status ${order.status}">${statusTexts[order.status] || order.status}</div>
         </div>
         <div class="order-info">
@@ -1736,7 +1736,6 @@ function displayOrderDetails(order) {
         
         <div class="order-detail-section">
             <div class="order-detail-title">📋 Информация о заказе</div>
-            <div><strong>Номер:</strong> #${order.order_id}</div>
             <div><strong>Дата:</strong> ${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
             <div><strong>Сумма:</strong> ${order.total_amount}₽</div>
             <div><strong>Телефон:</strong> ${order.phone}</div>
@@ -1904,6 +1903,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // 🚫 ЗАЩИТА ОТ МНОЖЕСТВЕННОЙ ОТПРАВКИ
+            if (window.isSubmittingOrder) {
+                console.log('⚠️ Заказ уже отправляется, игнорируем повторную отправку');
+                return;
+            }
+            window.isSubmittingOrder = true;
             
             // Проверяем минимальный заказ в зависимости от зоны доставки
             const deliveryZone = document.getElementById('delivery-zone').value;
@@ -2085,6 +2091,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Восстанавливаем кнопку
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
+                
+                // 🔄 СБРАСЫВАЕМ ФЛАГ МНОЖЕСТВЕННОЙ ОТПРАВКИ
+                window.isSubmittingOrder = false;
             }
 
             // Fallback - если что-то пошло не так
@@ -2094,6 +2103,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Профиль обновляется ТОЛЬКО при реальной оплате!
             
             console.log('❌ Заказ не отправлен. Профиль НЕ обновлен.');
+            
+            // 🔄 СБРАСЫВАЕМ ФЛАГ МНОЖЕСТВЕННОЙ ОТПРАВКИ
+            window.isSubmittingOrder = false;
             
             // Возвращаемся к корзине для повторной попытки
             showCart();
@@ -2456,7 +2468,6 @@ function startPaymentTimer(orderId) {
     paymentTimeLeft = 10 * 60; // 10 минут
     
     // Обновляем UI
-    document.getElementById('payment-order-number').textContent = `Заказ #${orderId}`;
     showScreen('payment-waiting-screen');
     
     // Запускаем таймер обратного отсчета
@@ -2560,7 +2571,6 @@ function handleSuccessfulPayment(order) {
     localStorage.removeItem('pending_order');
     
     // Показываем экран успеха
-    document.getElementById('order-number').textContent = `Номер заказа: #${order.id}`;
     showScreen('order-success-screen');
     
     showNotification('🎉 Заказ успешно оплачен!', 'success');
