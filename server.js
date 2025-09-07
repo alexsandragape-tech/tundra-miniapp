@@ -1792,8 +1792,19 @@ async function handleCallbackQuery(callbackQuery) {
                 return;
         }
         
-        // Обновляем статус заказа
+        // Обновляем статус заказа в памяти
         order = updateOrderStatus(orderId, newStatus);
+        
+        // 🔥 ОБНОВЛЯЕМ СТАТУС В БАЗЕ ДАННЫХ
+        try {
+            await OrdersDB.update(orderId, { 
+                status: newStatus,
+                updated_at: new Date().toISOString()
+            });
+            logger.info(`💾 Статус заказа ${orderId} обновлен в БД: ${newStatus}`);
+        } catch (dbError) {
+            logger.error(`❌ Ошибка обновления статуса в БД:`, dbError.message);
+        }
         
         // Обновляем сообщение в админ-группе
         await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
