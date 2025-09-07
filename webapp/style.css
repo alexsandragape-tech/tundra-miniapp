@@ -1580,5 +1580,181 @@ body {
     }
 }
 
+/* Стили для списка заказов */
+.orders-list {
+    padding: 20px;
+}
+
+.order-item {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.order-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.order-number {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1A1F2E;
+}
+
+.order-status {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.order-status.new { background: #fff3cd; color: #856404; }
+.order-status.accepted { background: #d4edda; color: #155724; }
+.order-status.preparing { background: #cce5ff; color: #004085; }
+.order-status.delivering { background: #e2e3e5; color: #383d41; }
+.order-status.completed { background: #d1ecf1; color: #0c5460; }
+.order-status.cancelled { background: #f8d7da; color: #721c24; }
+
+.order-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #666;
+}
+
+.order-amount {
+    font-weight: 600;
+    color: #1A1F2E;
+}
+
+/* Стили для деталей заказа */
+.order-details {
+    padding: 20px;
+}
+
+.order-detail-section {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+
+.order-detail-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1A1F2E;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.order-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+.order-status-badge.new { background: #fff3cd; color: #856404; }
+.order-status-badge.accepted { background: #d4edda; color: #155724; }
+.order-status-badge.preparing { background: #cce5ff; color: #004085; }
+.order-status-badge.delivering { background: #e2e3e5; color: #383d41; }
+.order-status-badge.completed { background: #d1ecf1; color: #0c5460; }
+.order-status-badge.cancelled { background: #f8d7da; color: #721c24; }
+
+.order-items-list {
+    list-style: none;
+    padding: 0;
+}
+
+.order-items-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.order-items-list li:last-child {
+    border-bottom: none;
+}
+
+.item-name {
+    font-weight: 500;
+    color: #1A1F2E;
+}
+
+.item-quantity {
+    color: #666;
+    font-size: 14px;
+}
+
+.item-price {
+    font-weight: 600;
+    color: #1A1F2E;
+}
+
+/* Стили для пустых заказов */
+.empty-orders {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.empty-orders-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-orders-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.empty-orders-desc {
+    font-size: 16px;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.go-shopping-btn {
+    background: #D4A574;
+    color: #1A1F2E;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.go-shopping-btn:hover {
+    background: #c19660;
+    transform: translateY(-2px);
+}
+
 
 
