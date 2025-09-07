@@ -2104,6 +2104,41 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
     }
 });
 
+// Получение заказов пользователя
+app.get('/api/orders/user/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const orders = await OrdersDB.getByUserId(userId);
+        
+        // Фильтруем отмененные заказы
+        const activeOrders = orders.filter(order => order.status !== 'cancelled');
+        
+        logger.info(`📋 Загружено ${activeOrders.length} активных заказов для пользователя ${userId}`);
+        res.json({ ok: true, orders: activeOrders });
+    } catch (error) {
+        logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Получение деталей конкретного заказа
+app.get('/api/orders/:orderId', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const order = await OrdersDB.getById(orderId);
+        
+        if (!order) {
+            return res.status(404).json({ ok: false, error: 'Заказ не найден' });
+        }
+        
+        logger.info(`📋 Загружены детали заказа ${orderId}`);
+        res.json({ ok: true, order });
+    } catch (error) {
+        logger.error('❌ Ошибка загрузки деталей заказа:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Получение всех товаров для админ панели
 app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     try {
