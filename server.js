@@ -2281,9 +2281,9 @@ async function startServer() {
             logger.warn('⚠️ Товары из БД не загружены, используем fallback');
         }
         
-        // Функция для получения Chat ID
+        // Функция для получения Chat ID (группы или личного чата)
         async function getTelegramChatId() {
-            if (!config.TELEGRAM_BOT_TOKEN) {
+            if (!config.TELEGRAM_BФOT_TOKEN) {
                 logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен');
                 return null;
             }
@@ -2293,18 +2293,63 @@ async function startServer() {
                 const updates = response.data.result;
                 
                 if (updates.length > 0) {
-                    const lastUpdate = updates[updates.length - 1];
-                    const chatId = lastUpdate.message?.chat?.id || lastUpdate.callback_query?.message?.chat?.id;
+                    // Ищем групповые чаты (ID начинается с минуса)
+                    const groupChats = updates
+                        .map(update => update.message?.chat || update.callback_query?.message?.chat)
+                        .filter(chat => chat && chat.id < 0)
+                        .map(chat => ({
+                            id: chat.id,
+                            title: chat.title || 'Группа',
+                            type: chat.type
+                        }));
                     
-                    if (chatId) {
-                        logger.info(`📱 Найден Chat ID: ${chatId}`);
+                    // Убираем дубликаты
+                    const uniqueGroups = groupChats.filter((chat, index, self) => 
+                        index === self.findIndex(c => c.id === chat.id)
+                    );
+                    
+                    if (uniqueGroups.length > 0) {
+                        logger.info('📱 Найдены групповые чаты:');
+                        uniqueGroups.forEach(group => {
+                            logger.info(`   🏢 ${group.title} (${group.type}): ${group.id}`);
+                        });
+                        
+                        const mainGroup = uniqueGroups[0];
                         logger.info('💡 Добавьте эту переменную в Railway:');
-                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${chatId}`);
-                        return chatId;
+                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${mainGroup.id}`);
+                        logger.info(`   (ID группы: ${mainGroup.title})`);
+                        return mainGroup.id;
+                    }
+                    
+                    // Если групп нет, ищем личные чаты
+                    const personalChats = updates
+                        .map(update => update.message?.chat || update.callback_query?.message?.chat)
+                        .filter(chat => chat && chat.id > 0)
+                        .map(chat => ({
+                            id: chat.id,
+                            username: chat.username || 'Пользователь',
+                            first_name: chat.first_name || ''
+                        }));
+                    
+                    const uniquePersonal = personalChats.filter((chat, index, self) => 
+                        index === self.findIndex(c => c.id === chat.id)
+                    );
+                    
+                    if (uniquePersonal.length > 0) {
+                        logger.info('📱 Найдены личные чаты:');
+                        uniquePersonal.forEach(chat => {
+                            logger.info(`   👤 ${chat.first_name} (@${chat.username}): ${chat.id}`);
+                        });
+                        
+                        const mainChat = uniquePersonal[0];
+                        logger.info('💡 Добавьте эту переменную в Railway:');
+                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${mainChat.id}`);
+                        logger.info(`   (Личный чат: ${mainChat.first_name})`);
+                        return mainChat.id;
                     }
                 }
                 
-                logger.warn('⚠️ Chat ID не найден. Напишите боту сообщение и попробуйте снова.');
+                logger.warn('⚠️ Chat ID не найден. Добавьте бота в группу или напишите ему сообщение.');
                 return null;
             } catch (error) {
                 logger.error('❌ Ошибка получения Chat ID:', error.message);
