@@ -135,7 +135,8 @@
 
                 <div class="form-group">
                 <label class="form-label">Телефон</label>
-                <input type="tel" id="phone" class="form-input" required>
+                <input type="tel" id="phone" class="form-input" placeholder="+7 (999) 123-45-67" required>
+                <div class="form-hint">Формат: +7XXXXXXXXXX или 8XXXXXXXXXX</div>
                 </div>
 
                 <div class="form-group">
@@ -143,13 +144,13 @@
                 <textarea id="comment" class="form-textarea" placeholder="Дополнительные пожелания"></textarea>
                 </div>
 
-            <div class="form-group">
+                <div class="form-group">
                 <button type="submit" class="checkout-btn" style="width: 100%; margin-top: 20px;">
                     Оформить заказ
                 </button>
             </div>
             </form>
-    </div>
+                </div>
 
     <!-- Экран ожидания оплаты -->
     <div id="payment-waiting-screen" class="screen">
@@ -162,7 +163,7 @@
                 <div class="timer-title">Время на оплату:</div>
                 <div class="timer-display" id="payment-timer">30:00</div>
                 <div class="timer-warning">Заказ будет автоматически отменен</div>
-            </div>
+                    </div>
             
             <div class="payment-actions">
                 <button class="payment-btn primary" id="pay-now-btn" onclick="redirectToPayment()">
@@ -174,11 +175,11 @@
                 <button class="payment-btn tertiary" onclick="showMain()">
                     🏠 Вернуться в каталог
                 </button>
-            </div>
+                    </div>
             
             <div class="payment-status" id="payment-status">
                 Проверяем статус оплаты...
-            </div>
+                    </div>
         </div>
     </div>
 
@@ -242,7 +243,7 @@
                 Перейти к покупкам
                     </button>
                 </div>
-                    </div>
+            </div>
 
     <!-- Экран успешной оплаты -->
     <div id="payment-success-screen" class="screen">
@@ -255,17 +256,17 @@
                     <div class="order-number-success">Заказ #<span id="success-order-id">-</span></div>
                     <div class="order-amount-success"><span id="success-amount">0</span>₽</div>
                 </div>
-            </div>
+                    </div>
             <div class="success-actions">
                 <button class="primary-btn" onclick="viewPurchaseHistory()">
                     📋 Посмотреть мои заказы
-                </button>
+                    </button>
                 <button class="secondary-btn" onclick="showMain()">
                     🏠 Вернуться в каталог
                 </button>
-            </div>
-        </div>
-    </div>
+                </div>
+                    </div>
+                    </div>
 
     <!-- Уведомления -->
     <div id="notification" class="notification"></div>
