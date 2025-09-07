@@ -1563,81 +1563,177 @@ function viewPurchaseHistory() {
 // Функция показа моих заказов
 async function showMyOrders() {
     showScreen('my-orders-screen');
+    await loadUserOrders();
+}
+
+// Загрузка заказов пользователя
+async function loadUserOrders() {
+    try {
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/orders/user/${userId}`);
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok) {
+                displayOrders(result.orders);
+            } else {
+                console.error('Ошибка загрузки заказов:', result.error);
+                showEmptyOrders();
+            }
+        } else {
+            console.error('Ошибка HTTP:', response.status);
+            showEmptyOrders();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки заказов:', error);
+        showEmptyOrders();
+    }
+}
+
+// Отображение списка заказов
+function displayOrders(orders) {
+    const ordersList = document.getElementById('orders-list');
+    const emptyOrders = document.getElementById('empty-orders');
     
-    // Находим контейнер для истории заказов
-    const ordersContainer = document.querySelector('#my-orders-screen');
-    if (!ordersContainer) return;
+    if (orders.length === 0) {
+        showEmptyOrders();
+        return;
+    }
     
-    // Показываем загрузку
-    ordersContainer.innerHTML = `
-        <div class="page-header">
-            <button class="back-btn" onclick="showProfile()">←</button>
-            <div class="page-title">Мои заказы</div>
+    ordersList.innerHTML = '';
+    
+    orders.forEach(order => {
+        const orderItem = createOrderItem(order);
+        ordersList.appendChild(orderItem);
+    });
+    
+    ordersList.style.display = 'block';
+    emptyOrders.style.display = 'none';
+}
+
+// Создание элемента заказа
+function createOrderItem(order) {
+    const orderItem = document.createElement('div');
+    orderItem.className = 'order-item';
+    orderItem.onclick = () => showOrderDetails(order.order_id);
+    
+    const statusTexts = {
+        'new': '⏳ Новый',
+        'accepted': '🟡 Принят',
+        'preparing': '🔵 Готовится',
+        'delivering': '🚚 В доставке',
+        'completed': '✅ Доставлен',
+        'cancelled': '🔴 Отменен'
+    };
+    
+    const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
+    const addressText = `${address?.street || ''}, ${address?.house || ''}`;
+    
+    orderItem.innerHTML = `
+        <div class="order-header">
+            <div class="order-number">Заказ #${order.order_id}</div>
+            <div class="order-status ${order.status}">${statusTexts[order.status] || order.status}</div>
         </div>
-        <div class="loading-orders">
-            <div class="loading-text">Загрузка истории заказов...</div>
+        <div class="order-info">
+            <div>${addressText}</div>
+            <div class="order-amount">${order.total_amount}₽</div>
         </div>
     `;
     
-    // Загружаем историю покупок
-    const purchases = await loadPurchaseHistory();
+    return orderItem;
+}
+
+// Показать пустой список заказов
+function showEmptyOrders() {
+    const ordersList = document.getElementById('orders-list');
+    const emptyOrders = document.getElementById('empty-orders');
     
-    if (purchases.length === 0) {
-        // Показываем пустое состояние
-        ordersContainer.innerHTML = `
-            <div class="page-header">
-                <button class="back-btn" onclick="showProfile()">←</button>
-                <div class="page-title">Мои заказы</div>
-            </div>
-            <div class="empty-orders">
-                <div class="empty-orders-icon">📋</div>
-                <div class="empty-orders-title">История заказов пуста</div>
-                <div class="empty-orders-desc">У вас пока нет оплаченных заказов. Сделайте первый заказ в каталоге!</div>
-                <button class="go-shopping-btn" onclick="showMain()">
-                    Перейти к покупкам
-                </button>
-            </div>
-        `;
-    } else {
-        // Отображаем историю покупок
-        const ordersHtml = purchases.map((purchase, index) => {
-            const date = new Date(purchase.purchase_date).toLocaleDateString('ru-RU');
-            const time = new Date(purchase.purchase_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            
-            return `
-                <div class="order-item">
-                    <div class="order-header">
-                        <div class="order-number">Заказ #${purchase.order_id}</div>
-                        <div class="order-date">${date} ${time}</div>
-                    </div>
-                    <div class="order-details">
-                        <div class="order-amount">${purchase.totalAmount.toLocaleString()}₽</div>
-                        <div class="order-items-count">${purchase.itemsCount} товаров</div>
-                    </div>
-                    <div class="order-items">
-                        ${purchase.items.map(item => `
-                            <div class="order-item-detail">
-                                <span class="item-name">${item.name}</span>
-                                <span class="item-qty">x${item.quantity}</span>
-                                <span class="item-price">${(item.price * item.quantity).toLocaleString()}₽</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="order-status completed">✅ Оплачен</div>
-                </div>
-            `;
-        }).join('');
+    ordersList.style.display = 'none';
+    emptyOrders.style.display = 'block';
+}
+
+// Показать детали заказа
+async function showOrderDetails(orderId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/orders/${orderId}`);
         
-        ordersContainer.innerHTML = `
-            <div class="page-header">
-                <button class="back-btn" onclick="showProfile()">←</button>
-                <div class="page-title">Мои заказы</div>
-            </div>
-            <div class="orders-list">
-                ${ordersHtml}
-            </div>
-        `;
+        if (response.ok) {
+            const result = await response.json();
+            if (result.ok) {
+                displayOrderDetails(result.order);
+                showScreen('order-details-screen');
+            } else {
+                showNotification('Ошибка загрузки деталей заказа', 'error');
+            }
+        } else {
+            showNotification('Ошибка загрузки деталей заказа', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки деталей заказа:', error);
+        showNotification('Ошибка загрузки деталей заказа', 'error');
     }
+}
+
+// Отображение деталей заказа
+function displayOrderDetails(order) {
+    const content = document.getElementById('order-details-content');
+    
+    const statusTexts = {
+        'new': '⏳ Новый',
+        'accepted': '🟡 Принят',
+        'preparing': '🔵 Готовится',
+        'delivering': '🚚 В доставке',
+        'completed': '✅ Доставлен',
+        'cancelled': '🔴 Отменен'
+    };
+    
+    const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
+    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+    
+    const fullAddress = [
+        address?.street,
+        address?.house,
+        address?.apartment && `кв. ${address.apartment}`,
+        address?.floor && `эт. ${address.floor}`,
+        address?.entrance && `под. ${address.entrance}`,
+        address?.intercom && `домофон: ${address.intercom}`
+    ].filter(Boolean).join(', ');
+    
+    content.innerHTML = `
+        <div class="order-detail-section">
+            <div class="order-detail-title">📦 Статус заказа</div>
+            <div class="order-status-badge ${order.status}">${statusTexts[order.status] || order.status}</div>
+        </div>
+        
+        <div class="order-detail-section">
+            <div class="order-detail-title">📋 Информация о заказе</div>
+            <div><strong>Номер:</strong> #${order.order_id}</div>
+            <div><strong>Дата:</strong> ${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
+            <div><strong>Сумма:</strong> ${order.total_amount}₽</div>
+            <div><strong>Телефон:</strong> ${order.phone}</div>
+        </div>
+        
+        <div class="order-detail-section">
+            <div class="order-detail-title">📍 Адрес доставки</div>
+            <div>${fullAddress}</div>
+            <div><strong>Зона:</strong> ${order.delivery_zone === 'moscow' ? 'Москва' : 'МО'}</div>
+        </div>
+        
+        <div class="order-detail-section">
+            <div class="order-detail-title">🛍️ Состав заказа</div>
+            <ul class="order-items-list">
+                ${items.map(item => `
+                    <li>
+                        <div>
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-quantity">Количество: ${item.quantity}</div>
+                        </div>
+                        <div class="item-price">${item.price * item.quantity}₽</div>
+                    </li>
+                `).join('')}
+            </ul>
+        </div>
+    `;
 }
 
 // Функция проверки рабочих часов
@@ -1856,6 +1952,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     house: document.getElementById('house').value.trim(),
                     apartment: document.getElementById('apartment').value.trim(),
                     floor: document.getElementById('floor').value.trim(),
+                    entrance: document.getElementById('entrance').value.trim(),
                     intercom: document.getElementById('intercom').value.trim()
                 },
                 phone: document.getElementById('phone').value.trim(),
