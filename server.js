@@ -1245,8 +1245,22 @@ app.get('/test-yookassa', async (req, res) => {
 app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
     try {
         logger.debug('🔔 Получено уведомление от ЮKassa');
+        logger.debug('📦 Тип req.body:', typeof req.body);
+        logger.debug('📦 req.body:', req.body);
         
-        const notification = JSON.parse(req.body.toString());
+        let notification;
+        
+        // Проверяем тип данных и парсим соответственно
+        if (typeof req.body === 'string') {
+            notification = JSON.parse(req.body);
+        } else if (Buffer.isBuffer(req.body)) {
+            notification = JSON.parse(req.body.toString());
+        } else if (typeof req.body === 'object' && req.body !== null) {
+            // Если уже объект, используем как есть
+            notification = req.body;
+        } else {
+            throw new Error(`Неожиданный тип данных: ${typeof req.body}`);
+        }
         
         // Проверяем тип уведомления
         if (notification.type === 'payment.succeeded') {
@@ -1341,6 +1355,9 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         res.status(200).send('OK');
     } catch (error) {
         logger.error('❌ Ошибка обработки webhook:', error.message);
+        logger.error('❌ Стек ошибки:', error.stack);
+        logger.error('❌ req.body тип:', typeof req.body);
+        logger.error('❌ req.body содержимое:', req.body);
         res.status(500).send('Error');
     }
 });
