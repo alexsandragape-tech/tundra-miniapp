@@ -257,8 +257,12 @@ class OrdersDB {
         const result = await pool.query(query, values);
         if (result.rows.length > 0) {
             const order = result.rows[0];
-            if (order.items) {
-                order.items = JSON.parse(order.items);
+            if (order.items && typeof order.items === 'string') {
+                try {
+                    order.items = JSON.parse(order.items);
+                } catch (e) {
+                    order.items = [];
+                }
             }
             return order;
         }
@@ -270,7 +274,14 @@ class OrdersDB {
         const query = 'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC';
         const result = await pool.query(query, [userId]);
         return result.rows.map(order => {
-            order.items = JSON.parse(order.items);
+            // Безопасно парсим items
+            if (typeof order.items === 'string') {
+                try {
+                    order.items = JSON.parse(order.items);
+                } catch (e) {
+                    order.items = [];
+                }
+            }
             return order;
         });
     }
