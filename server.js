@@ -1366,13 +1366,6 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         // Получаем данные клиента (приоритет: Telegram > форма > fallback)
         const telegramUser = orderData.telegramUser;
         
-        logger.debug('🔍 Данные Telegram пользователя:', {
-            telegramUser: telegramUser,
-            hasFullName: !!telegramUser?.full_name,
-            hasFirstName: !!telegramUser?.first_name,
-            hasUsername: !!telegramUser?.username
-        });
-        
         const customerName = telegramUser?.full_name || 
                            telegramUser?.first_name || 
                            orderData.customerName || 
@@ -1488,11 +1481,6 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                         `🏠 Адрес: ${fullAddress}` +
                         (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
                     
-                    logger.debug('📱 Отправляем уведомление в Telegram:', {
-                        chatId: config.TELEGRAM_ADMIN_CHAT_ID,
-                        tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
-                        messageLength: message.length
-                    });
                     
                     const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
