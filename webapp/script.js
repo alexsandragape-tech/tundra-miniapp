@@ -123,6 +123,7 @@ let currentOrderId = null;
 const TEST_MODE = true; // Установите false для продакшена
 const TEST_MIN_ORDER = 100; // Минимальная сумма для тестов
 const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
+const FORCE_DEMO_MODE = true; // Принудительный демо-режим (без реальных платежей)
 let paymentStatusChecker = null;
 
 // Функция получения минимальной суммы заказа
@@ -133,6 +134,20 @@ function getMinOrderAmount() {
 // Функция проверки тестового режима
 function isTestMode() {
     return TEST_MODE;
+}
+
+// Функция проверки принудительного демо-режима
+function isForceDemoMode() {
+    return FORCE_DEMO_MODE;
+}
+
+// Функция для переключения демо-режима (для разработки)
+function toggleDemoMode() {
+    if (FORCE_DEMO_MODE) {
+        showNotification('🎭 Демо-режим включен. Заказы будут автоматически оплачиваться без реальных платежей.', 'info');
+    } else {
+        showNotification('💳 Демо-режим отключен. Заказы будут создавать реальные платежи.', 'warning');
+    }
 }
 
 // Функция показа индикатора тестового режима
@@ -155,7 +170,7 @@ function showTestModeIndicator() {
             box-shadow: 0 2px 10px rgba(255, 107, 107, 0.3);
             animation: pulse 2s infinite;
         ">
-            🧪 ТЕСТОВЫЙ РЕЖИМ
+            ${FORCE_DEMO_MODE ? '🎭 ДЕМО-РЕЖИМ' : '🧪 ТЕСТОВЫЙ РЕЖИМ'}
         </div>
     `;
     
@@ -174,7 +189,10 @@ function showTestModeIndicator() {
     
     // Показываем уведомление о тестовом режиме
     setTimeout(() => {
-        showNotification('🧪 Включен тестовый режим. Минимальный заказ: 100₽', 'info');
+        const message = FORCE_DEMO_MODE 
+            ? '🧪 Включен тестовый режим. Минимальный заказ: 100₽. ДЕМО-РЕЖИМ: без реальных платежей!'
+            : '🧪 Включен тестовый режим. Минимальный заказ: 100₽';
+        showNotification(message, 'info');
     }, 1000);
 }
 
@@ -1328,7 +1346,7 @@ function showCart() {
                 <button class="checkout-btn" onclick="proceedToOrder()" ${subtotal < getMinOrderAmount() ? 'disabled' : ''}>
                     Оформить заказ
                 </button>
-                ${subtotal < getMinOrderAmount() ? `<div class="min-order-notice">Минимальная сумма заказа: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}</div>` : ''}
+                ${subtotal < getMinOrderAmount() ? `<div class="min-order-notice">Минимальная сумма заказа: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}</div>` : ''}
             </div>
         </div>`;
 
@@ -1421,7 +1439,7 @@ function proceedToOrder() {
     
     if (subtotal < minOrder) {
         const message = TEST_MODE 
-            ? `Минимальная сумма заказа: ${minOrder}₽ (тестовый режим)`
+            ? `Минимальная сумма заказа: ${minOrder}₽ (тестовый режим${FORCE_DEMO_MODE ? ', демо-режим' : ''})`
             : `Минимальная сумма заказа: ${minOrder}₽`;
         showNotification(message, 'warning');
         return;
@@ -1673,7 +1691,7 @@ function updateDeliveryInfo() {
                     <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
                 </div>
                 <div class="delivery-rule">
-                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}
+                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}
                 </div>
             </div>
         `;
@@ -1700,7 +1718,7 @@ function updateDeliveryInfo() {
                     <strong>МО:</strong> минималка 5000₽, доставка 700₽
                 </div>
                 <div class="delivery-rule">
-                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}
+                    <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}
                 </div>
             </div>
         `;
@@ -1753,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
                 return;
             } else if (deliveryZone === 'moscow' && subtotal < getMinOrderAmount()) {
-                showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим)' : ''}`, 'warning');
+                showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
                 return;
             } else if (!deliveryZone) {
                 showNotification('Выберите зону доставки', 'warning');
@@ -1802,7 +1820,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 phone: document.getElementById('phone').value.trim(),
                 comment: document.getElementById('comment').value.trim(),
                 cartItems: Object.values(cart).filter(i => i.quantity > 0),
-                totals: calculateCartTotal()
+                totals: calculateCartTotal(),
+                forceDemoMode: FORCE_DEMO_MODE // Передаем флаг принудительного демо-режима
             };
 
             // Показываем индикатор загрузки
