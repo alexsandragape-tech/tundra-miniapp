@@ -2281,12 +2281,49 @@ async function startServer() {
             logger.warn('⚠️ Товары из БД не загружены, используем fallback');
         }
         
+        // Функция для получения Chat ID
+        async function getTelegramChatId() {
+            if (!config.TELEGRAM_BOT_TOKEN) {
+                logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен');
+                return null;
+            }
+            
+            try {
+                const response = await axios.get(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getUpdates`);
+                const updates = response.data.result;
+                
+                if (updates.length > 0) {
+                    const lastUpdate = updates[updates.length - 1];
+                    const chatId = lastUpdate.message?.chat?.id || lastUpdate.callback_query?.message?.chat?.id;
+                    
+                    if (chatId) {
+                        logger.info(`📱 Найден Chat ID: ${chatId}`);
+                        logger.info('💡 Добавьте эту переменную в Railway:');
+                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${chatId}`);
+                        return chatId;
+                    }
+                }
+                
+                logger.warn('⚠️ Chat ID не найден. Напишите боту сообщение и попробуйте снова.');
+                return null;
+            } catch (error) {
+                logger.error('❌ Ошибка получения Chat ID:', error.message);
+                return null;
+            }
+        }
+        
         // Запускаем сервер
-        app.listen(PORT, () => {
+        app.listen(PORT, async () => {
             logger.info(`🚀 Сервер запущен на порту ${PORT}`);
             logger.info(`📁 Статические файлы из: ${webRoot}`);
             logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
             logger.info(`🗄️ База данных подключена`);
+            
+            // Проверяем настройки Telegram
+            if (config.TELEGRAM_BOT_TOKEN && !config.TELEGRAM_ADMIN_CHAT_ID) {
+                logger.info('🔍 Ищем Chat ID для Telegram бота...');
+                await getTelegramChatId();
+            }
         });
         
     } catch (error) {
