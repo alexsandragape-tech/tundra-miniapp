@@ -1724,7 +1724,7 @@ function validateOrderData(req, res, next) {
     
     // Валидируем товары в корзине
     for (const item of cartItems) {
-        if (!item.id || !item.name || !item.price || !item.quantity) {
+        if (!item.productId || !item.name || !item.price || !item.quantity) {
             logger.error('❌ Валидация: Товар некорректный:', item);
             return res.status(400).json({
                 ok: false,
