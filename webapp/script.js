@@ -1329,6 +1329,33 @@ function calculateCartTotal() {
     };
 }
 
+// 📞 ФУНКЦИЯ ВАЛИДАЦИИ НОМЕРА ТЕЛЕФОНА
+function validatePhoneNumber(phone) {
+    if (!phone) {
+        return { valid: false, message: 'Введите номер телефона' };
+    }
+    
+    // Убираем все символы кроме цифр и +
+    const cleanPhone = phone.replace(/[^\d+]/g, '');
+    
+    // Проверяем длину
+    if (cleanPhone.length < 10) {
+        return { valid: false, message: 'Номер телефона слишком короткий' };
+    }
+    
+    if (cleanPhone.length > 15) {
+        return { valid: false, message: 'Номер телефона слишком длинный' };
+    }
+    
+    // Проверяем формат (должен начинаться с +7, 8, или 7)
+    const phoneRegex = /^(\+7|8|7)[\d]{10}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+        return { valid: false, message: 'Неверный формат номера. Используйте: +7XXXXXXXXXX или 8XXXXXXXXXX' };
+    }
+    
+    return { valid: true, message: 'Номер телефона корректен' };
+}
+
 // Функция перехода к оформлению заказа
 function proceedToOrder() {
     const { subtotal } = calculateCartTotal();
@@ -1628,6 +1655,30 @@ function startFromWelcome() {
 document.addEventListener('DOMContentLoaded', () => {
     const orderForm = document.getElementById('orderForm');
     if (orderForm) {
+        // Добавляем валидацию номера телефона в реальном времени
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                const phone = this.value.trim();
+                const validation = validatePhoneNumber(phone);
+                
+                // Убираем предыдущие стили
+                this.style.borderColor = '';
+                this.style.backgroundColor = '';
+                
+                if (phone.length > 0) {
+                    if (validation.valid) {
+                        // Зеленый цвет для правильного номера
+                        this.style.borderColor = '#4CAF50';
+                        this.style.backgroundColor = '#f0f8f0';
+                    } else {
+                        // Красный цвет для неправильного номера
+                        this.style.borderColor = '#ff6b6b';
+                        this.style.backgroundColor = '#ffe6e6';
+                    }
+                }
+            });
+        }
         orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1651,8 +1702,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const house = document.getElementById('house').value.trim();
             const phone = document.getElementById('phone').value.trim();
             
-            if (!street || !house || !phone) {
-                showNotification('Заполните все обязательные поля', 'warning');
+            if (!street || !house) {
+                showNotification('Заполните адрес доставки', 'warning');
+                return;
+            }
+            
+            // Валидируем номер телефона
+            const phoneValidation = validatePhoneNumber(phone);
+            if (!phoneValidation.valid) {
+                showNotification(phoneValidation.message, 'error');
+                
+                // Подсвечиваем поле телефона красным
+                const phoneInput = document.getElementById('phone');
+                phoneInput.style.borderColor = '#ff6b6b';
+                phoneInput.style.backgroundColor = '#ffe6e6';
+                
+                // Убираем подсветку через 3 секунды
+                setTimeout(() => {
+                    phoneInput.style.borderColor = '';
+                    phoneInput.style.backgroundColor = '';
+                }, 3000);
+                
                 return;
             }
             
