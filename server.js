@@ -110,23 +110,34 @@ const TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 
 // 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ
-// Безопасность заголовков
-app.use(helmet());
-
-// CORS для Telegram
-const corsOrigins = config.CORS_ORIGIN.split(',');
-app.use(cors({
-    origin: corsOrigins,
-    credentials: true
+// Безопасность заголовков для Telegram Web App
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'", "https://telegram.org"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://api.yookassa.ru"],
+            frameSrc: ["'self'", "https://telegram.org"]
+        }
+    },
+    crossOriginEmbedderPolicy: false
 }));
 
-// Защита от DDoS
+// CORS только для API (не для статических файлов)
+const corsOrigins = config.CORS_ORIGIN.split(',');
+const corsOptions = {
+    origin: corsOrigins,
+    credentials: true
+};
+
+// Защита от DDoS только для API
 const limiter = rateLimit({
     windowMs: config.RATE_LIMIT_WINDOW_MS,
     max: config.RATE_LIMIT_MAX_REQUESTS,
     message: 'Слишком много запросов, попробуйте позже'
 });
-app.use(limiter);
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
 logger.info('🔧 Инициализация ЮKassa...');
@@ -1057,9 +1068,22 @@ function cancelOrderTimer(orderId) {
     logger.debug(`🔥 Таймер заказа ${orderId} отменен (заказ оплачен)`);
 }
 
-// Настройка статических файлов
+// Настройка статических файлов (БЕЗ ограничений безопасности)
 const webRoot = path.join(__dirname, 'webapp');
-app.use(express.static(webRoot));
+app.use(express.static(webRoot, {
+    setHeaders: (res, path) => {
+        // Разрешаем загрузку всех ресурсов для Telegram
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+}));
+
+// Применяем CORS и rate limiting только к API
+app.use('/api', cors(corsOptions));
+app.use('/api', limiter);
+app.use('/webhook', cors(corsOptions));
+app.use('/webhook', limiter);
 
 // Health check endpoints
 app.get('/health', (req, res) => {
