@@ -924,6 +924,25 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             },
             capture: true,
             description: description,
+            receipt: {
+                customer: {
+                    email: customerInfo.email || 'customer@example.com',
+                    phone: customerInfo.phone || '+79000000000'
+                },
+                items: [
+                    {
+                        description: description,
+                        quantity: '1',
+                        amount: {
+                            value: amount.toFixed(2),
+                            currency: 'RUB'
+                        },
+                        vat_code: 1, // НДС 20%
+                        payment_mode: 'full_payment',
+                        payment_subject: 'commodity'
+                    }
+                ]
+            },
             metadata: {
                 orderId: orderId,
                 customerName: customerInfo.customerName || 'Клиент',
@@ -1002,6 +1021,7 @@ async function createOrder(orderData) {
             items: JSON.stringify(order.cartItems || []),
             totalAmount: order.totals?.total || 0,
             status: order.status,
+            paymentStatus: order.paymentStatus,
             paymentId: order.paymentId || null,
             paymentUrl: order.paymentUrl || null
         };
