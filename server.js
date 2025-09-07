@@ -1365,6 +1365,14 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         // Получаем данные клиента (приоритет: Telegram > форма > fallback)
         const telegramUser = orderData.telegramUser;
+        
+        logger.debug('🔍 Данные Telegram пользователя:', {
+            telegramUser: telegramUser,
+            hasFullName: !!telegramUser?.full_name,
+            hasFirstName: !!telegramUser?.first_name,
+            hasUsername: !!telegramUser?.username
+        });
+        
         const customerName = telegramUser?.full_name || 
                            telegramUser?.first_name || 
                            orderData.customerName || 
