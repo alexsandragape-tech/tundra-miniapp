@@ -1291,9 +1291,8 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                     // Обновляем статус заказа
                     await OrdersDB.update(orderId, { 
                         status: 'accepted',
-                        paymentStatus: 'paid',
-                        paymentId: payment.id,
-                        paidAt: new Date().toISOString()
+                        payment_status: 'paid',
+                        payment_id: payment.id
                     });
                     
                     // Получаем данные заказа для создания записи в истории покупок
@@ -1661,8 +1660,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
                     address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
                     phone: order.phone,
                     customerName: order.user_name,
-                    createdAt: order.created_at,
-                    paidAt: order.paid_at
+                    createdAt: order.created_at
                 };
             } else {
                 logger.warn(`❌ API: Заказ ${orderId} не найден в БД`);
