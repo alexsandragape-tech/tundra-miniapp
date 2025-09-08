@@ -1255,6 +1255,9 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         logger.info('📦 WEBHOOK: req.body:', req.body);
         logger.info('📦 WEBHOOK: Headers:', req.headers);
         
+        // Проверяем, что webhook доходит до этого места
+        logger.info('🔍 WEBHOOK: Начинаем обработку webhook...');
+        
         let notification;
         
         // Проверяем тип данных и парсим соответственно
@@ -1285,6 +1288,9 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 amount: payment.amount,
                 metadata: payment.metadata
             });
+            
+            // Проверяем, что мы дошли до обработки payment.succeeded
+            logger.info('🔍 WEBHOOK: Обрабатываем payment.succeeded...');
             
             // Обновляем статус заказа в базе данных
             if (payment.metadata && payment.metadata.orderId) {
