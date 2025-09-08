@@ -1266,9 +1266,21 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         }
         
         // Проверяем тип уведомления (YooKassa отправляет type: 'notification' и event: 'payment.succeeded')
+        logger.info('🔍 WEBHOOK: Проверяем уведомление:', {
+            type: notification.type,
+            event: notification.event,
+            hasObject: !!notification.object
+        });
+        
         if (notification.type === 'notification' && notification.event === 'payment.succeeded') {
             const payment = notification.object;
-            logger.info('✅ Платеж успешно завершен:', payment.id);
+            logger.info('✅ WEBHOOK: Платеж успешно завершен:', payment.id);
+            logger.info('🔍 WEBHOOK: Данные платежа:', {
+                id: payment.id,
+                status: payment.status,
+                amount: payment.amount,
+                metadata: payment.metadata
+            });
             
             // Обновляем статус заказа в базе данных
             if (payment.metadata && payment.metadata.orderId) {
@@ -1620,14 +1632,23 @@ app.get('/api/orders', (req, res) => {
 app.get('/api/orders/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
+        logger.info(`🔍 API: Запрос статуса заказа ${orderId}`);
         
         // Сначала пробуем получить из памяти (для новых заказов)
         let order = getOrder(orderId);
+        logger.info(`🔍 API: Заказ ${orderId} в памяти:`, order ? 'найден' : 'не найден');
         
         // Если не найден в памяти, ищем в базе данных
         if (!order) {
+            logger.info(`🔍 API: Ищем заказ ${orderId} в базе данных...`);
             order = await OrdersDB.getById(orderId);
             if (order) {
+                logger.info(`✅ API: Заказ ${orderId} найден в БД:`, {
+                    status: order.status,
+                    payment_status: order.payment_status,
+                    total_amount: order.total_amount
+                });
+                
                 // Конвертируем данные из БД в формат, ожидаемый клиентом
                 order = {
                     id: order.id,
@@ -1643,16 +1664,24 @@ app.get('/api/orders/:orderId', async (req, res) => {
                     createdAt: order.created_at,
                     paidAt: order.paid_at
                 };
+            } else {
+                logger.warn(`❌ API: Заказ ${orderId} не найден в БД`);
             }
         }
         
         if (order) {
+            logger.info(`✅ API: Возвращаем заказ ${orderId}:`, {
+                status: order.status,
+                paymentStatus: order.paymentStatus,
+                total: order.totals?.total
+            });
             res.json({ ok: true, order });
         } else {
+            logger.warn(`❌ API: Заказ ${orderId} не найден`);
             res.status(404).json({ ok: false, error: 'Заказ не найден' });
         }
     } catch (error) {
-        logger.error('Ошибка получения заказа:', error.message);
+        logger.error('❌ API: Ошибка получения заказа:', error.message);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
