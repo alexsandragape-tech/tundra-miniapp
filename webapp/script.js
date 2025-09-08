@@ -1653,14 +1653,18 @@ function createOrderItem(order) {
         ? items.map(item => `${item.name} x${item.quantity}`).join(', ')
         : 'Состав недоступен';
     
+    // Форматируем дату и сумму
+    const orderDate = order.created_at || order.createdAt;
+    const orderAmount = order.total_amount || order.totals?.total || 0;
+    
     orderItem.innerHTML = `
         <div class="order-header">
-            <div class="order-date">${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
-            <div class="order-time">${new Date(order.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+            <div class="order-date">${orderDate ? new Date(orderDate).toLocaleDateString('ru-RU') : 'Не указана'}</div>
+            <div class="order-time">${orderDate ? new Date(orderDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Не указано'}</div>
         </div>
         <div class="order-info">
             <div class="order-composition">${itemsText}</div>
-            <div class="order-amount">${order.total_amount}₽</div>
+            <div class="order-amount">${orderAmount}₽</div>
         </div>
     `;
     
@@ -1717,12 +1721,16 @@ function displayOrderDetails(order) {
         address?.intercom && `домофон: ${address.intercom}`
     ].filter(Boolean).join(', ');
     
+    // Форматируем дату и время
+    const orderDate = order.createdAt || order.created_at;
+    const orderAmount = order.totals?.total || order.total_amount || 0;
+    
     content.innerHTML = `
         <div class="order-detail-section">
             <div class="order-detail-title">📋 Информация о заказе</div>
-            <div><strong>Дата:</strong> ${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
-            <div><strong>Время:</strong> ${new Date(order.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
-            <div><strong>Сумма:</strong> ${order.total_amount}₽</div>
+            <div><strong>Дата:</strong> ${orderDate ? new Date(orderDate).toLocaleDateString('ru-RU') : 'Не указана'}</div>
+            <div><strong>Время:</strong> ${orderDate ? new Date(orderDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Не указано'}</div>
+            <div><strong>Сумма:</strong> ${orderAmount}₽</div>
         </div>
         
         <div class="order-detail-section">
