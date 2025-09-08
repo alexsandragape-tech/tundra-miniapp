@@ -977,7 +977,9 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
                 orderId: orderId,
                 customerName: customerInfo.customerName || 'Клиент',
                 phone: customerInfo.phone || ''
-            }
+            },
+            // Добавляем webhook URL для уведомлений
+            webhook_url: 'https://tundra-miniapp-production.up.railway.app/webhook/yookassa'
         };
         
         // Создаем уникальный ключ идемпотентности
@@ -1244,9 +1246,10 @@ app.get('/test-yookassa', async (req, res) => {
 // Webhook для обработки уведомлений от ЮKassa
 app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
     try {
-        logger.debug('🔔 Получено уведомление от ЮKassa');
-        logger.debug('📦 Тип req.body:', typeof req.body);
-        logger.debug('📦 req.body:', req.body);
+        logger.info('🔔 WEBHOOK: Получено уведомление от ЮKassa');
+        logger.info('📦 WEBHOOK: Тип req.body:', typeof req.body);
+        logger.info('📦 WEBHOOK: req.body:', req.body);
+        logger.info('📦 WEBHOOK: Headers:', req.headers);
         
         let notification;
         
@@ -1417,16 +1420,29 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 });
                 logger.info('🔄 Статус заказа обновлен на "отменен"');
             }
+        } else {
+            logger.warn('⚠️ WEBHOOK: Неизвестный тип уведомления:', notification.type);
         }
         
+        logger.info('✅ WEBHOOK: Обработка завершена успешно');
         res.status(200).send('OK');
     } catch (error) {
-        logger.error('❌ Ошибка обработки webhook:', error.message);
-        logger.error('❌ Стек ошибки:', error.stack);
-        logger.error('❌ req.body тип:', typeof req.body);
-        logger.error('❌ req.body содержимое:', req.body);
+        logger.error('❌ WEBHOOK: Ошибка обработки webhook:', error.message);
+        logger.error('❌ WEBHOOK: Стек ошибки:', error.stack);
+        logger.error('❌ WEBHOOK: req.body тип:', typeof req.body);
+        logger.error('❌ WEBHOOK: req.body содержимое:', req.body);
         res.status(500).send('Error');
     }
+});
+
+// Тестовый endpoint для проверки webhook
+app.get('/test-webhook', (req, res) => {
+    logger.info('🧪 Тестовый запрос к webhook endpoint');
+    res.json({
+        message: 'Webhook endpoint работает',
+        timestamp: new Date().toISOString(),
+        url: '/webhook/yookassa'
+    });
 });
 
 // API для заказов
