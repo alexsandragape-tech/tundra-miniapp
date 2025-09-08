@@ -2479,16 +2479,25 @@ function updateTimerDisplay() {
 
 // Проверка статуса оплаты
 function startPaymentStatusChecker(orderId) {
+    console.log(`🔍 CLIENT: Запуск проверки статуса заказа ${orderId}`);
     paymentStatusChecker = setInterval(async () => {
         try {
+            console.log(`🔍 CLIENT: Проверяем статус заказа ${orderId}...`);
             const response = await fetch(`${API_BASE}/api/orders/${orderId}`);
             if (response.ok) {
                 const result = await response.json();
+                console.log(`🔍 CLIENT: Ответ сервера для заказа ${orderId}:`, result);
                 if (result.ok && result.order) {
                     const order = result.order;
+                    console.log(`🔍 CLIENT: Статус заказа ${orderId}:`, {
+                        status: order.status,
+                        paymentStatus: order.paymentStatus,
+                        total: order.totals?.total
+                    });
                     
                     if (order.paymentStatus === 'paid') {
                         // Оплата прошла успешно!
+                        console.log(`✅ CLIENT: Заказ ${orderId} оплачен! Переключаем на экран успеха`);
                         handleSuccessfulPayment(order);
                         return;
                     }
@@ -2514,9 +2523,10 @@ function startPaymentStatusChecker(orderId) {
 
 // Успешная оплата
 function handleSuccessfulPayment(order) {
-    console.log('✅ Оплата успешна:', order);
+    console.log('✅ CLIENT: Оплата успешна:', order);
     
     // Останавливаем таймер и проверки
+    console.log('🛑 CLIENT: Останавливаем таймер оплаты');
     cancelPaymentTimer();
     
     // 🔥 ОБНОВЛЯЕМ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ДЛЯ СИСТЕМЫ ЛОЯЛЬНОСТИ
@@ -2541,6 +2551,7 @@ function handleSuccessfulPayment(order) {
     localStorage.removeItem('pending_order');
     
     // Показываем экран успеха
+    console.log('🎉 CLIENT: Переключаем на экран успешной оплаты');
     showScreen('order-success-screen');
     
     showNotification('🎉 Заказ успешно оплачен!', 'success');
