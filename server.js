@@ -1255,6 +1255,9 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         logger.info('📦 WEBHOOK: req.body:', req.body);
         logger.info('📦 WEBHOOK: Headers:', req.headers);
         
+        // Логируем полные данные webhook для диагностики
+        logger.info('🔍 WEBHOOK: Полные данные webhook:', JSON.stringify(req.body, null, 2));
+        
         // Проверяем, что webhook доходит до этого места
         logger.info('🔍 WEBHOOK: Начинаем обработку webhook...');
         
@@ -1325,16 +1328,21 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}, пользователь: ${order.user_id}`);
                             
                             try {
-                                // Логируем данные платежа для диагностики
-                                logger.info(`📝 WEBHOOK: Данные платежа:`, {
-                                    payment_id: payment.id,
-                                    amount_value: payment.amount.value,
-                                    amount_currency: payment.amount.currency,
-                                    amount_type: typeof payment.amount.value
-                                });
+                                // Логируем данные платежа для диагностики (как рекомендует документация)
+                                logger.info(`📝 WEBHOOK: Полные данные платежа:`, JSON.stringify(payment, null, 2));
+                                logger.info(`📝 WEBHOOK: Структура amount:`, JSON.stringify(payment.amount, null, 2));
                                 
-                                const totalAmount = parseFloat(payment.amount.value);
-                                logger.info(`📝 WEBHOOK: Парсинг суммы: ${payment.amount.value} → ${totalAmount}`);
+                                // Проверяем сумму на каждом этапе
+                                const rawAmount = payment.amount?.value ?? 'NOT_FOUND';
+                                logger.info(`📝 WEBHOOK: Сырая сумма из webhook: ${rawAmount} (тип: ${typeof rawAmount})`);
+                                
+                                const totalAmount = parseFloat(rawAmount);
+                                logger.info(`📝 WEBHOOK: Финальная сумма для БД: ${totalAmount} (тип: ${typeof totalAmount})`);
+                                
+                                // Проверяем, что сумма валидна
+                                if (isNaN(totalAmount) || totalAmount <= 0) {
+                                    logger.error(`❌ WEBHOOK: НЕВЕРНАЯ СУММА! Сырая: ${rawAmount}, Парсинг: ${totalAmount}`);
+                                }
                                 
                                 const purchaseRecord = await PurchaseHistoryDB.create({
                                     order_id: orderId,
