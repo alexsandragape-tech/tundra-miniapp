@@ -1310,6 +1310,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                         
                         // Проверяем, что user_id не 'unknown'
                         if (order.user_id && order.user_id !== 'unknown') {
+                            logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}`);
                             const purchaseRecord = await PurchaseHistoryDB.create({
                                 order_id: orderId,
                                 user_id: order.user_id,
@@ -1325,7 +1326,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             
                             logger.info('✅ WEBHOOK: Заказ обновлен и добавлен в историю покупок:', purchaseRecord);
                         } else {
-                            logger.warn('⚠️ WEBHOOK: user_id отсутствует или равен "unknown", пропускаем создание записи в истории покупок');
+                            logger.warn(`⚠️ WEBHOOK: user_id отсутствует или равен "unknown" (${order.user_id}), пропускаем создание записи в истории покупок для заказа ${orderId}`);
                         }
                         
                         // Отправляем уведомление в Telegram (если настроен бот)
@@ -1789,8 +1790,7 @@ async function handleCallbackQuery(callbackQuery) {
         // 🔥 ОБНОВЛЯЕМ СТАТУС В БАЗЕ ДАННЫХ
         try {
             await OrdersDB.update(orderId, { 
-                status: newStatus,
-                updated_at: new Date().toISOString()
+                status: newStatus
             });
             logger.info(`💾 Статус заказа ${orderId} обновлен в БД: ${newStatus}`);
         } catch (dbError) {
