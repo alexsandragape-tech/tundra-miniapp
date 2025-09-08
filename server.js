@@ -1303,6 +1303,16 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 try {
                     // Обновляем статус заказа И сумму
                     const paymentAmount = parseFloat(payment.amount.value);
+                    
+                    // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ СУММЫ
+                    logger.info(`💰 WEBHOOK: Сумма платежа от YooKassa:`, {
+                        raw_amount: payment.amount,
+                        value: payment.amount.value,
+                        currency: payment.amount.currency,
+                        parsed_amount: paymentAmount,
+                        type: typeof paymentAmount
+                    });
+                    
                     await OrdersDB.update(orderId, { 
                         status: 'accepted',
                         payment_status: 'paid',
