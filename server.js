@@ -1637,6 +1637,13 @@ async function syncPaidOrdersToLoyalty(userId) {
             // Проверяем статус оплаты
             if (order.payment_status === 'paid' || order.status === 'completed') {
                 logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ${order.order_id} в лояльность`);
+                logger.info(`🔄 СИНХРОНИЗАЦИЯ: Данные заказа:`, {
+                    order_id: order.order_id,
+                    total_amount: order.total_amount,
+                    totalAmount: order.totalAmount,
+                    payment_status: order.payment_status,
+                    status: order.status
+                });
                 
                 try {
                     await PurchaseHistoryDB.create({
@@ -1644,7 +1651,7 @@ async function syncPaidOrdersToLoyalty(userId) {
                         user_id: order.user_id,
                         customer_name: order.user_name || 'Клиент',
                         phone: order.phone || '',
-                        total_amount: order.total_amount || 0,
+                        total_amount: order.total_amount || order.totalAmount || 0,
                         items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
                         items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
                         payment_id: order.payment_id || '',
@@ -1671,22 +1678,18 @@ async function syncPaidOrdersToLoyalty(userId) {
 // 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ ТАБЛИЦЫ PURCHASE_HISTORY
 app.get('/api/check-db', async (req, res) => {
     try {
-        // Выполняем SQL запрос как рекомендует специалист
-        const result = await pool.query('SELECT * FROM purchase_history ORDER BY created_at DESC LIMIT 10');
+        // Используем существующую функцию базы данных
+        const purchases = await PurchaseHistoryDB.getByUserId('7303614654');
         
-        logger.info('🔍 ПРОВЕРКА БД: Результат SQL запроса:', result.rows);
+        logger.info('🔍 ПРОВЕРКА БД: Результат через PurchaseHistoryDB:', purchases);
         
         res.json({
             ok: true,
-            query: 'SELECT * FROM purchase_history ORDER BY created_at DESC LIMIT 10',
-            count: result.rows.length,
-            records: result.rows.map(row => ({
-                id: row.id,
+            count: purchases.length,
+            records: purchases.slice(0, 5).map(row => ({
                 order_id: row.order_id,
-                amount: row.amount,
-                total_amount: row.total_amount,
-                user_id: row.user_id,
-                created_at: row.created_at
+                totalAmount: row.totalAmount,
+                purchase_date: row.purchase_date
             }))
         });
     } catch (error) {
