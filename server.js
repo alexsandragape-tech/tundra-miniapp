@@ -1613,9 +1613,35 @@ app.get('/api/orders', (req, res) => {
 });
 
 // API для получения конкретного заказа
-app.get('/api/orders/:orderId', (req, res) => {
+app.get('/api/orders/:orderId', async (req, res) => {
     try {
-        const order = getOrder(req.params.orderId);
+        const { orderId } = req.params;
+        
+        // Сначала пробуем получить из памяти (для новых заказов)
+        let order = getOrder(orderId);
+        
+        // Если не найден в памяти, ищем в базе данных
+        if (!order) {
+            order = await OrdersDB.getById(orderId);
+            if (order) {
+                // Конвертируем данные из БД в формат, ожидаемый клиентом
+                order = {
+                    id: order.id,
+                    status: order.status,
+                    paymentStatus: order.payment_status,
+                    totals: {
+                        total: parseFloat(order.total_amount || 0)
+                    },
+                    items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
+                    address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
+                    phone: order.phone,
+                    customerName: order.user_name,
+                    createdAt: order.created_at,
+                    paidAt: order.paid_at
+                };
+            }
+        }
+        
         if (order) {
             res.json({ ok: true, order });
         } else {
@@ -2060,23 +2086,7 @@ app.get('/api/orders/user/:userId', async (req, res) => {
     }
 });
 
-// Получение деталей конкретного заказа
-app.get('/api/orders/:orderId', async (req, res) => {
-    try {
-        const { orderId } = req.params;
-        const order = await OrdersDB.getById(orderId);
-        
-        if (!order) {
-            return res.status(404).json({ ok: false, error: 'Заказ не найден' });
-        }
-        
-        logger.info(`📋 Загружены детали заказа ${orderId}`);
-        res.json({ ok: true, order });
-    } catch (error) {
-        logger.error('❌ Ошибка загрузки деталей заказа:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
+// Дублирующийся endpoint удален - используется основной /api/orders/:orderId выше
 
 // Получение всех товаров для админ панели
 app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
