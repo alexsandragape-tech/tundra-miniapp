@@ -1001,6 +1001,13 @@ function showScreen(screenId) {
     });
     document.getElementById(screenId).classList.add('active');
     
+    // Останавливаем автообновление заказов при уходе с экрана
+    if (screenId !== 'my-orders-screen' && window.ordersUpdateInterval) {
+        clearInterval(window.ordersUpdateInterval);
+        window.ordersUpdateInterval = null;
+        console.log('🛑 CLIENT: Остановлено автообновление заказов');
+    }
+    
     // Обновляем Telegram кнопки
     if (typeof updateMainButton === 'function') {
         updateMainButton(screenId);
@@ -1569,7 +1576,14 @@ async function showMyOrders() {
     showScreen('my-orders-screen');
     await loadUserOrders();
     
-    // Убрано автообновление - показываем только доставленные заказы
+    // Запускаем автообновление заказов каждые 10 секунд
+    if (window.ordersUpdateInterval) {
+        clearInterval(window.ordersUpdateInterval);
+    }
+    window.ordersUpdateInterval = setInterval(async () => {
+        console.log('🔄 CLIENT: Автообновление списка заказов');
+        await loadUserOrders();
+    }, 10000);
 }
 
 // Загрузка заказов пользователя
