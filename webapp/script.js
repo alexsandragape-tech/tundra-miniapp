@@ -138,8 +138,8 @@ let currentOrderId = null;
 
 // 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
 const TEST_MODE = false; // Установите false для продакшена
-const TEST_MIN_ORDER = 100; // Минимальная сумма для тестов
-const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
+const TEST_MIN_ORDER = 1; // Минимальная сумма для тестов
+const PROD_MIN_ORDER = 1; // Минимальная сумма для продакшена (временно убрано ограничение)
 const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
 let paymentStatusChecker = null;
 
@@ -1373,10 +1373,10 @@ function showCart() {
                     <span>Итого:</span>
                     <span>${total}₽</span>
                 </div>
-                <button class="checkout-btn" onclick="proceedToOrder()" ${subtotal < getMinOrderAmount() ? 'disabled' : ''}>
+                <button class="checkout-btn" onclick="proceedToOrder()">
                     Оформить заказ
                 </button>
-                ${subtotal < getMinOrderAmount() ? `<div class="min-order-notice">Минимальная сумма заказа: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}</div>` : ''}
+                <!-- Временно убрано ограничение минимального заказа -->
             </div>
         </div>`;
 
@@ -1464,16 +1464,7 @@ function validatePhoneNumber(phone) {
 
 // Функция перехода к оформлению заказа
 function proceedToOrder() {
-    const { subtotal } = calculateCartTotal();
-    const minOrder = getMinOrderAmount();
-    
-    if (subtotal < minOrder) {
-        const message = TEST_MODE 
-            ? `Минимальная сумма заказа: ${minOrder}₽ (тестовый режим${FORCE_DEMO_MODE ? ', демо-режим' : ''})`
-            : `Минимальная сумма заказа: ${minOrder}₽`;
-        showNotification(message, 'warning');
-        return;
-    }
+    // Временно убрана проверка минимального заказа
     
     // Проверяем, есть ли товары в корзине
     const cartItems = Object.values(cart).filter(item => item.quantity > 0);
@@ -1898,11 +1889,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
                 return;
             } else if (deliveryZone === 'moscow' && subtotal < getMinOrderAmount()) {
-                showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
-                return;
+                // Временно убрана проверка минимального заказа
+                // showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
+                // return;
             } else if (!deliveryZone) {
-                showNotification('Выберите зону доставки', 'warning');
-                return;
+                // Временно убрана обязательная доставка
+                deliveryZone = 'moscow'; // Устанавливаем по умолчанию
             }
             
             // Проверяем обязательные поля
