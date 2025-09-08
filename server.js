@@ -1328,21 +1328,24 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}, пользователь: ${order.user_id}`);
                             
                             try {
-                                // Логируем данные платежа для диагностики (как рекомендует документация)
-                                logger.info(`📝 WEBHOOK: Полные данные платежа:`, JSON.stringify(payment, null, 2));
-                                logger.info(`📝 WEBHOOK: Структура amount:`, JSON.stringify(payment.amount, null, 2));
+                                // Детальное логирование как рекомендует специалист
+                                logger.info('=== YOOKASSA WEBHOOK DEBUG ===');
+                                logger.info('📝 WEBHOOK: Полные данные платежа:', JSON.stringify(payment, null, 2));
+                                logger.info('📝 WEBHOOK: Структура amount:', JSON.stringify(payment.amount, null, 2));
                                 
-                                // Проверяем сумму на каждом этапе
-                                const rawAmount = payment.amount?.value ?? 'NOT_FOUND';
-                                logger.info(`📝 WEBHOOK: Сырая сумма из webhook: ${rawAmount} (тип: ${typeof rawAmount})`);
+                                // Проверяем путь к сумме
+                                const amountPath = payment.amount?.value ?? 'PATH_NOT_FOUND';
+                                logger.info(`📝 WEBHOOK: Amount path check: ${amountPath}`);
                                 
-                                const totalAmount = parseFloat(rawAmount);
-                                logger.info(`📝 WEBHOOK: Финальная сумма для БД: ${totalAmount} (тип: ${typeof totalAmount})`);
+                                // Парсим сумму
+                                const totalAmount = parseFloat(amountPath);
+                                logger.info(`📝 WEBHOOK: Before save to DB - amount: ${totalAmount}`);
                                 
                                 // Проверяем, что сумма валидна
                                 if (isNaN(totalAmount) || totalAmount <= 0) {
-                                    logger.error(`❌ WEBHOOK: НЕВЕРНАЯ СУММА! Сырая: ${rawAmount}, Парсинг: ${totalAmount}`);
+                                    logger.error(`❌ WEBHOOK: НЕВЕРНАЯ СУММА! Сырая: ${amountPath}, Парсинг: ${totalAmount}`);
                                 }
+                                logger.info('============================');
                                 
                                 const purchaseRecord = await PurchaseHistoryDB.create({
                                     order_id: orderId,
@@ -1360,8 +1363,14 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                 logger.info('✅ WEBHOOK: Заказ добавлен в историю покупок:', {
                                     id: purchaseRecord.id,
                                     user_id: purchaseRecord.user_id,
-                                    total_amount: purchaseRecord.amount
+                                    amount_in_db: purchaseRecord.amount,
+                                    total_amount_sent: totalAmount
                                 });
+                                
+                                // Проверяем, что сумма сохранилась правильно
+                                if (purchaseRecord.amount !== totalAmount) {
+                                    logger.error(`❌ WEBHOOK: СУММА НЕ СОВПАДАЕТ! Отправлено: ${totalAmount}, В БД: ${purchaseRecord.amount}`);
+                                }
                             } catch (purchaseError) {
                                 logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
                             }
@@ -1602,6 +1611,133 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 });
 
 
+// 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ОПЛАЧЕННЫХ ЗАКАЗОВ С ЛОЯЛЬНОСТЬЮ
+async function syncPaidOrdersToLoyalty(userId) {
+    try {
+        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Проверяем оплаченные заказы для пользователя ${userId}`);
+        
+        // Получаем все заказы пользователя из БД
+        const orders = await OrdersDB.getByUserId(userId);
+        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Найдено ${orders.length} заказов в БД`);
+        
+        // Получаем существующие записи в purchase_history
+        const existingPurchases = await PurchaseHistoryDB.getByUserId(userId);
+        const existingOrderIds = new Set(existingPurchases.map(p => p.order_id));
+        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Уже есть ${existingOrderIds.size} записей в purchase_history`);
+        
+        let addedCount = 0;
+        
+        // Проверяем каждый заказ
+        for (const order of orders) {
+            // Пропускаем если уже есть в purchase_history
+            if (existingOrderIds.has(order.order_id)) {
+                continue;
+            }
+            
+            // Проверяем статус оплаты
+            if (order.payment_status === 'paid' || order.status === 'completed') {
+                logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ${order.order_id} в лояльность`);
+                
+                try {
+                    await PurchaseHistoryDB.create({
+                        order_id: order.order_id,
+                        user_id: order.user_id,
+                        customer_name: order.user_name || 'Клиент',
+                        phone: order.phone || '',
+                        total_amount: order.total_amount || 0,
+                        items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
+                        items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
+                        payment_id: order.payment_id || '',
+                        delivery_zone: order.delivery_zone || 'moscow',
+                        address_data: order.address || '{}'
+                    });
+                    
+                    addedCount++;
+                    logger.info(`✅ СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} добавлен в лояльность`);
+                } catch (error) {
+                    logger.error(`❌ СИНХРОНИЗАЦИЯ: Ошибка добавления заказа ${order.order_id}:`, error.message);
+                }
+            }
+        }
+        
+        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавлено ${addedCount} новых записей в лояльность`);
+        return addedCount;
+    } catch (error) {
+        logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка синхронизации лояльности:', error.message);
+        return 0;
+    }
+}
+
+// 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ ТАБЛИЦЫ PURCHASE_HISTORY
+app.get('/api/check-db', async (req, res) => {
+    try {
+        // Выполняем SQL запрос как рекомендует специалист
+        const result = await pool.query('SELECT * FROM purchase_history ORDER BY created_at DESC LIMIT 10');
+        
+        logger.info('🔍 ПРОВЕРКА БД: Результат SQL запроса:', result.rows);
+        
+        res.json({
+            ok: true,
+            query: 'SELECT * FROM purchase_history ORDER BY created_at DESC LIMIT 10',
+            count: result.rows.length,
+            records: result.rows.map(row => ({
+                id: row.id,
+                order_id: row.order_id,
+                amount: row.amount,
+                total_amount: row.total_amount,
+                user_id: row.user_id,
+                created_at: row.created_at
+            }))
+        });
+    } catch (error) {
+        logger.error('❌ ПРОВЕРКА БД: Ошибка:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ НАСТРОЕК WEBHOOK
+app.get('/api/check-webhook', async (req, res) => {
+    try {
+        const webhookUrl = `${config.BASE_URL}/webhook/yookassa`;
+        
+        res.json({
+            ok: true,
+            webhookUrl,
+            message: `Webhook URL для YooKassa: ${webhookUrl}`,
+            instructions: [
+                '1. Зайдите в личный кабинет YooKassa',
+                '2. Перейдите в раздел "Настройки" → "Webhook"',
+                `3. Укажите URL: ${webhookUrl}`,
+                '4. Выберите события: payment.succeeded, payment.canceled',
+                '5. Сохраните настройки'
+            ]
+        });
+    } catch (error) {
+        logger.error('❌ ПРОВЕРКА WEBHOOK: Ошибка:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔄 ENDPOINT ДЛЯ РУЧНОЙ СИНХРОНИЗАЦИИ ЛОЯЛЬНОСТИ
+app.post('/api/sync-loyalty/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        logger.info(`🔄 РУЧНАЯ СИНХРОНИЗАЦИЯ: Запрос для пользователя ${userId}`);
+        
+        const addedCount = await syncPaidOrdersToLoyalty(userId);
+        
+        res.json({
+            ok: true,
+            userId,
+            addedCount,
+            message: `Добавлено ${addedCount} новых записей в лояльность`
+        });
+    } catch (error) {
+        logger.error('❌ РУЧНАЯ СИНХРОНИЗАЦИЯ: Ошибка:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔍 ДИАГНОСТИЧЕСКИЙ ENDPOINT ДЛЯ ПРОВЕРКИ ДАННЫХ В БД
 app.get('/debug-purchases/:userId', async (req, res) => {
     try {
@@ -1638,6 +1774,9 @@ app.get('/api/purchases/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         logger.info(`🔍 API: Запрос данных лояльности для пользователя: ${userId}`);
+        
+        // 🔄 СНАЧАЛА ПРОВЕРЯЕМ И СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ
+        await syncPaidOrdersToLoyalty(userId);
         
         // Загружаем историю покупок из БД
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
