@@ -1734,6 +1734,46 @@ app.get('/api/check-webhook', async (req, res) => {
     }
 });
 
+// 🗑️ ENDPOINT ДЛЯ ОЧИСТКИ БД (ТОЛЬКО ДЛЯ АДМИНА!)
+app.post('/api/admin/clear-database', async (req, res) => {
+    try {
+        // Простая проверка авторизации (можно улучшить)
+        const { adminKey } = req.body;
+        if (adminKey !== 'meatbot_admin_2024') {
+            return res.status(403).json({ ok: false, error: 'Неверный ключ администратора' });
+        }
+        
+        logger.info('🗑️ АДМИН: Начинаем очистку базы данных...');
+        
+        // Очищаем таблицы в правильном порядке
+        const tables = ['purchase_history', 'orders', 'products'];
+        const results = {};
+        
+        for (const table of tables) {
+            const result = await pool.query(`DELETE FROM ${table}`);
+            results[table] = result.rowCount;
+            logger.info(`🗑️ АДМИН: Таблица ${table} очищена: ${result.rowCount} записей`);
+        }
+        
+        // Сбрасываем счетчики
+        await pool.query("SELECT setval('orders_id_seq', 1, false)");
+        await pool.query("SELECT setval('products_id_seq', 1, false)");
+        await pool.query("SELECT setval('purchase_history_id_seq', 1, false)");
+        
+        logger.info('🗑️ АДМИН: База данных очищена успешно');
+        
+        res.json({
+            ok: true,
+            message: 'База данных успешно очищена',
+            deleted: results
+        });
+        
+    } catch (error) {
+        logger.error('❌ АДМИН: Ошибка очистки БД:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ WEBHOOK ЛОГОВ
 app.get('/api/webhook-logs', async (req, res) => {
     try {
