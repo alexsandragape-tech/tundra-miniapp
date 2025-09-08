@@ -1301,11 +1301,13 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 logger.info('🔄 Обновляем статус заказа:', orderId);
                 
                 try {
-                    // Обновляем статус заказа
+                    // Обновляем статус заказа И сумму
+                    const paymentAmount = parseFloat(payment.amount.value);
                     await OrdersDB.update(orderId, { 
                         status: 'accepted',
                         payment_status: 'paid',
-                        payment_id: payment.id
+                        payment_id: payment.id,
+                        total_amount: paymentAmount
                     });
                     
                     // Получаем данные заказа для создания записи в истории покупок
@@ -1352,7 +1354,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                     user_id: order.user_id,
                                     customer_name: order.user_name || 'Клиент',
                                     phone: order.phone || '',
-                                    total_amount: totalAmount,
+                                    total_amount: order.total_amount, // Используем сумму из заказа, а не из платежа
                                     items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
                                     items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
                                     payment_id: payment.id,
@@ -1364,12 +1366,13 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                     id: purchaseRecord.id,
                                     user_id: purchaseRecord.user_id,
                                     amount_in_db: purchaseRecord.amount,
-                                    total_amount_sent: totalAmount
+                                    total_amount_from_order: order.total_amount,
+                                    payment_amount: totalAmount
                                 });
                                 
                                 // Проверяем, что сумма сохранилась правильно
-                                if (purchaseRecord.amount !== totalAmount) {
-                                    logger.error(`❌ WEBHOOK: СУММА НЕ СОВПАДАЕТ! Отправлено: ${totalAmount}, В БД: ${purchaseRecord.amount}`);
+                                if (purchaseRecord.amount !== order.total_amount) {
+                                    logger.error(`❌ WEBHOOK: СУММА НЕ СОВПАДАЕТ! Отправлено: ${order.total_amount}, В БД: ${purchaseRecord.amount}`);
                                 }
                             } catch (purchaseError) {
                                 logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
