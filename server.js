@@ -1581,21 +1581,20 @@ app.get('/test-purchase-history/:userId', async (req, res) => {
         const { userId } = req.params;
         logger.info(`🧪 ТЕСТ: Проверка purchase_history для пользователя ${userId}`);
         
-        // Проверяем все записи в purchase_history
-        const allPurchases = await pool.query('SELECT * FROM purchase_history WHERE user_id = $1', [userId]);
-        logger.info(`🧪 ТЕСТ: Найдено ${allPurchases.rows.length} записей в purchase_history`);
-        
         // Проверяем через PurchaseHistoryDB.getByUserId
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
         logger.info(`🧪 ТЕСТ: PurchaseHistoryDB.getByUserId вернул ${purchases.length} записей`);
         
+        // Проверяем суммы
+        const dbTotal = purchases.reduce((sum, row) => sum + (row.totalAmount || 0), 0);
+        logger.info(`🧪 ТЕСТ: Сумма через DB: ${dbTotal}₽`);
+        
         res.json({
             ok: true,
             userId,
-            directQuery: allPurchases.rows,
-            throughDB: purchases,
-            directCount: allPurchases.rows.length,
-            dbCount: purchases.length
+            purchases: purchases,
+            count: purchases.length,
+            totalSpent: dbTotal
         });
     } catch (error) {
         logger.error('❌ ТЕСТ: Ошибка проверки purchase_history:', error.message);
