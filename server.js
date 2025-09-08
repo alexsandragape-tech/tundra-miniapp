@@ -1314,33 +1314,40 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             total_amount: order.total_amount
                         });
                         
-                        // 🔥 ПРИНУДИТЕЛЬНО СОЗДАЕМ ЗАПИСЬ В PURCHASE_HISTORY ДЛЯ ТЕСТИРОВАНИЯ
-                        logger.info(`📝 WEBHOOK: ПРИНУДИТЕЛЬНО создаем запись в purchase_history для заказа ${orderId}`);
-                        logger.info(`📝 WEBHOOK: Данные для purchase_history:`, {
-                            order_id: orderId,
-                            user_id: order.user_id || '7303614654',
-                            total_amount: parseFloat(payment.amount.value),
-                            payment_id: payment.id
+                        // Создаем запись в purchase_history для лояльности
+                        logger.info(`📝 WEBHOOK: Проверяем user_id для заказа ${orderId}:`, {
+                            user_id: order.user_id,
+                            user_id_type: typeof order.user_id,
+                            user_id_length: order.user_id?.length
                         });
                         
-                        try {
-                            const purchaseRecord = await PurchaseHistoryDB.create({
-                                order_id: orderId,
-                                user_id: order.user_id || '7303614654', // Fallback для тестирования
-                                customer_name: order.user_name || 'Тест',
-                                phone: order.phone || '+79991234567',
-                                total_amount: parseFloat(payment.amount.value),
-                                items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
-                                items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
-                                payment_id: payment.id,
-                                delivery_zone: order.delivery_zone || 'moscow',
-                                address_data: order.address || '{}' // address уже строка JSON
-                            });
+                        if (order.user_id && order.user_id !== 'unknown') {
+                            logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}, пользователь: ${order.user_id}`);
                             
-                            logger.info('✅ WEBHOOK: Заказ обновлен и добавлен в историю покупок:', purchaseRecord);
-                        } catch (purchaseError) {
-                            logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
-                            logger.error('❌ WEBHOOK: Стек ошибки:', purchaseError.stack);
+                            try {
+                                const purchaseRecord = await PurchaseHistoryDB.create({
+                                    order_id: orderId,
+                                    user_id: order.user_id,
+                                    customer_name: order.user_name || 'Клиент',
+                                    phone: order.phone || '',
+                                    total_amount: parseFloat(payment.amount.value),
+                                    items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
+                                    items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
+                                    payment_id: payment.id,
+                                    delivery_zone: order.delivery_zone || 'moscow',
+                                    address_data: order.address || '{}'
+                                });
+                                
+                                logger.info('✅ WEBHOOK: Заказ добавлен в историю покупок:', {
+                                    id: purchaseRecord.id,
+                                    user_id: purchaseRecord.user_id,
+                                    total_amount: purchaseRecord.amount
+                                });
+                            } catch (purchaseError) {
+                                logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
+                            }
+                        } else {
+                            logger.warn(`⚠️ WEBHOOK: Пропускаем создание записи в purchase_history - user_id: ${order.user_id}`);
                         }
                         
                         // Отправляем уведомление в Telegram (если настроен бот)
@@ -1575,40 +1582,25 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     }
 });
 
-// 🧪 ТЕСТОВЫЙ ENDPOINT ДЛЯ ПРОВЕРКИ PURCHASE_HISTORY
-app.get('/test-purchase-history/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        logger.info(`🧪 ТЕСТ: Проверка purchase_history для пользователя ${userId}`);
-        
-        // Проверяем через PurchaseHistoryDB.getByUserId
-        const purchases = await PurchaseHistoryDB.getByUserId(userId);
-        logger.info(`🧪 ТЕСТ: PurchaseHistoryDB.getByUserId вернул ${purchases.length} записей`);
-        
-        // Проверяем суммы
-        const dbTotal = purchases.reduce((sum, row) => sum + (row.totalAmount || 0), 0);
-        logger.info(`🧪 ТЕСТ: Сумма через DB: ${dbTotal}₽`);
-        
-        res.json({
-            ok: true,
-            userId,
-            purchases: purchases,
-            count: purchases.length,
-            totalSpent: dbTotal
-        });
-    } catch (error) {
-        logger.error('❌ ТЕСТ: Ошибка проверки purchase_history:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
 
 // API для получения истории покупок клиента
 app.get('/api/purchases/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+        logger.info(`🔍 API: Запрос данных лояльности для пользователя: ${userId}`);
+        
         // Загружаем историю покупок из БД
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
         logger.info(`🔍 API: Найдено ${purchases.length} покупок для пользователя ${userId}`);
+        
+        // Логируем детали покупок
+        if (purchases.length > 0) {
+            logger.info(`🔍 API: Детали покупок:`, purchases.map(p => ({
+                order_id: p.order_id,
+                totalAmount: p.totalAmount,
+                purchase_date: p.purchase_date
+            })));
+        }
         
         // Подсчитываем статистику лояльности
         const totalPurchases = purchases.length;
