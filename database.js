@@ -370,7 +370,7 @@ class PurchaseHistoryDB {
             user_id,
             customer_name,
             phone,
-            total_amount, // Это значение попадает в поле amount в БД
+            total_amount, // Сохраняем в поле amount в БД
             items_count,
             items_data,
             payment_id,
@@ -379,6 +379,15 @@ class PurchaseHistoryDB {
         ];
         
         const result = await pool.query(query, values);
+        
+        // Логируем для диагностики
+        console.log(`🔍 PurchaseHistoryDB.create: Создана запись:`, {
+            order_id: result.rows[0].order_id,
+            user_id: result.rows[0].user_id,
+            amount: result.rows[0].amount,
+            total_amount_sent: total_amount
+        });
+        
         return result.rows[0];
     }
     
@@ -402,6 +411,16 @@ class PurchaseHistoryDB {
         `;
         
         const result = await pool.query(query, [userId]);
+        
+        // Логируем для диагностики
+        console.log(`🔍 PurchaseHistoryDB.getByUserId: Найдено ${result.rows.length} записей для пользователя ${userId}`);
+        if (result.rows.length > 0) {
+            console.log(`🔍 PurchaseHistoryDB.getByUserId: Первая запись:`, {
+                order_id: result.rows[0].order_id,
+                amount: result.rows[0].amount,
+                totalAmount: result.rows[0].totalAmount
+            });
+        }
         
         // Парсим JSON данные
         return result.rows.map(row => {
