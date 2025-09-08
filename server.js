@@ -1325,12 +1325,23 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}, пользователь: ${order.user_id}`);
                             
                             try {
+                                // Логируем данные платежа для диагностики
+                                logger.info(`📝 WEBHOOK: Данные платежа:`, {
+                                    payment_id: payment.id,
+                                    amount_value: payment.amount.value,
+                                    amount_currency: payment.amount.currency,
+                                    amount_type: typeof payment.amount.value
+                                });
+                                
+                                const totalAmount = parseFloat(payment.amount.value);
+                                logger.info(`📝 WEBHOOK: Парсинг суммы: ${payment.amount.value} → ${totalAmount}`);
+                                
                                 const purchaseRecord = await PurchaseHistoryDB.create({
                                     order_id: orderId,
                                     user_id: order.user_id,
                                     customer_name: order.user_name || 'Клиент',
                                     phone: order.phone || '',
-                                    total_amount: parseFloat(payment.amount.value),
+                                    total_amount: totalAmount,
                                     items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
                                     items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
                                     payment_id: payment.id,
@@ -1582,6 +1593,37 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     }
 });
 
+
+// 🔍 ДИАГНОСТИЧЕСКИЙ ENDPOINT ДЛЯ ПРОВЕРКИ ДАННЫХ В БД
+app.get('/debug-purchases/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        logger.info(`🔍 DEBUG: Проверяем данные в БД для пользователя: ${userId}`);
+        
+        // Используем существующую функцию базы данных
+        const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        
+        logger.info(`🔍 DEBUG: Найдено ${purchases.length} записей через PurchaseHistoryDB`);
+        purchases.slice(0, 5).forEach((row, index) => {
+            logger.info(`🔍 DEBUG: Запись ${index + 1}:`, {
+                order_id: row.order_id,
+                totalAmount: row.totalAmount,
+                purchase_date: row.purchase_date,
+                payment_id: row.payment_id
+            });
+        });
+        
+        res.json({
+            ok: true,
+            userId,
+            count: purchases.length,
+            records: purchases.slice(0, 5)
+        });
+    } catch (error) {
+        logger.error('❌ DEBUG: Ошибка проверки БД:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 
 // API для получения истории покупок клиента
 app.get('/api/purchases/:userId', async (req, res) => {
