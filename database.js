@@ -227,6 +227,9 @@ class OrdersDB {
         const values = [];
         let paramCounter = 1;
         
+        // 🔍 ЛОГИРОВАНИЕ ДАННЫХ ОБНОВЛЕНИЯ
+        console.log(`🔍 OrdersDB.update: Обновляем заказ ${orderId} с данными:`, updateData);
+        
         // Динамически строим запрос
         for (const [key, value] of Object.entries(updateData)) {
             if (key === 'paymentId') {
@@ -264,6 +267,15 @@ class OrdersDB {
                     order.items = [];
                 }
             }
+            
+            // 🔍 ЛОГИРОВАНИЕ РЕЗУЛЬТАТА ОБНОВЛЕНИЯ
+            console.log(`✅ OrdersDB.update: Заказ ${orderId} обновлен:`, {
+                order_id: order.order_id,
+                total_amount: order.total_amount,
+                payment_status: order.payment_status,
+                status: order.status
+            });
+            
             return order;
         }
         return null;
