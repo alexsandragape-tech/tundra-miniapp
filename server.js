@@ -1061,6 +1061,9 @@ async function createOrder(orderData) {
             telegramUsername: order.telegramUsername || null
         };
         
+        // Логируем userId для диагностики
+        logger.info(`💾 Создание заказа ${order.id} с userId: ${dbOrder.userId}`);
+        
         await OrdersDB.create(dbOrder);
         logger.debug(`💾 Заказ ${orderId} сохранен в БД`);
     } catch (error) {
@@ -1299,6 +1302,11 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                     // Получаем данные заказа для создания записи в истории покупок
                     const order = await OrdersDB.getById(orderId);
                     if (order) {
+                        logger.info(`🔍 WEBHOOK: Заказ ${orderId} из БД:`, {
+                            user_id: order.user_id,
+                            user_name: order.user_name,
+                            total_amount: order.total_amount
+                        });
                         
                         // Проверяем, что user_id не 'unknown'
                         if (order.user_id && order.user_id !== 'unknown') {
@@ -1558,10 +1566,12 @@ app.get('/api/purchases/:userId', async (req, res) => {
         const { userId } = req.params;
         // Загружаем историю покупок из БД
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        logger.info(`🔍 API: Найдено ${purchases.length} покупок для пользователя ${userId}`);
         
         // Подсчитываем статистику лояльности
         const totalPurchases = purchases.length;
         const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+        logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
         let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
