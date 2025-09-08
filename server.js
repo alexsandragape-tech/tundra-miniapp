@@ -1632,38 +1632,36 @@ app.get('/api/orders/:orderId', async (req, res) => {
         const { orderId } = req.params;
         logger.info(`🔍 API: Запрос статуса заказа ${orderId}`);
         
-        // Сначала пробуем получить из памяти (для новых заказов)
-        let order = getOrder(orderId);
-        logger.info(`🔍 API: Заказ ${orderId} в памяти:`, order ? 'найден' : 'не найден');
+        // Сначала ищем в базе данных (для актуальных данных)
+        logger.info(`🔍 API: Ищем заказ ${orderId} в базе данных...`);
+        let order = await OrdersDB.getById(orderId);
         
-        // Если не найден в памяти, ищем в базе данных
-        if (!order) {
-            logger.info(`🔍 API: Ищем заказ ${orderId} в базе данных...`);
-            order = await OrdersDB.getById(orderId);
-            if (order) {
-                logger.info(`✅ API: Заказ ${orderId} найден в БД:`, {
-                    status: order.status,
-                    payment_status: order.payment_status,
-                    total_amount: order.total_amount
-                });
-                
-                // Конвертируем данные из БД в формат, ожидаемый клиентом
-                order = {
-                    id: order.id,
-                    status: order.status,
-                    paymentStatus: order.payment_status,
-                    totals: {
-                        total: parseFloat(order.total_amount || 0)
-                    },
-                    items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
-                    address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
-                    phone: order.phone,
-                    customerName: order.user_name,
-                    createdAt: order.created_at
-                };
-            } else {
-                logger.warn(`❌ API: Заказ ${orderId} не найден в БД`);
-            }
+        if (order) {
+            logger.info(`✅ API: Заказ ${orderId} найден в БД:`, {
+                status: order.status,
+                payment_status: order.payment_status,
+                total_amount: order.total_amount
+            });
+            
+            // Конвертируем данные из БД в формат, ожидаемый клиентом
+            order = {
+                id: order.id,
+                status: order.status,
+                paymentStatus: order.payment_status,
+                totals: {
+                    total: parseFloat(order.total_amount || 0)
+                },
+                items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
+                address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
+                phone: order.phone,
+                customerName: order.user_name,
+                createdAt: order.created_at
+            };
+        } else {
+            // Если не найден в БД, пробуем получить из памяти (для очень новых заказов)
+            logger.info(`🔍 API: Заказ ${orderId} не найден в БД, ищем в памяти...`);
+            order = getOrder(orderId);
+            logger.info(`🔍 API: Заказ ${orderId} в памяти:`, order ? 'найден' : 'не найден');
         }
         
         if (order) {
@@ -2475,22 +2473,6 @@ async function startServer() {
                 logger.info('💡 Добавьте переменную TELEGRAM_BOT_TOKEN в Railway');
             } else {
                 logger.info('✅ Telegram настроен полностью');
-                
-                // Тестируем отправку сообщения
-                try {
-                    await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                        chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
-                        text: '🧪 Тестовое сообщение от сервера - Telegram настроен корректно!'
-                    });
-                    logger.info('✅ Тестовое сообщение в Telegram отправлено успешно');
-                } catch (testError) {
-                    logger.error('❌ Ошибка тестового сообщения в Telegram:', testError.message);
-                    if (testError.response?.status === 401) {
-                        logger.error('❌ Неверный токен бота');
-                    } else if (testError.response?.status === 400) {
-                        logger.error('❌ Неверный Chat ID');
-                    }
-                }
             }
         });
         
