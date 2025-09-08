@@ -1028,12 +1028,6 @@ async function createOrder(orderData) {
     orderCounter++;
     const orderId = orderCounter.toString();
     
-    logger.info('🔥 Создание заказа:', {
-        orderId,
-        userId: orderData.userId,
-        telegramUserId: orderData.telegramUserId,
-        customerName: orderData.customerName
-    });
     
     const order = {
         id: orderId,
@@ -1052,7 +1046,7 @@ async function createOrder(orderData) {
     try {
         const dbOrder = {
             orderId: order.id,
-            userId: order.userId || orderData.userId || order.telegramUserId || 'unknown',
+            userId: orderData.userId || order.userId || order.telegramUserId || 'unknown',
             userName: order.customerName || 'Клиент',
             phone: order.phone || '',
             deliveryZone: order.deliveryZone || 'moscow',
@@ -1305,19 +1299,6 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                     // Получаем данные заказа для создания записи в истории покупок
                     const order = await OrdersDB.getById(orderId);
                     if (order) {
-                        logger.info('🔍 WEBHOOK: Данные заказа из БД:', {
-                            order_id: order.order_id,
-                            user_id: order.user_id,
-                            user_name: order.user_name,
-                            total_amount: order.total_amount
-                        });
-                        
-                        // Создаем запись в истории покупок
-                        logger.info('📝 WEBHOOK: Создаем запись в истории покупок:', {
-                            order_id: orderId,
-                            user_id: order.user_id,
-                            total_amount: parseFloat(payment.amount.value)
-                        });
                         
                         // Проверяем, что user_id не 'unknown'
                         if (order.user_id && order.user_id !== 'unknown') {
@@ -1575,16 +1556,12 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 app.get('/api/purchases/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        logger.info(`🔍 API: Запрос истории покупок для пользователя ${userId}`);
-        
         // Загружаем историю покупок из БД
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
-        logger.info(`📊 API: Найдено ${purchases.length} покупок для пользователя ${userId}`);
         
         // Подсчитываем статистику лояльности
         const totalPurchases = purchases.length;
         const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
-        logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
         let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
