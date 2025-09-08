@@ -1309,8 +1309,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
                             payment_id: payment.id,
                             delivery_zone: order.delivery_zone,
-                            address_data: order.address, // address уже строка JSON
-                            created_at: new Date().toISOString()
+                            address_data: order.address // address уже строка JSON
                         });
                         
                         logger.info('✅ Заказ обновлен и добавлен в историю покупок');
