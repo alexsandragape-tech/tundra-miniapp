@@ -103,7 +103,7 @@
                 <label class="form-label">Зона доставки</label>
                 <select id="delivery-zone" class="form-select" required onchange="updateDeliveryInfo()">
                         <option value="">Выберите зону</option>
-                    <option value="moscow">Москва (МКАД) - 400₽</option>
+                    <option value="moscow">Москва (МКАД) - 10₽</option>
                     <option value="mo">Московская область - 700₽</option>
                     </select>
                 </div>
@@ -245,7 +245,7 @@
 
         <div id="orders-list" class="orders-list">
             <!-- Заказы будут загружены динамически -->
-        </div>
+                </div>
 
         <div id="empty-orders" class="empty-orders" style="display: none;">
             <div class="empty-orders-icon">📦</div>
@@ -254,15 +254,15 @@
             <button class="go-shopping-btn" onclick="showMain()">
                 Перейти к покупкам
             </button>
-        </div>
-    </div>
+                    </div>
+                    </div>
 
     <!-- Детали заказа -->
     <div id="order-details-screen" class="screen">
         <div class="page-header">
             <button class="back-btn" onclick="showMyOrders()">←</button>
             <div class="page-title">Детали заказа</div>
-        </div>
+            </div>
 
         <div id="order-details-content" class="order-details">
             <!-- Детали заказа будут загружены динамически -->
@@ -279,7 +279,7 @@
                 <div class="order-info">
                     <div class="order-number-success">Заказ #<span id="success-order-id">-</span></div>
                     <div class="order-amount-success"><span id="success-amount">0</span>₽</div>
-                </div>
+                    </div>
                     </div>
             <div class="success-actions">
                 <button class="primary-btn" onclick="viewPurchaseHistory()">
