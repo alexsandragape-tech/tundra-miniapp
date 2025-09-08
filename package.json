@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "cleanup": "node cleanup_database.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
