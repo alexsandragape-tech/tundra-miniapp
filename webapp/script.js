@@ -1969,8 +1969,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Получаем данные пользователя Telegram
             const telegramUser = getTelegramUserData();
             
+            const userId = getUserId();
+            console.log(`🔍 CLIENT: Создаем заказ для пользователя: ${userId}`);
+            
             const formData = {
-                userId: getUserId(), // Добавляем ID пользователя
+                userId: userId, // Добавляем ID пользователя
                 telegramUser: telegramUser, // Данные Telegram профиля
                 customerName: document.getElementById('customerName').value.trim(), // Имя из формы
                 deliveryZone: deliveryZone,
@@ -2219,10 +2222,13 @@ function calculateLoyalty(totalSpent) {
 async function loadLoyaltyData() {
     try {
         const userId = getUserId();
+        console.log(`🔍 CLIENT: Загружаем данные лояльности для пользователя: ${userId}`);
+        
         const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
+            console.log(`🔍 CLIENT: Получены данные лояльности:`, data.stats);
             return data.stats || null;
         } else {
             console.warn('Не удалось загрузить данные лояльности с сервера');
