@@ -1419,7 +1419,7 @@ function calculateCartTotal() {
     
     let delivery = 0;
     if (deliveryZone === 'moscow') {
-        delivery = subtotal >= 5000 ? 0 : 400;
+        delivery = subtotal >= 5000 ? 0 : 10;
     } else if (deliveryZone === 'mo') {
         delivery = 700;
     }
@@ -1799,7 +1799,7 @@ function updateDeliveryInfo() {
             <h4>Информация о доставке</h4>
             <div class="delivery-rules">
                 <div class="delivery-rule">
-                    <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
+                    <strong>Москва (МКАД):</strong> 10₽, бесплатно от 5000₽
                 </div>
                 <div class="delivery-rule">
                     <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}
@@ -1823,7 +1823,7 @@ function updateDeliveryInfo() {
             <h4>Информация о доставке</h4>
             <div class="delivery-rules">
                 <div class="delivery-rule">
-                    <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
+                    <strong>Москва (МКАД):</strong> 10₽, бесплатно от 5000₽
                 </div>
                 <div class="delivery-rule">
                     <strong>МО:</strong> минималка 5000₽, доставка 700₽
@@ -1889,12 +1889,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
                 return;
             } else if (deliveryZone === 'moscow' && subtotal < getMinOrderAmount()) {
-                // Временно убрана проверка минимального заказа
-                // showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
-                // return;
+                showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
+                return;
             } else if (!deliveryZone) {
-                // Временно убрана обязательная доставка
-                deliveryZone = 'moscow'; // Устанавливаем по умолчанию
+                showNotification('Выберите зону доставки', 'warning');
+                return;
             }
             
             // Проверяем обязательные поля
