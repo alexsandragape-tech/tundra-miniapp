@@ -352,17 +352,16 @@ class PurchaseHistoryDB {
             items_data,
             payment_id,
             delivery_zone,
-            address_data,
-            created_at
+            address_data
         } = purchaseData;
         
         const query = `
             INSERT INTO purchase_history (
                 order_id, user_id, customer_name, phone, amount, 
                 items_count, items_data, payment_id, 
-                delivery_zone, address_data, created_at
+                delivery_zone, address_data
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         `;
         
@@ -376,8 +375,7 @@ class PurchaseHistoryDB {
             items_data,
             payment_id,
             delivery_zone,
-            address_data,
-            created_at
+            address_data
         ];
         
         const result = await pool.query(query, values);
