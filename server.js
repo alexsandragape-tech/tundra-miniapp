@@ -1744,12 +1744,24 @@ app.get('/api/webhook-logs', async (req, res) => {
         const orders = await OrdersDB.getByUserId('7303614654');
         const paidOrders = orders.filter(order => order.payment_status === 'paid' || order.status === 'completed');
         
+        // 🔍 ПРОВЕРЯЕМ СУММЫ В PURCHASE_HISTORY
+        const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+        const totalSpentFromAmount = purchases.reduce((sum, purchase) => sum + (purchase.amount || 0), 0);
+        
         res.json({
             ok: true,
             webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
             purchaseHistoryCount: purchases.length,
             totalOrders: orders.length,
             paidOrders: paidOrders.length,
+            totalSpentFromTotalAmount: totalSpent,
+            totalSpentFromAmount: totalSpentFromAmount,
+            purchaseHistoryDetails: purchases.slice(0, 5).map(p => ({
+                order_id: p.order_id,
+                totalAmount: p.totalAmount,
+                amount: p.amount,
+                purchase_date: p.purchase_date
+            })),
             paidOrdersList: paidOrders.map(order => ({
                 order_id: order.order_id,
                 payment_status: order.payment_status,
@@ -1834,13 +1846,18 @@ app.get('/api/purchases/:userId', async (req, res) => {
             logger.info(`🔍 API: Детали покупок:`, purchases.map(p => ({
                 order_id: p.order_id,
                 totalAmount: p.totalAmount,
+                amount: p.amount,
                 purchase_date: p.purchase_date
             })));
         }
         
         // Подсчитываем статистику лояльности
         const totalPurchases = purchases.length;
-        const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+        const totalSpent = purchases.reduce((sum, purchase) => {
+            const amount = purchase.totalAmount || purchase.amount || 0;
+            logger.info(`💰 API: Покупка ${purchase.order_id}: totalAmount=${purchase.totalAmount}, amount=${purchase.amount}, используем=${amount}`);
+            return sum + amount;
+        }, 0);
         logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
