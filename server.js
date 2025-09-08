@@ -2099,17 +2099,17 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
     }
 });
 
-// Получение заказов пользователя (только доставленные)
+// Получение заказов пользователя (все заказы кроме отмененных)
 app.get('/api/orders/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const orders = await OrdersDB.getByUserId(userId);
         
-        // Показываем только доставленные заказы
-        const deliveredOrders = orders.filter(order => order.status === 'completed');
+        // Показываем все заказы кроме отмененных
+        const activeOrders = orders.filter(order => order.status !== 'cancelled' && order.status !== 'expired');
         
-        logger.info(`📋 Загружено ${deliveredOrders.length} доставленных заказов для пользователя ${userId}`);
-        res.json({ ok: true, orders: deliveredOrders });
+        logger.info(`📋 Загружено ${activeOrders.length} активных заказов для пользователя ${userId}`);
+        res.json({ ok: true, orders: activeOrders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
         res.status(500).json({ ok: false, error: error.message });
