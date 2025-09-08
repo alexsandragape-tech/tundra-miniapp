@@ -2219,17 +2219,21 @@ function calculateLoyalty(totalSpent) {
 async function loadLoyaltyData() {
     try {
         const userId = getUserId();
+        console.log('🔍 CLIENT: Загружаем данные лояльности для userId:', userId);
+        
         const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        console.log('🔍 CLIENT: Ответ сервера:', response.status, response.ok);
         
         if (response.ok) {
             const data = await response.json();
+            console.log('🔍 CLIENT: Данные лояльности:', data);
             return data.stats || null;
         } else {
-            console.warn('Не удалось загрузить данные лояльности с сервера');
+            console.warn('❌ CLIENT: Не удалось загрузить данные лояльности с сервера:', response.status);
             return null;
         }
     } catch (error) {
-        console.error('Ошибка загрузки данных лояльности:', error);
+        console.error('❌ CLIENT: Ошибка загрузки данных лояльности:', error);
         return null;
     }
 }
