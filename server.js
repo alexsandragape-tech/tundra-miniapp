@@ -1367,11 +1367,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     logger.info('🔥 Создание нового заказа');
     let order = null;
     
-    // 🧪 ПРОВЕРЯЕМ ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ
-    const forceDemoMode = req.body.forceDemoMode || false;
-    if (forceDemoMode) {
-        logger.info('🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ активирован');
-    }
+    // Режим продакшена - без демо-режима
     
     try {
         const orderData = req.body;
@@ -1390,7 +1386,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
         const totalAmount = order.totals?.total || 0;
-        const description = `Заказ #${order.id} в Tundra Gourmet`;
+        const description = `Заказ #${order.id} - ${customerName}`;
         
         if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
             logger.error('❌ ЮKassa ключи не настроены');
@@ -1413,157 +1409,116 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         order.telegramUsername = customerInfo.telegramUsername;
         order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
         
-        // 🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание реального платежа
-        if (forceDemoMode) {
-            logger.info('🎭 ПРИНУДИТЕЛЬНЫЙ ДЕМО-РЕЖИМ: пропускаем создание платежа ЮKassa');
+        // Создаем реальный платеж через ЮKassa
+        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
+        
+        // Сохраняем ID платежа в заказе
+        order.paymentId = payment.id;
+        order.paymentUrl = payment.confirmation.confirmation_url;
+        orders.set(order.id, order);
+        
+        // Отправляем уведомление в Telegram
+        try {
+            logger.debug('🔍 Проверка настроек Telegram:', {
+                hasToken: !!config.TELEGRAM_BOT_TOKEN,
+                tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
+                hasChatId: !!config.TELEGRAM_ADMIN_CHAT_ID,
+                chatId: config.TELEGRAM_ADMIN_CHAT_ID
+            });
             
-            // В демо-режиме сразу помечаем заказ как оплаченный
-            order.paymentStatus = 'paid';
-            order.status = 'accepted';
-            order.paymentId = 'demo_payment_' + order.id;
-            order.paymentUrl = null;
-            orders.set(order.id, order);
-            
-            // Обновляем заказ в БД
-            try {
-                await OrdersDB.update(order.id, {
-                    paymentStatus: 'paid',
-                    status: 'accepted',
-                    paymentId: order.paymentId
-                });
-                logger.info(`✅ Заказ ${order.id} обновлен в БД (демо-режим)`);
-            } catch (error) {
-                logger.error('❌ Ошибка обновления заказа в БД:', error.message);
-            }
-            
-            // Создаем запись в истории покупок
-            try {
-                const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
-                const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+            if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+                // Парсим адрес из JSON строки
+                const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
                 
-                // Проверяем, что items существует и является массивом
-                const itemsArray = Array.isArray(items) ? items : [];
+                // Формируем полный адрес
+                const fullAddress = [
+                    addressData.street,
+                    addressData.house,
+                    addressData.apartment && `кв. ${addressData.apartment}`,
+                    addressData.floor && `эт. ${addressData.floor}`,
+                    addressData.entrance && `под. ${addressData.entrance}`,
+                    addressData.intercom && `домофон: ${addressData.intercom}`
+                ].filter(Boolean).join(', ');
                 
-                await PurchaseHistoryDB.create({
-                    user_id: order.user_id,
-                    user_name: order.user_name,
-                    order_id: order.id,
-                    total_amount: order.totals?.total || 0,
-                    items_count: itemsArray.length,
-                    items_data: JSON.stringify(itemsArray),
-                    address: JSON.stringify(address),
-                    phone: order.phone,
-                    created_at: new Date().toISOString()
-                });
+                // Формируем информацию о клиенте
+                const clientInfo = [
+                    customerName || 'Клиент',
+                    telegramUser?.username && `@${telegramUser.username}`
+                ].filter(Boolean).join(' ');
                 
-                logger.info(`✅ Запись в истории покупок создана для заказа ${order.id}`);
-            } catch (error) {
-                logger.error('❌ Ошибка создания записи в истории покупок:', error.message);
-            }
-            
-            // Отправляем уведомление в Telegram
-            try {
-                logger.debug('🔍 Проверка настроек Telegram:', {
-                    hasToken: !!config.TELEGRAM_BOT_TOKEN,
-                    tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
-                    hasChatId: !!config.TELEGRAM_ADMIN_CHAT_ID,
-                    chatId: config.TELEGRAM_ADMIN_CHAT_ID
-                });
+                // Формируем состав заказа
+                logger.debug('🔍 order.cartItems тип:', typeof order.cartItems);
+                logger.debug('🔍 order.cartItems содержимое:', order.cartItems);
+                logger.debug('🔍 order.items тип:', typeof order.items);
+                logger.debug('🔍 order.items содержимое:', order.items);
                 
-                if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
-                    // Парсим адрес из JSON строки
-                    const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
-                    
-                    // Формируем полный адрес
-                    const fullAddress = [
-                        addressData.street,
-                        addressData.house,
-                        addressData.apartment && `кв. ${addressData.apartment}`,
-                        addressData.floor && `эт. ${addressData.floor}`,
-                        addressData.entrance && `под. ${addressData.entrance}`,
-                        addressData.intercom && `домофон: ${addressData.intercom}`
-                    ].filter(Boolean).join(', ');
-                    
-                    // Формируем информацию о клиенте
-                    const clientInfo = [
-                        customerName || 'Клиент',
-                        telegramUser?.username && `@${telegramUser.username}`
-                    ].filter(Boolean).join(' ');
-                    
-                    // Формируем состав заказа
-                    logger.debug('🔍 order.cartItems тип:', typeof order.cartItems);
-                    logger.debug('🔍 order.cartItems содержимое:', order.cartItems);
-                    logger.debug('🔍 order.items тип:', typeof order.items);
-                    logger.debug('🔍 order.items содержимое:', order.items);
-                    
-                    let orderItems = 'Состав заказа недоступен';
-                    
-                    // Пробуем получить items из разных источников
-                    let itemsArray = null;
-                    
-                    // 1. Пробуем order.cartItems (основной источник)
-                    if (order.cartItems && Array.isArray(order.cartItems)) {
-                        itemsArray = order.cartItems;
-                        logger.debug('✅ Используем order.cartItems');
-                    }
-                    // 2. Пробуем order.items
-                    else if (order.items) {
-                        if (typeof order.items === 'string') {
-                            try {
-                                itemsArray = JSON.parse(order.items);
-                                logger.debug('✅ Используем order.items (парсим JSON)');
-                            } catch (e) {
-                                logger.error('❌ Ошибка парсинга order.items:', e.message);
-                                itemsArray = [];
-                            }
-                        } else if (Array.isArray(order.items)) {
-                            itemsArray = order.items;
-                            logger.debug('✅ Используем order.items (массив)');
-                        }
-                    }
-                    
-                    if (Array.isArray(itemsArray) && itemsArray.length > 0) {
-                        orderItems = itemsArray.map(item => 
-                            `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
-                        ).join('\n');
-                        logger.debug('✅ Состав заказа сформирован:', orderItems);
-                    } else {
-                        logger.warn('⚠️ Не удалось получить состав заказа');
-                    }
-                    
-                    const message = 
-                        `🎭 <b>НОВЫЙ ЗАКАЗ (ДЕМО-РЕЖИМ)</b>\n` +
-                        `📋 Номер: #${order.id}\n` +
-                        `👤 Клиент: ${clientInfo}\n` +
-                        `📞 Телефон: ${order.phone}\n` +
-                        `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                        `📍 Зона доставки: ${order.deliveryZone}\n` +
-                        `🏠 Адрес: ${fullAddress}\n` +
-                        `📦 <b>Состав заказа:</b>\n${orderItems}` +
-                        (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
-                    
-                    
-                    // Создаем кнопки для нового заказа
-                    const inlineKeyboard = {
-                        inline_keyboard: [
-                            [
-                                { text: '🟡 Принять', callback_data: `accept_${order.id}` },
-                                { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
-                            ]
-                        ]
-                    };
-                    
-                    const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                        chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
-                        text: message,
-                        parse_mode: 'HTML',
-                        reply_markup: inlineKeyboard
-                    });
-                    
-                    logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
-                } else {
-                    logger.warn('⚠️ Telegram бот не настроен - уведомления не отправляются');
+                let orderItems = 'Состав заказа недоступен';
+                
+                // Пробуем получить items из разных источников
+                let itemsArray = null;
+                
+                // 1. Пробуем order.cartItems (основной источник)
+                if (order.cartItems && Array.isArray(order.cartItems)) {
+                    itemsArray = order.cartItems;
+                    logger.debug('✅ Используем order.cartItems');
                 }
+                // 2. Пробуем order.items
+                else if (order.items) {
+                    if (typeof order.items === 'string') {
+                        try {
+                            itemsArray = JSON.parse(order.items);
+                            logger.debug('✅ Используем order.items (парсим JSON)');
+                        } catch (e) {
+                            logger.error('❌ Ошибка парсинга order.items:', e.message);
+                            itemsArray = [];
+                        }
+                    } else if (Array.isArray(order.items)) {
+                        itemsArray = order.items;
+                        logger.debug('✅ Используем order.items (массив)');
+                    }
+                }
+                
+                if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+                    orderItems = itemsArray.map(item => 
+                        `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
+                    ).join('\n');
+                    logger.debug('✅ Состав заказа сформирован:', orderItems);
+                } else {
+                    logger.warn('⚠️ Не удалось получить состав заказа');
+                }
+                
+                const message = 
+                    `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n` +
+                    `📋 Номер: #${order.id}\n` +
+                    `👤 Клиент: ${clientInfo}\n` +
+                    `📞 Телефон: ${order.phone}\n` +
+                    `💰 Сумма: ${order.totals?.total || 0}₽\n` +
+                    `📍 Зона доставки: ${order.deliveryZone}\n` +
+                    `🏠 Адрес: ${fullAddress}\n` +
+                    `📦 <b>Состав заказа:</b>\n${orderItems}` +
+                    (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
+                
+                // Создаем кнопки для нового заказа
+                const inlineKeyboard = {
+                    inline_keyboard: [
+                        [
+                            { text: '🟡 Принять', callback_data: `accept_${order.id}` },
+                            { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
+                        ]
+                    ]
+                };
+                
+                const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML',
+                    reply_markup: inlineKeyboard
+                });
+                
+                logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
+            } else {
+                logger.warn('⚠️ Telegram бот не настроен - уведомления не отправляются');
+            }
             } catch (error) {
                 if (error.response?.status === 401) {
                     logger.error('❌ Ошибка авторизации Telegram: неверный токен бота');
@@ -1575,30 +1530,6 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                     logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
                 }
             }
-            
-            // Отправляем ответ клиенту
-            const response = {
-                ok: true, 
-                orderId: order.id,
-                paymentUrl: null, // Нет URL для редиректа
-                paymentId: 'demo_payment_' + order.id,
-                amount: order.totals?.total || 0,
-                isTestMode: true,
-                isPaid: true, // Помечаем как оплаченный
-                message: 'ДЕМО РЕЖИМ: Заказ автоматически оплачен'
-            };
-            
-            res.json(response);
-            return;
-        }
-        
-        // Обычный режим: создаем платеж через ЮKassa
-        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
-        
-        // Сохраняем ID платежа в заказе
-        order.paymentId = payment.id;
-        order.paymentUrl = payment.confirmation.confirmation_url;
-        orders.set(order.id, order);
         
         // Обновляем в БД
         try {
@@ -1626,46 +1557,12 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     } catch (error) {
         logger.error('❌ Ошибка обработки заказа:', error.message);
         
-        // Если ошибка ЮKassa, отправим заказ в ДЕМО РЕЖИМЕ
-        logger.warn('⚠️ ЮKassa недоступна, включаем ДЕМО РЕЖИМ');
-        
-        // Проверяем, что order был создан
-        if (order && order.id) {
-            // В демо-режиме сразу помечаем заказ как оплаченный
-            order.paymentStatus = 'paid';
-            order.status = 'accepted';
-            orders.set(order.id, order);
-            
-            // Обновляем в БД
-            try {
-                await OrdersDB.update(order.id, {
-                    status: 'accepted',
-                    paymentStatus: 'paid'
-                });
-            } catch (dbError) {
-                logger.error(`❌ Ошибка обновления заказа в БД:`, dbError.message);
-            }
-            
-            // Возвращаем успешный ответ без редиректа на оплату
-            res.json({ 
-                ok: true, 
-                orderId: order.id,
-                paymentUrl: null, // Нет URL для редиректа
-                paymentId: 'demo_payment_' + order.id,
-                amount: order.totals?.total || 0,
-                isTestMode: true,
-                isPaid: true, // Помечаем как оплаченный
-                message: 'ДЕМО РЕЖИМ: Заказ автоматически оплачен'
-            });
-        } else {
-            // Если заказ не был создан, возвращаем ошибку
-            logger.error('❌ Заказ не был создан');
-            res.status(500).json({ 
-                ok: false, 
-                error: 'Ошибка создания заказа',
-                message: 'Не удалось создать заказ'
-            });
-        }
+        // Возвращаем ошибку клиенту
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Ошибка создания заказа',
+            message: 'Не удалось создать заказ. Попробуйте еще раз.'
+        });
     }
 });
 
@@ -2174,17 +2071,17 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
     }
 });
 
-// Получение заказов пользователя
+// Получение заказов пользователя (только доставленные)
 app.get('/api/orders/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const orders = await OrdersDB.getByUserId(userId);
         
-        // Фильтруем отмененные заказы
-        const activeOrders = orders.filter(order => order.status !== 'cancelled');
+        // Показываем только доставленные заказы
+        const deliveredOrders = orders.filter(order => order.status === 'completed');
         
-        logger.info(`📋 Загружено ${activeOrders.length} активных заказов для пользователя ${userId}`);
-        res.json({ ok: true, orders: activeOrders });
+        logger.info(`📋 Загружено ${deliveredOrders.length} доставленных заказов для пользователя ${userId}`);
+        res.json({ ok: true, orders: deliveredOrders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
         res.status(500).json({ ok: false, error: error.message });
