@@ -2259,7 +2259,6 @@ async function updateLoyaltyCard() {
         <div class="loyalty-header">
             <div class="loyalty-icon">🔥</div>
             <div class="loyalty-title">Программа лояльности</div>
-            <button class="sync-button" onclick="forceSyncLoyalty()" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: auto;">🔄</button>
         </div>
         <div class="loading-text">Загрузка данных...</div>
     `;
@@ -2302,7 +2301,6 @@ async function updateLoyaltyCard() {
         <div class="loyalty-header">
             <div class="loyalty-icon">🔥</div>
             <div class="loyalty-title">Программа лояльности</div>
-            <button class="sync-button" onclick="forceSyncLoyalty()" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: auto;">🔄</button>
         </div>
         <div class="loyalty-stats">
             <div class="loyalty-stat">
@@ -2419,34 +2417,6 @@ function resetUserProfile() {
     
     showNotification('🔄 Профиль сброшен', 'info');
     console.log('🔄 Профиль пользователя сброшен:', userProfile);
-}
-
-// 🔄 ФУНКЦИЯ ПРИНУДИТЕЛЬНОЙ СИНХРОНИЗАЦИИ ЛОЯЛЬНОСТИ
-async function forceSyncLoyalty() {
-    try {
-        const userId = getUserId();
-        console.log(`🔄 CLIENT: Принудительная синхронизация лояльности для пользователя: ${userId}`);
-        
-        // Вызываем endpoint синхронизации на сервере
-        const response = await fetch(`${API_BASE}/api/sync-loyalty/${userId}`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log(`✅ CLIENT: Синхронизация завершена:`, result);
-            showNotification(`✅ ${result.message}`, 'success');
-            
-            // Обновляем карту лояльности
-            updateLoyaltyCard();
-        } else {
-            console.error('❌ CLIENT: Ошибка синхронизации:', response.status);
-            showNotification('❌ Ошибка синхронизации', 'error');
-        }
-    } catch (error) {
-        console.error('❌ CLIENT: Ошибка принудительной синхронизации:', error);
-        showNotification('❌ Ошибка синхронизации', 'error');
-    }
 }
 
 // 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ПРОФИЛЯ С СЕРВЕРОМ
