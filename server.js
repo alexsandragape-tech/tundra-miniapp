@@ -1313,22 +1313,73 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                 // Парсим адрес из JSON строки
                                 const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
                                 
-                                const message = `🎉 НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!\n\n` +
-                                    `📋 Заказ #${orderId}\n` +
+                                // Формируем полный адрес
+                                const fullAddress = [
+                                    addressData.street,
+                                    addressData.house,
+                                    addressData.apartment && `кв. ${addressData.apartment}`,
+                                    addressData.floor && `эт. ${addressData.floor}`,
+                                    addressData.entrance && `под. ${addressData.entrance}`,
+                                    addressData.intercom && `домофон: ${addressData.intercom}`
+                                ].filter(Boolean).join(', ');
+                                
+                                // Формируем состав заказа
+                                let orderItems = 'Состав заказа недоступен';
+                                let itemsArray = [];
+                                
+                                if (order.items) {
+                                    if (typeof order.items === 'string') {
+                                        try {
+                                            itemsArray = JSON.parse(order.items);
+                                        } catch (e) {
+                                            logger.error('❌ Ошибка парсинга order.items:', e.message);
+                                            itemsArray = [];
+                                        }
+                                    } else if (Array.isArray(order.items)) {
+                                        itemsArray = order.items;
+                                    }
+                                }
+                                
+                                if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+                                    orderItems = itemsArray.map(item => 
+                                        `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
+                                    ).join('\n');
+                                }
+                                
+                                const message = 
+                                    `🎉 <b>ЗАКАЗ ОПЛАЧЕН!</b>\n` +
+                                    `📋 Номер: #${orderId}\n` +
                                     `👤 Клиент: ${order.user_name}\n` +
                                     `📞 Телефон: ${order.phone}\n` +
                                     `💰 Сумма: ${payment.amount.value} ${payment.amount.currency}\n` +
                                     `💳 ID платежа: ${payment.id}\n` +
                                     `📍 Зона доставки: ${order.delivery_zone}\n` +
-                                    `🏠 Адрес: ${addressData.street}, ${addressData.house}${addressData.apartment ? `, кв. ${addressData.apartment}` : ''}${addressData.floor ? `, эт. ${addressData.floor}` : ''}${addressData.entrance ? `, под. ${addressData.entrance}` : ''}${addressData.intercom ? `, домофон: ${addressData.intercom}` : ''}`;
+                                    `🏠 Адрес: ${fullAddress}\n` +
+                                    `📦 <b>Состав заказа:</b>\n${orderItems}` +
+                                    (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
+                                
+                                // Создаем кнопки для оплаченного заказа
+                                const inlineKeyboard = {
+                                    inline_keyboard: [
+                                        [
+                                            { text: '🟡 Принять', callback_data: `accept_${orderId}` },
+                                            { text: '🔴 Отменить', callback_data: `cancel_${orderId}` }
+                                        ],
+                                        [
+                                            { text: '🚚 В доставке', callback_data: `delivering_${orderId}` },
+                                            { text: '✅ Завершить', callback_data: `complete_${orderId}` }
+                                        ]
+                                    ]
+                                };
                                 
                                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                                     chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
                                     text: message,
-                                    parse_mode: 'HTML'
+                                    parse_mode: 'HTML',
+                                    reply_markup: inlineKeyboard
                                 });
                                 
-                                logger.info('📱 Уведомление отправлено в Telegram');
+                                logger.info('📱 Уведомление об оплаченном заказе отправлено в Telegram');
                             } catch (telegramError) {
                                 logger.error('❌ Ошибка отправки в Telegram:', telegramError.message);
                             }
@@ -1417,119 +1468,8 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         order.paymentUrl = payment.confirmation.confirmation_url;
         orders.set(order.id, order);
         
-        // Отправляем уведомление в Telegram
-        try {
-            logger.debug('🔍 Проверка настроек Telegram:', {
-                hasToken: !!config.TELEGRAM_BOT_TOKEN,
-                tokenLength: config.TELEGRAM_BOT_TOKEN?.length || 0,
-                hasChatId: !!config.TELEGRAM_ADMIN_CHAT_ID,
-                chatId: config.TELEGRAM_ADMIN_CHAT_ID
-            });
-            
-            if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
-                // Парсим адрес из JSON строки
-                const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
-                
-                // Формируем полный адрес
-                const fullAddress = [
-                    addressData.street,
-                    addressData.house,
-                    addressData.apartment && `кв. ${addressData.apartment}`,
-                    addressData.floor && `эт. ${addressData.floor}`,
-                    addressData.entrance && `под. ${addressData.entrance}`,
-                    addressData.intercom && `домофон: ${addressData.intercom}`
-                ].filter(Boolean).join(', ');
-                
-                // Формируем информацию о клиенте
-                const clientInfo = [
-                    customerName || 'Клиент',
-                    telegramUser?.username && `@${telegramUser.username}`
-                ].filter(Boolean).join(' ');
-                
-                // Формируем состав заказа
-                logger.debug('🔍 order.cartItems тип:', typeof order.cartItems);
-                logger.debug('🔍 order.cartItems содержимое:', order.cartItems);
-                logger.debug('🔍 order.items тип:', typeof order.items);
-                logger.debug('🔍 order.items содержимое:', order.items);
-                
-                let orderItems = 'Состав заказа недоступен';
-                
-                // Пробуем получить items из разных источников
-                let itemsArray = null;
-                
-                // 1. Пробуем order.cartItems (основной источник)
-                if (order.cartItems && Array.isArray(order.cartItems)) {
-                    itemsArray = order.cartItems;
-                    logger.debug('✅ Используем order.cartItems');
-                }
-                // 2. Пробуем order.items
-                else if (order.items) {
-                    if (typeof order.items === 'string') {
-                        try {
-                            itemsArray = JSON.parse(order.items);
-                            logger.debug('✅ Используем order.items (парсим JSON)');
-                        } catch (e) {
-                            logger.error('❌ Ошибка парсинга order.items:', e.message);
-                            itemsArray = [];
-                        }
-                    } else if (Array.isArray(order.items)) {
-                        itemsArray = order.items;
-                        logger.debug('✅ Используем order.items (массив)');
-                    }
-                }
-                
-                if (Array.isArray(itemsArray) && itemsArray.length > 0) {
-                    orderItems = itemsArray.map(item => 
-                        `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
-                    ).join('\n');
-                    logger.debug('✅ Состав заказа сформирован:', orderItems);
-                } else {
-                    logger.warn('⚠️ Не удалось получить состав заказа');
-                }
-                
-                const message = 
-                    `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n` +
-                    `📋 Номер: #${order.id}\n` +
-                    `👤 Клиент: ${clientInfo}\n` +
-                    `📞 Телефон: ${order.phone}\n` +
-                    `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                    `📍 Зона доставки: ${order.deliveryZone}\n` +
-                    `🏠 Адрес: ${fullAddress}\n` +
-                    `📦 <b>Состав заказа:</b>\n${orderItems}` +
-                    (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
-                
-                // Создаем кнопки для нового заказа
-                const inlineKeyboard = {
-                    inline_keyboard: [
-                        [
-                            { text: '🟡 Принять', callback_data: `accept_${order.id}` },
-                            { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
-                        ]
-                    ]
-                };
-                
-                const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
-                    text: message,
-                    parse_mode: 'HTML',
-                    reply_markup: inlineKeyboard
-                });
-                
-                logger.info(`📱 Уведомление в Telegram отправлено для заказа ${order.id}`);
-            } else {
-                logger.warn('⚠️ Telegram бот не настроен - уведомления не отправляются');
-            }
-            } catch (error) {
-                if (error.response?.status === 401) {
-                    logger.error('❌ Ошибка авторизации Telegram: неверный токен бота');
-                    logger.info('💡 Проверьте токен бота в Railway: TELEGRAM_BOT_TOKEN');
-                } else if (error.response?.status === 400) {
-                    logger.error('❌ Ошибка Telegram: неверный Chat ID');
-                    logger.info('💡 Проверьте Chat ID в Railway: TELEGRAM_ADMIN_CHAT_ID');
-                } else {
-                    logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
-                }
-            }
+        // Уведомление в Telegram будет отправлено только после оплаты заказа
+        logger.info(`📝 Заказ ${order.id} создан, ожидает оплаты`);
         
         // Обновляем в БД
         try {
