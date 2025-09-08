@@ -370,7 +370,7 @@ class PurchaseHistoryDB {
             user_id,
             customer_name,
             phone,
-            total_amount,
+            total_amount, // Это значение попадает в поле amount в БД
             items_count,
             items_data,
             payment_id,
