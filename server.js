@@ -1310,6 +1310,13 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                         
                         // 🔥 ПРИНУДИТЕЛЬНО СОЗДАЕМ ЗАПИСЬ В PURCHASE_HISTORY ДЛЯ ТЕСТИРОВАНИЯ
                         logger.info(`📝 WEBHOOK: ПРИНУДИТЕЛЬНО создаем запись в purchase_history для заказа ${orderId}`);
+                        logger.info(`📝 WEBHOOK: Данные для purchase_history:`, {
+                            order_id: orderId,
+                            user_id: order.user_id || '7303614654',
+                            total_amount: parseFloat(payment.amount.value),
+                            payment_id: payment.id
+                        });
+                        
                         try {
                             const purchaseRecord = await PurchaseHistoryDB.create({
                                 order_id: orderId,
@@ -1327,6 +1334,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                             logger.info('✅ WEBHOOK: Заказ обновлен и добавлен в историю покупок:', purchaseRecord);
                         } catch (purchaseError) {
                             logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
+                            logger.error('❌ WEBHOOK: Стек ошибки:', purchaseError.stack);
                         }
                         
                         // Отправляем уведомление в Telegram (если настроен бот)
@@ -1558,6 +1566,34 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             error: 'Ошибка создания заказа',
             message: 'Не удалось создать заказ. Попробуйте еще раз.'
         });
+    }
+});
+
+// 🧪 ТЕСТОВЫЙ ENDPOINT ДЛЯ ПРОВЕРКИ PURCHASE_HISTORY
+app.get('/test-purchase-history/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        logger.info(`🧪 ТЕСТ: Проверка purchase_history для пользователя ${userId}`);
+        
+        // Проверяем все записи в purchase_history
+        const allPurchases = await pool.query('SELECT * FROM purchase_history WHERE user_id = $1', [userId]);
+        logger.info(`🧪 ТЕСТ: Найдено ${allPurchases.rows.length} записей в purchase_history`);
+        
+        // Проверяем через PurchaseHistoryDB.getByUserId
+        const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        logger.info(`🧪 ТЕСТ: PurchaseHistoryDB.getByUserId вернул ${purchases.length} записей`);
+        
+        res.json({
+            ok: true,
+            userId,
+            directQuery: allPurchases.rows,
+            throughDB: purchases,
+            directCount: allPurchases.rows.length,
+            dbCount: purchases.length
+        });
+    } catch (error) {
+        logger.error('❌ ТЕСТ: Ошибка проверки purchase_history:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
     }
 });
 
