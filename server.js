@@ -1265,8 +1265,8 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
             throw new Error(`Неожиданный тип данных: ${typeof req.body}`);
         }
         
-        // Проверяем тип уведомления
-        if (notification.type === 'payment.succeeded') {
+        // Проверяем тип уведомления (YooKassa отправляет type: 'notification' и event: 'payment.succeeded')
+        if (notification.type === 'notification' && notification.event === 'payment.succeeded') {
             const payment = notification.object;
             logger.info('✅ Платеж успешно завершен:', payment.id);
             
@@ -1408,7 +1408,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                     logger.error('❌ Ошибка обновления заказа в БД:', dbError.message);
                 }
             }
-        } else if (notification.type === 'payment.canceled') {
+        } else if (notification.type === 'notification' && notification.event === 'payment.canceled') {
             const payment = notification.object;
             logger.info('❌ Платеж отменен:', payment.id);
             
@@ -1421,7 +1421,11 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                 logger.info('🔄 Статус заказа обновлен на "отменен"');
             }
         } else {
-            logger.warn('⚠️ WEBHOOK: Неизвестный тип уведомления:', notification.type);
+            logger.warn('⚠️ WEBHOOK: Неизвестный тип уведомления:', {
+                type: notification.type,
+                event: notification.event,
+                fullNotification: notification
+            });
         }
         
         logger.info('✅ WEBHOOK: Обработка завершена успешно');
