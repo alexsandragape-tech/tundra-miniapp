@@ -1028,6 +1028,13 @@ async function createOrder(orderData) {
     orderCounter++;
     const orderId = orderCounter.toString();
     
+    logger.info('🔥 Создание заказа:', {
+        orderId,
+        userId: orderData.userId,
+        telegramUserId: orderData.telegramUserId,
+        customerName: orderData.customerName
+    });
+    
     const order = {
         id: orderId,
         status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
@@ -1045,7 +1052,7 @@ async function createOrder(orderData) {
     try {
         const dbOrder = {
             orderId: order.id,
-            userId: order.userId || order.telegramUserId || 'unknown',
+            userId: order.userId || orderData.userId || order.telegramUserId || 'unknown',
             userName: order.customerName || 'Клиент',
             phone: order.phone || '',
             deliveryZone: order.deliveryZone || 'moscow',
@@ -1298,27 +1305,39 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                     // Получаем данные заказа для создания записи в истории покупок
                     const order = await OrdersDB.getById(orderId);
                     if (order) {
-                        // Создаем запись в истории покупок
-                        await PurchaseHistoryDB.create({
-                            order_id: orderId,
+                        logger.info('🔍 WEBHOOK: Данные заказа из БД:', {
+                            order_id: order.order_id,
                             user_id: order.user_id,
-                            customer_name: order.user_name,
-                            phone: order.phone,
-                            total_amount: parseFloat(payment.amount.value),
-                            items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
-                            items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
-                            payment_id: payment.id,
-                            delivery_zone: order.delivery_zone,
-                            address_data: order.address // address уже строка JSON
+                            user_name: order.user_name,
+                            total_amount: order.total_amount
                         });
                         
-                        logger.info('✅ Заказ обновлен и добавлен в историю покупок');
-                        logger.debug('📊 Данные для истории покупок:', {
-                            orderId: orderId,
-                            userId: order.user_id,
-                            totalAmount: parseFloat(payment.amount.value),
-                            itemsCount: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length
+                        // Создаем запись в истории покупок
+                        logger.info('📝 WEBHOOK: Создаем запись в истории покупок:', {
+                            order_id: orderId,
+                            user_id: order.user_id,
+                            total_amount: parseFloat(payment.amount.value)
                         });
+                        
+                        // Проверяем, что user_id не 'unknown'
+                        if (order.user_id && order.user_id !== 'unknown') {
+                            const purchaseRecord = await PurchaseHistoryDB.create({
+                                order_id: orderId,
+                                user_id: order.user_id,
+                                customer_name: order.user_name,
+                                phone: order.phone,
+                                total_amount: parseFloat(payment.amount.value),
+                                items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
+                                items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
+                                payment_id: payment.id,
+                                delivery_zone: order.delivery_zone,
+                                address_data: order.address // address уже строка JSON
+                            });
+                            
+                            logger.info('✅ WEBHOOK: Заказ обновлен и добавлен в историю покупок:', purchaseRecord);
+                        } else {
+                            logger.warn('⚠️ WEBHOOK: user_id отсутствует или равен "unknown", пропускаем создание записи в истории покупок');
+                        }
                         
                         // Отправляем уведомление в Telegram (если настроен бот)
                         logger.debug('🔍 Проверка настроек Telegram в webhook:', {
@@ -1556,13 +1575,16 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 app.get('/api/purchases/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+        logger.info(`🔍 API: Запрос истории покупок для пользователя ${userId}`);
         
         // Загружаем историю покупок из БД
         const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        logger.info(`📊 API: Найдено ${purchases.length} покупок для пользователя ${userId}`);
         
         // Подсчитываем статистику лояльности
         const totalPurchases = purchases.length;
         const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+        logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
         let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
