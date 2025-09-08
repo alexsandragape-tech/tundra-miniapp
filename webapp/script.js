@@ -1783,9 +1783,9 @@ function hideWorkHours() {
 // Функция открытия поддержки
 function openSupport() {
     if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.openTelegramLink('https://t.me/nextleveluppp');
+        window.Telegram.WebApp.openTelegramLink('https://t.me/tundrasupport');
     } else {
-        window.open('https://t.me/nextleveluppp', '_blank');
+        window.open('https://t.me/tundrasupport', '_blank');
     }
 }
 
