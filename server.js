@@ -1724,6 +1724,37 @@ app.get('/api/check-webhook', async (req, res) => {
     }
 });
 
+// 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ WEBHOOK ЛОГОВ
+app.get('/api/webhook-logs', async (req, res) => {
+    try {
+        // Проверяем, есть ли записи в purchase_history
+        const purchases = await PurchaseHistoryDB.getByUserId('7303614654');
+        
+        // Проверяем, есть ли оплаченные заказы
+        const orders = await OrdersDB.getByUserId('7303614654');
+        const paidOrders = orders.filter(order => order.payment_status === 'paid' || order.status === 'completed');
+        
+        res.json({
+            ok: true,
+            webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
+            purchaseHistoryCount: purchases.length,
+            totalOrders: orders.length,
+            paidOrders: paidOrders.length,
+            paidOrdersList: paidOrders.map(order => ({
+                order_id: order.order_id,
+                payment_status: order.payment_status,
+                status: order.status,
+                total_amount: order.total_amount,
+                created_at: order.created_at
+            })),
+            message: purchases.length === 0 ? '❌ Webhook не работает! Записей в purchase_history нет.' : '✅ Webhook работает, записи есть.'
+        });
+    } catch (error) {
+        logger.error('❌ ПРОВЕРКА WEBHOOK ЛОГОВ: Ошибка:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔄 ENDPOINT ДЛЯ РУЧНОЙ СИНХРОНИЗАЦИИ ЛОЯЛЬНОСТИ
 app.post('/api/sync-loyalty/:userId', async (req, res) => {
     try {
