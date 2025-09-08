@@ -410,6 +410,7 @@ class PurchaseHistoryDB {
                 order_id,
                 customer_name,
                 phone,
+                amount,
                 amount as totalAmount,
                 items_count as itemsCount,
                 items_data,
