@@ -137,10 +137,10 @@ let paymentTimeLeft = 10 * 60; // 10 минут в секундах
 let currentOrderId = null;
 
 // 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
-const TEST_MODE = true; // Установите false для продакшена
+const TEST_MODE = false; // Установите false для продакшена
 const TEST_MIN_ORDER = 100; // Минимальная сумма для тестов
 const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
-const FORCE_DEMO_MODE = true; // Принудительный демо-режим (без реальных платежей)
+const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
 let paymentStatusChecker = null;
 
 // Функция получения минимальной суммы заказа
@@ -221,7 +221,7 @@ const categories = [
         desc: 'Сыровяленые деликатесы из оленины',
         icon: '🌭',
         imageUrl: 'images/categories/колбасы.jpg',
-        count: 8
+        count: 9
     },
     {
         id: 'pashtet',
@@ -387,6 +387,19 @@ let products = {
             nutrition: 'белок - 15 г, жир - 20 г, углеводы - 8 г',
             calories: '540 ккал/2266 кДж',
             storage: '180 суток'
+        },
+        {
+            id: 'test',
+            name: 'Тест',
+            price: 10,
+            unit: '/шт.',
+            maxQty: 100,
+            image: '🧪',
+            imageUrl: 'images/products/kolbasy/test.jpg',
+            composition: 'тестовый товар для проверки',
+            nutrition: 'тест',
+            calories: '10 ккал',
+            storage: '1 день'
         }
     ],
     'pashtet': [
@@ -1217,7 +1230,10 @@ function goBackFromProduct() {
 
 // Функция добавления товара в корзину
 function addToCart(categoryId, productId, quantity) {
-    // Временно убрана проверка времени работы
+    if (!isWorkingHours()) {
+        showNotification('К сожалению, сейчас мы не работаем. Заказы принимаются ежедневно с 10:00 до 21:00', 'warning');
+        return;
+    }
 
     const cartKey = `${categoryId}_${productId}`;
     const product = products[categoryId].find(p => p.id === productId);
@@ -1562,14 +1578,7 @@ async function showMyOrders() {
     showScreen('my-orders-screen');
     await loadUserOrders();
     
-    // 🔄 АВТООБНОВЛЕНИЕ СТАТУСА КАЖДЫЕ 30 СЕКУНД
-    if (window.orderStatusInterval) {
-        clearInterval(window.orderStatusInterval);
-    }
-    
-    window.orderStatusInterval = setInterval(async () => {
-        await loadUserOrders();
-    }, 30000); // 30 секунд
+    // Убрано автообновление - показываем только доставленные заказы
 }
 
 // Загрузка заказов пользователя
@@ -1627,22 +1636,25 @@ const ORDER_STATUS_TEXTS = {
     'cancelled': '🔴 Отменен'
 };
 
-// Создание элемента заказа
+// Создание элемента заказа (упрощенный вид)
 function createOrderItem(order) {
     const orderItem = document.createElement('div');
     orderItem.className = 'order-item';
     orderItem.onclick = () => showOrderDetails(order.order_id);
     
-    const address = typeof order.address === 'string' ? JSON.parse(order.address) : order.address;
-    const addressText = `${address?.street || ''}, ${address?.house || ''}`;
+    // Получаем состав заказа
+    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+    const itemsText = Array.isArray(items) && items.length > 0 
+        ? items.map(item => `${item.name} x${item.quantity}`).join(', ')
+        : 'Состав недоступен';
     
     orderItem.innerHTML = `
         <div class="order-header">
             <div class="order-date">${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
-            <div class="order-status ${order.status}">${ORDER_STATUS_TEXTS[order.status] || order.status}</div>
+            <div class="order-time">${new Date(order.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
         <div class="order-info">
-            <div>${addressText}</div>
+            <div class="order-composition">${itemsText}</div>
             <div class="order-amount">${order.total_amount}₽</div>
         </div>
     `;
@@ -1670,24 +1682,7 @@ async function showOrderDetails(orderId) {
                 displayOrderDetails(result.order);
                 showScreen('order-details-screen');
                 
-                // 🔄 АВТООБНОВЛЕНИЕ ДЕТАЛЕЙ ЗАКАЗА
-                if (window.orderDetailsInterval) {
-                    clearInterval(window.orderDetailsInterval);
-                }
-                
-                window.orderDetailsInterval = setInterval(async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/orders/${orderId}`);
-                        if (response.ok) {
-                            const result = await response.json();
-                            if (result.ok) {
-                                displayOrderDetails(result.order);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Ошибка автообновления деталей:', error);
-                    }
-                }, 30000); // 30 секунд
+                // Убрано автообновление - показываем только доставленные заказы
                 
             } else {
                 showNotification('Ошибка загрузки деталей заказа', 'error');
@@ -1719,15 +1714,10 @@ function displayOrderDetails(order) {
     
     content.innerHTML = `
         <div class="order-detail-section">
-            <div class="order-detail-title">📦 Статус заказа</div>
-            <div class="order-status-badge ${order.status}">${ORDER_STATUS_TEXTS[order.status] || order.status}</div>
-        </div>
-        
-        <div class="order-detail-section">
             <div class="order-detail-title">📋 Информация о заказе</div>
             <div><strong>Дата:</strong> ${new Date(order.created_at).toLocaleDateString('ru-RU')}</div>
+            <div><strong>Время:</strong> ${new Date(order.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
             <div><strong>Сумма:</strong> ${order.total_amount}₽</div>
-            <div><strong>Телефон:</strong> ${order.phone}</div>
         </div>
         
         <div class="order-detail-section">
@@ -1763,9 +1753,13 @@ function isWorkingHours() {
 // Функция обновления статуса работы
 function updateWorkStatus() {
     const statusEl = document.getElementById('work-status');
-    // Временно всегда показываем "Работаем"
-    statusEl.textContent = 'Работаем';
-    statusEl.style.color = '#27ae60';
+    if (isWorkingHours()) {
+        statusEl.textContent = 'Работаем';
+        statusEl.style.color = '#27ae60';
+    } else {
+        statusEl.textContent = 'Закрыто';
+        statusEl.style.color = '#e74c3c';
+    }
 }
 
 // Функция показа уведомлений
@@ -1979,7 +1973,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 comment: document.getElementById('comment').value.trim(),
                 cartItems: Object.values(cart).filter(i => i.quantity > 0),
                 totals: calculateCartTotal(),
-                forceDemoMode: FORCE_DEMO_MODE // Передаем флаг принудительного демо-режима
+                // Режим продакшена - без демо-режима
             };
 
             // Показываем индикатор загрузки
