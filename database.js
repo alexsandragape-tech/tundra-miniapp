@@ -464,6 +464,8 @@ class PurchaseHistoryDB {
 class AdminProductsDB {
     // Сохранить все товары
     static async saveAll(productsData) {
+        console.log('🔍 AdminProductsDB.saveAll: Начинаем сохранение товаров');
+        console.log('🔍 AdminProductsDB.saveAll: Данные:', Object.keys(productsData));
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
