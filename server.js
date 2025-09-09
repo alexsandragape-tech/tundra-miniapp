@@ -2596,10 +2596,13 @@ app.get('/api/products', async (req, res) => {
         
         console.log('🔍 API: Загружено товаров из БД:', Object.keys(allProducts).length);
         
-        // Если в БД нет товаров, используем данные из памяти
-        if (Object.keys(allProducts).length === 0 && adminProducts.size > 0) {
-            console.log('🔍 API: Используем данные из памяти (БД пуста)');
-            allProducts = Object.fromEntries(adminProducts);
+        // Если в БД нет товаров, инициализируем полным каталогом
+        if (Object.keys(allProducts).length === 0) {
+            console.log('🔍 API: БД пуста, инициализируем полным каталогом...');
+            const fullProducts = await loadFullProductCatalog();
+            await AdminProductsDB.saveAll(fullProducts);
+            allProducts = fullProducts;
+            console.log('✅ Полный каталог сохранен в БД для основного приложения');
         }
         
         // Фильтруем только доступные товары для клиентов
@@ -2615,6 +2618,13 @@ app.get('/api/products', async (req, res) => {
         }
         
         console.log(`🔍 API: Всего доступно товаров для клиентов: ${totalAvailable}`);
+        
+        // 🔍 ЛОГИРУЕМ СТАТУС ТОВАРОВ ДЛЯ ОТЛАДКИ
+        for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
+            const hiddenCount = categoryProducts.filter(p => p.available === false).length;
+            const availableCount = categoryProducts.filter(p => p.available !== false).length;
+            console.log(`🔍 API: ${categoryId}: ${availableCount} доступно, ${hiddenCount} скрыто`);
+        }
         
         res.json({ ok: true, products: productsObj });
         
