@@ -2646,11 +2646,8 @@ app.get('/admin', (req, res) => {
         }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html (кроме /admin)
+// SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
-    if (req.path === '/admin') {
-        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
-    }
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
