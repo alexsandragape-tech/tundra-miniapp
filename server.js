@@ -2646,16 +2646,23 @@ app.get('/admin', (req, res) => {
         }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html
+// SPA fallback - все остальные маршруты ведут на index.html (кроме /admin)
 app.get('*', (req, res) => {
+    if (req.path === '/admin') {
+        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
+    }
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
 // Запуск сервера с инициализацией БД
 async function startServer() {
     try {
+        console.log('🔄 Начинаем инициализацию сервера...');
+        
         // Инициализируем базу данных
+        console.log('🔄 Инициализируем базу данных...');
         await initializeDatabase();
+        console.log('✅ База данных инициализирована');
         
         // Инициализируем счетчик заказов из БД
         await initializeOrderCounter();
@@ -2758,10 +2765,11 @@ async function startServer() {
 
         // Запускаем сервер
         app.listen(PORT, async () => {
-            logger.info(`🚀 Сервер запущен на порту ${PORT}`);
-            logger.info(`📁 Статические файлы из: ${webRoot}`);
-            logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
-            logger.info(`🗄️ База данных подключена`);
+            console.log(`🚀 Сервер запущен на порту ${PORT}`);
+            console.log(`📁 Статические файлы из: ${webRoot}`);
+            console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+            console.log(`🗄️ База данных подключена`);
+            console.log(`🔐 Админ-панель: http://localhost:${PORT}/admin?password=TundraAdmin2024!`);
             
             // Проверяем настройки Telegram
             logger.info('🔍 Проверка настроек Telegram:');
