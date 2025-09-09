@@ -1,4 +1,4 @@
-// 🔧 ОПТИМИЗИРОВАННАЯ СИСТЕМА ЛОГИРОВАНИЯ
+// 🔧 СИСТЕМА ЛОГИРОВАНИЯ
 const LOG_LEVELS = {
     ERROR: 0,
     WARN: 1,
@@ -8,37 +8,11 @@ const LOG_LEVELS = {
 
 const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL || LOG_LEVELS.INFO;
 
-// Кэш для предотвращения дублирования логов
-const logCache = new Map();
-const LOG_CACHE_TTL = 5000; // 5 секунд
-
 function log(level, message, ...args) {
     if (level <= CURRENT_LOG_LEVEL) {
         const timestamp = new Date().toISOString();
         const levelNames = ['❌ ERROR', '⚠️ WARN', 'ℹ️ INFO', '🔍 DEBUG'];
-        
-        // Предотвращаем дублирование логов
-        const logKey = `${level}-${message}`;
-        const now = Date.now();
-        
-        if (logCache.has(logKey)) {
-            const lastLog = logCache.get(logKey);
-            if (now - lastLog < LOG_CACHE_TTL) {
-                return; // Пропускаем дублирующий лог
-            }
-        }
-        
-        logCache.set(logKey, now);
         console.log(`[${timestamp}] ${levelNames[level]} ${message}`, ...args);
-        
-        // Очищаем старые записи из кэша
-        if (logCache.size > 100) {
-            for (const [key, time] of logCache.entries()) {
-                if (now - time > LOG_CACHE_TTL) {
-                    logCache.delete(key);
-                }
-            }
-        }
     }
 }
 
@@ -62,35 +36,12 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 
-// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ И ПРОИЗВОДИТЕЛЬНОСТИ
+// Защита от DDoS только для API (УПРОЩЕННАЯ)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // максимум 100 запросов с одного IP
-    message: {
-        error: 'Слишком много запросов, попробуйте позже',
-        retryAfter: '15 минут'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Rate limiting для API endpoints
-const apiLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 минута
-    max: 30, // максимум 30 API запросов в минуту
-    message: {
-        error: 'API rate limit exceeded',
-        retryAfter: '1 минута'
-    }
-});
-
-// Rate limiting для webhook
-const webhookLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 минута
-    max: 50, // максимум 50 webhook запросов в минуту
-    message: {
-        error: 'Webhook rate limit exceeded'
-    }
+    max: 100, // 100 запросов
+    message: 'Слишком много запросов, попробуйте позже',
+    trustProxy: true
 });
 // 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
 class YooKassaAPI {
@@ -1200,18 +1151,9 @@ app.use(express.static(webRoot));
 
 // Применяем CORS и rate limiting только к API
 app.use('/api', cors(corsOptions));
-app.use('/api', apiLimiter);
+app.use('/api', limiter);
 app.use('/webhook', cors(corsOptions));
-app.use('/webhook', webhookLimiter);
-
-// Общий rate limiting для всех остальных запросов (кроме админ-панели)
-app.use((req, res, next) => {
-    // Исключаем админ-панель из rate limiting
-    if (req.path === '/admin') {
-        return next();
-    }
-    return limiter(req, res, next);
-});
+app.use('/webhook', limiter);
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -1978,14 +1920,9 @@ app.get('/api/purchases/:userId', async (req, res) => {
         const totalPurchases = purchases.length;
         const totalSpent = purchases.reduce((sum, purchase) => {
             const amount = purchase.totalAmount || purchase.amount || 0;
-            // Убираем избыточное логирование - только при ошибках
-            if (!purchase.totalAmount && !purchase.amount) {
-                logger.warn(`⚠️ API: Покупка ${purchase.order_id} без суммы: totalAmount=${purchase.totalAmount}, amount=${purchase.amount}`);
-            }
+            logger.info(`💰 API: Покупка ${purchase.order_id}: totalAmount=${purchase.totalAmount}, amount=${purchase.amount}, используем=${amount}`);
             return sum + amount;
         }, 0);
-        
-        // Логируем только итоговую статистику
         logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
@@ -2750,8 +2687,12 @@ app.get('/admin', (req, res) => {
         }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html (кроме /admin)
-app.get(/^\/(?!api|admin$).*/, (req, res) => {
+// SPA fallback - все остальные маршруты ведут на index.html
+app.get('*', (req, res) => {
+    // Исключаем API и админ-панель
+    if (req.path.startsWith('/api') || req.path === '/admin') {
+        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
+    }
     // Остальные маршруты ведут на основное приложение
     res.sendFile(path.join(webRoot, 'index.html'));
 });
@@ -2877,7 +2818,7 @@ async function startServer() {
             }
         }
         
-        // Обработчики ошибок вынесены в конец файла
+        // Обработчики ошибок настроены глобально
 
         // Запускаем сервер
         app.listen(PORT, async () => {
