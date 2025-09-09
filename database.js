@@ -18,35 +18,7 @@ const pool = new Pool({
     createRetryIntervalMillis: 200, // Повтор каждые 200мс
 });
 
-// 🚀 КЭШ ДЛЯ ОПТИМИЗАЦИИ ПРОИЗВОДИТЕЛЬНОСТИ
-const cache = new Map();
-const CACHE_TTL = 30000; // 30 секунд
-
-function getCached(key) {
-    const item = cache.get(key);
-    if (item && Date.now() - item.timestamp < CACHE_TTL) {
-        return item.data;
-    }
-    cache.delete(key);
-    return null;
-}
-
-function setCache(key, data) {
-    cache.set(key, {
-        data,
-        timestamp: Date.now()
-    });
-    
-    // Очищаем старые записи
-    if (cache.size > 100) {
-        const now = Date.now();
-        for (const [k, v] of cache.entries()) {
-            if (now - v.timestamp > CACHE_TTL) {
-                cache.delete(k);
-            }
-        }
-    }
-}
+// Кэш убран - возвращаемся к простой работе с БД
 
 // 🔄 ФУНКЦИЯ ДЛЯ ПОВТОРНЫХ ПОПЫТОК БД ОПЕРАЦИЙ
 async function retryDbOperation(operation, maxRetries = 3, delay = 1000) {
@@ -362,11 +334,6 @@ class PurchaseHistoryDB {
             RETURNING *
         `;
         const result = await pool.query(query, [userId, orderId, amount]);
-        
-        // Очищаем кэш для этого пользователя
-        const cacheKey = `purchases_${userId}`;
-        cache.delete(cacheKey);
-        
         return result.rows[0];
     }
     
@@ -443,16 +410,8 @@ class PurchaseHistoryDB {
         return result.rows[0];
     }
     
-    // 📋 ПОЛУЧИТЬ ВСЕ ПОКУПКИ ПОЛЬЗОВАТЕЛЯ (для API) - С КЭШИРОВАНИЕМ
+    // 📋 ПОЛУЧИТЬ ВСЕ ПОКУПКИ ПОЛЬЗОВАТЕЛЯ (для API)
     static async getByUserId(userId) {
-        const cacheKey = `purchases_${userId}`;
-        
-        // Проверяем кэш
-        const cached = getCached(cacheKey);
-        if (cached) {
-            return cached;
-        }
-        
         const query = `
             SELECT 
                 order_id,
@@ -473,8 +432,18 @@ class PurchaseHistoryDB {
         
         const result = await pool.query(query, [userId]);
         
+        // Логируем для диагностики
+        console.log(`🔍 PurchaseHistoryDB.getByUserId: Найдено ${result.rows.length} записей для пользователя ${userId}`);
+        if (result.rows.length > 0) {
+            console.log(`🔍 PurchaseHistoryDB.getByUserId: Первая запись:`, {
+                order_id: result.rows[0].order_id,
+                amount: result.rows[0].amount,
+                totalAmount: result.rows[0].totalAmount
+            });
+        }
+        
         // Парсим JSON данные
-        const purchases = result.rows.map(row => {
+        return result.rows.map(row => {
             try {
                 row.items = JSON.parse(row.items_data);
                 row.address = JSON.parse(row.address_data);
@@ -488,11 +457,6 @@ class PurchaseHistoryDB {
                 return row;
             }
         });
-        
-        // Кэшируем результат
-        setCache(cacheKey, purchases);
-        
-        return purchases;
     }
 }
 
