@@ -2750,8 +2750,8 @@ app.get('/admin', (req, res) => {
         }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html
-app.get(/^\/(?!api).*/, (req, res) => {
+// SPA fallback - все остальные маршруты ведут на index.html (кроме /admin)
+app.get(/^\/(?!api|admin).*/, (req, res) => {
     // Остальные маршруты ведут на основное приложение
     res.sendFile(path.join(webRoot, 'index.html'));
 });
