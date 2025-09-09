@@ -6,6 +6,12 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 console.log('🔍 admin-script.js загружен');
 console.log('🔍 API_BASE:', API_BASE);
 
+// Проверяем, что все функции определены
+console.log('🔍 Проверка функций:');
+console.log('🔍 toggleProductAvailability:', typeof toggleProductAvailability);
+console.log('🔍 saveProductsToServer:', typeof saveProductsToServer);
+console.log('🔍 renderProducts:', typeof renderProducts);
+
 // Глобальные переменные
 let products = {};
 let originalProducts = {};
@@ -60,22 +66,41 @@ async function loadProducts() {
 // Загрузка товаров с сервера
 async function loadProductsFromServer() {
     try {
+        console.log('🔍 ===== НАЧАЛО loadProductsFromServer =====');
         const password = getAdminPassword();
         if (!password) {
             console.log('⚠️ Пароль не найден, используем локальные данные');
             return false;
         }
         
+        console.log('🔍 Отправляем GET запрос на:', `${API_BASE}/api/admin/products`);
         const response = await fetch(`${API_BASE}/api/admin/products`, {
             headers: { 'X-Admin-Password': password }
         });
         
+        console.log('🔍 Ответ сервера:', response.status, response.statusText);
+        
         if (response.ok) {
             const result = await response.json();
+            console.log('🔍 Данные с сервера:', result);
+            
             if (result.ok && result.products) {
                 console.log('✅ Товары загружены с сервера для админ панели');
                 products = result.products;
                 originalProducts = JSON.parse(JSON.stringify(products));
+                
+                // Подсчитываем скрытые товары
+                let hiddenCount = 0;
+                for (const [categoryId, categoryProducts] of Object.entries(products)) {
+                    for (const product of categoryProducts) {
+                        if (product.available === false) {
+                            hiddenCount++;
+                            console.log(`🔍 Скрытый товар при загрузке: ${product.name} (${categoryId})`);
+                        }
+                    }
+                }
+                console.log(`🔍 Всего товаров: ${Object.values(products).flat().length}, скрыто: ${hiddenCount}`);
+                
                 return true;
             }
         }
@@ -867,7 +892,7 @@ function renderProductCard(categoryId, product) {
                 </div>
                 <div class="product-actions">
                     <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
-                            onclick="toggleProductAvailability('${categoryId}', '${product.id}')">
+                            onclick="console.log('🔍 КНОПКА НАЖАТА!'); toggleProductAvailability('${categoryId}', '${product.id}')">
                         ${isHidden ? '👁️ Показать' : '🙈 Скрыть'}
                     </button>
                     <button class="edit-btn" onclick="editProduct('${categoryId}', '${product.id}')">
@@ -908,7 +933,13 @@ function hasProductChanged(categoryId, product) {
 
 // Переключение доступности товара
 async function toggleProductAvailability(categoryId, productId) {
+    // Проверяем, что функция вызывается
+    if (typeof window !== 'undefined') {
+        window.toggleProductAvailability = toggleProductAvailability;
+    }
+    console.log('🔍 ===== НАЧАЛО toggleProductAvailability =====');
     console.log('🔍 toggleProductAvailability вызвана:', categoryId, productId);
+    console.log('🔍 Текущие products:', Object.keys(products));
     
     const product = products[categoryId].find(p => p.id === productId);
     if (!product) {
@@ -919,6 +950,8 @@ async function toggleProductAvailability(categoryId, productId) {
     console.log('🔍 Товар найден:', product.name, 'текущий статус:', product.available);
     
     product.available = !product.available;
+    console.log('🔍 Новый статус товара:', product.available);
+    
     markAsChanged();
     renderProducts();
     updateStats();
@@ -1101,10 +1134,27 @@ async function saveProductsToServer() {
         throw new Error('Пароль не найден');
     }
     
+    console.log('🔍 ===== НАЧАЛО saveProductsToServer =====');
     console.log('🔍 Отправляем данные на сервер:', Object.keys(products));
+    
+    // Подсчитываем скрытые товары для отладки
+    let hiddenCount = 0;
+    let availableCount = 0;
+    for (const [categoryId, categoryProducts] of Object.entries(products)) {
+        for (const product of categoryProducts) {
+            if (product.available === false) {
+                hiddenCount++;
+                console.log(`🔍 Скрытый товар: ${product.name} (${categoryId})`);
+            } else {
+                availableCount++;
+            }
+        }
+    }
+    console.log(`🔍 Всего товаров: ${availableCount + hiddenCount}, доступно: ${availableCount}, скрыто: ${hiddenCount}`);
     
     // API запрос к серверу
     try {
+        console.log('🔍 Отправляем PUT запрос на:', `${API_BASE}/api/admin/products`);
         const response = await fetch(`${API_BASE}/api/admin/products`, {
             method: 'PUT',
             headers: { 
@@ -1131,11 +1181,13 @@ async function saveProductsToServer() {
         
         // Сохраняем в localStorage как backup
         localStorage.setItem('admin_products', JSON.stringify(products));
+        console.log('✅ saveProductsToServer: Успешно сохранено на сервер и в localStorage');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения на сервер:', error);
         // Fallback - сохраняем локально
         localStorage.setItem('admin_products', JSON.stringify(products));
+        console.log('⚠️ saveProductsToServer: Fallback - сохранено только локально');
         throw error;
     }
 }
