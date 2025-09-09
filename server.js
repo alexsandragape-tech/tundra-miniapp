@@ -2547,8 +2547,11 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
 
 // 🔐 АДМИН ПАНЕЛЬ - ОТДЕЛЬНЫЙ МАРШРУТ
 app.get('/admin', (req, res) => {
+    console.log('🔍 Обработка запроса /admin');
     const adminPassword = config.ADMIN_PASSWORD;
     const providedPassword = req.query.password;
+    console.log('🔍 Пароль из конфига:', adminPassword);
+    console.log('🔍 Переданный пароль:', providedPassword);
     
     if (providedPassword !== adminPassword) {
         res.status(401).send(`
@@ -2648,6 +2651,11 @@ app.get('/admin', (req, res) => {
 
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
+    console.log('🔍 SPA fallback для пути:', req.path);
+    if (req.path === '/admin') {
+        console.log('❌ SPA fallback перехватывает /admin!');
+        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
+    }
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
