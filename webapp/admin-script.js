@@ -903,8 +903,15 @@ function hasProductChanged(categoryId, product) {
 
 // Переключение доступности товара
 async function toggleProductAvailability(categoryId, productId) {
+    console.log('🔍 toggleProductAvailability вызвана:', categoryId, productId);
+    
     const product = products[categoryId].find(p => p.id === productId);
-    if (!product) return;
+    if (!product) {
+        console.error('❌ Товар не найден:', categoryId, productId);
+        return;
+    }
+    
+    console.log('🔍 Товар найден:', product.name, 'текущий статус:', product.available);
     
     product.available = !product.available;
     markAsChanged();
@@ -913,6 +920,8 @@ async function toggleProductAvailability(categoryId, productId) {
     
     const status = product.available ? 'показан' : 'скрыт';
     showNotification(`Товар "${product.name}" ${status}`, 'info');
+    
+    console.log('🔍 Пытаемся сохранить на сервер...');
     
     // 🔥 АВТОМАТИЧЕСКИ СОХРАНЯЕМ НА СЕРВЕР
     try {
@@ -924,8 +933,10 @@ async function toggleProductAvailability(categoryId, productId) {
         hasUnsavedChanges = false;
         document.getElementById('save-btn').disabled = true;
         
+        console.log('✅ Товар успешно сохранен на сервере');
+        
     } catch (error) {
-        console.error('Ошибка сохранения:', error);
+        console.error('❌ Ошибка сохранения:', error);
         showNotification('Товар изменен локально, но не сохранен на сервере. Нажмите "Сохранить изменения"', 'warning');
     }
 }
@@ -954,12 +965,14 @@ function editProduct(categoryId, productId) {
 }
 
 // Сохранение изменений товара
-function saveProduct() {
+async function saveProduct() {
     if (!currentEditingProduct) return;
     
     const { categoryId, productId } = currentEditingProduct;
     const product = products[categoryId].find(p => p.id === productId);
     if (!product) return;
+    
+    console.log('🔍 saveProduct вызвана для:', categoryId, productId);
     
     // Получаем данные из формы
     product.name = document.getElementById('edit-name').value;
@@ -973,12 +986,32 @@ function saveProduct() {
     product.storage = document.getElementById('edit-storage').value;
     product.available = document.getElementById('edit-available').checked;
     
+    console.log('🔍 Товар обновлен:', product.name, 'цена:', product.price);
+    
     markAsChanged();
     closeEditModal();
     renderProducts();
     updateStats();
     
     showNotification(`Товар "${product.name}" обновлен`, 'success');
+    
+    // Автоматически сохраняем на сервер
+    try {
+        console.log('🔍 Пытаемся сохранить изменения товара на сервер...');
+        await saveProductsToServer();
+        showNotification(`Товар "${product.name}" сохранен на сервере!`, 'success');
+        
+        // Обновляем оригинальную копию
+        originalProducts = JSON.parse(JSON.stringify(products));
+        hasUnsavedChanges = false;
+        document.getElementById('save-btn').disabled = true;
+        
+        console.log('✅ Изменения товара успешно сохранены на сервере');
+        
+    } catch (error) {
+        console.error('❌ Ошибка сохранения изменений товара:', error);
+        showNotification('Изменения сохранены локально, но не на сервере. Нажмите "Сохранить изменения"', 'warning');
+    }
 }
 
 // Закрытие модального окна
@@ -1063,10 +1096,9 @@ async function saveProductsToServer() {
         throw new Error('Пароль не найден');
     }
     
-    // Пока сохраняем в localStorage для локального тестирования
-    localStorage.setItem('admin_products', JSON.stringify(products));
+    console.log('🔍 Отправляем данные на сервер:', Object.keys(products));
     
-    // API запрос к серверу (будет работать когда сервер запущен)
+    // API запрос к серверу
     try {
         const response = await fetch(`${API_BASE}/api/admin/products`, {
             method: 'PUT',
@@ -1077,17 +1109,29 @@ async function saveProductsToServer() {
             body: JSON.stringify({ products })
         });
         
+        console.log('🔍 Ответ сервера:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ Ошибка сервера:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const result = await response.json();
+        console.log('🔍 Результат сервера:', result);
+        
         if (!result.ok) {
             throw new Error(result.error || 'Ошибка сервера');
         }
+        
+        // Сохраняем в localStorage как backup
+        localStorage.setItem('admin_products', JSON.stringify(products));
+        
     } catch (error) {
-        console.warn('Сервер недоступен, сохраняем локально:', error.message);
+        console.error('❌ Ошибка сохранения на сервер:', error);
         // Fallback - сохраняем локально
+        localStorage.setItem('admin_products', JSON.stringify(products));
+        throw error;
     }
 }
 
