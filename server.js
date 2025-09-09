@@ -1113,10 +1113,100 @@ console.log('🔍 WebRoot путь:', webRoot);
 console.log('🔍 Существует ли admin.html:', require('fs').existsSync(path.join(webRoot, 'admin.html')));
 app.use(express.static(webRoot));
 
+// Логирование всех входящих запросов
+app.use((req, res, next) => {
+    console.log('🔍 ВХОДЯЩИЙ ЗАПРОС:', req.method, req.path);
+    next();
+});
+
 // CORS для всех запросов
 app.use(cors());
 
-// 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ
+// 🔧 API МАРШРУТЫ - ПЕРЕД ВСЕМИ ОСТАЛЬНЫМИ
+// Получение всех товаров для админ панели
+app.get('/api/admin/products', (req, res, next) => {
+    console.log('🔍 API GET /api/admin/products: МАРШРУТ ВЫЗВАН!');
+    console.log('🔍 Заголовки:', req.headers);
+    console.log('🔍 Query:', req.query);
+    next();
+}, requireAdminAuth, async (req, res) => {
+    try {
+        console.log('🔍 API GET /api/admin/products: ENDPOINT ВЫЗВАН!');
+        console.log('🔍 API: Загрузка товаров для админ-панели');
+        
+        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
+        let products = await AdminProductsDB.loadAll();
+        
+        console.log('🔍 API: Загружено товаров из БД:', Object.keys(products).length);
+        
+        // 🔄 ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ЕСЛИ БД ПОЛНОСТЬЮ ПУСТА (ПЕРВЫЙ ЗАПУСК)
+        if (Object.keys(products).length === 0) {
+            console.log('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
+            logger.info('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
+            
+            // Полный ассортимент товаров (все 49 товаров)
+            const fullProducts = await loadFullProductCatalog();
+            
+            // Сохраняем в БД ТОЛЬКО ОДИН РАЗ
+            try {
+                await AdminProductsDB.saveAll(fullProducts);
+                console.log('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
+                logger.info('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
+                products = fullProducts;
+                
+                // Заполняем локальный кэш
+                Object.entries(fullProducts).forEach(([categoryId, categoryProducts]) => {
+                    adminProducts.set(categoryId, categoryProducts);
+                });
+            } catch (error) {
+                console.error('❌ Ошибка сохранения полного каталога:', error);
+                logger.error('❌ Ошибка сохранения полного каталога:', error.message);
+                products = fullProducts; // Используем как fallback
+            }
+        } else {
+            // ✅ ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ДАННЫЕ ИЗ БД (с изменениями пользователя)
+            console.log('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
+            logger.info('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
+        }
+        
+        res.json({ ok: true, products });
+    } catch (error) {
+        logger.error('Ошибка получения товаров:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Обновление товаров через админ панель
+app.put('/api/admin/products', (req, res, next) => {
+    console.log('🔍 API PUT /api/admin/products: МАРШРУТ ВЫЗВАН!');
+    console.log('🔍 Заголовки:', req.headers);
+    console.log('🔍 Query:', req.query);
+    next();
+}, requireAdminAuth, validateAdminData, async (req, res) => {
+    try {
+        console.log('🔍 API PUT /api/admin/products: ENDPOINT ВЫЗВАН!');
+        console.log('🔍 API: Обновление товаров через админ панель - ENDPOINT ВЫЗВАН!');
+        console.log('🔍 API: Тело запроса:', req.body);
+        const { products } = req.body;
+        
+        // 🗄️ СОХРАНЯЕМ В БАЗУ ДАННЫХ
+        await AdminProductsDB.saveAll(products);
+        
+        // Обновляем локальный кэш для совместимости
+        adminProducts.clear();
+        Object.entries(products).forEach(([categoryId, categoryProducts]) => {
+            adminProducts.set(categoryId, categoryProducts);
+        });
+        
+        res.json({ ok: true, message: 'Товары обновлены успешно' });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка обновления товаров:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ (только для /admin, НЕ для /api/admin/*)
 app.get('/admin', (req, res) => {
     console.log('🔍 Обработка запроса /admin');
     console.log('🔍 Полный URL:', req.url);
@@ -2567,90 +2657,9 @@ app.get('/api/orders/user/:userId', async (req, res) => {
 });
 
 // Дублирующийся endpoint удален - используется основной /api/orders/:orderId выше
+// Дублирующийся API маршрут удален - используется основной выше
 
-// Получение всех товаров для админ панели
-app.get('/api/admin/products', (req, res, next) => {
-    console.log('🔍 API GET /api/admin/products: МАРШРУТ ВЫЗВАН!');
-    console.log('🔍 Заголовки:', req.headers);
-    console.log('🔍 Query:', req.query);
-    next();
-}, requireAdminAuth, async (req, res) => {
-    try {
-        console.log('🔍 API GET /api/admin/products: ENDPOINT ВЫЗВАН!');
-        console.log('🔍 API: Загрузка товаров для админ-панели');
-        
-        // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
-        let products = await AdminProductsDB.loadAll();
-        
-        console.log('🔍 API: Загружено товаров из БД:', Object.keys(products).length);
-        
-        // 🔄 ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ЕСЛИ БД ПОЛНОСТЬЮ ПУСТА (ПЕРВЫЙ ЗАПУСК)
-        if (Object.keys(products).length === 0) {
-            console.log('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
-            logger.info('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
-            
-            // Полный ассортимент товаров (все 49 товаров)
-            const fullProducts = await loadFullProductCatalog();
-            
-            // Сохраняем в БД ТОЛЬКО ОДИН РАЗ
-            try {
-                await AdminProductsDB.saveAll(fullProducts);
-                console.log('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
-                logger.info('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
-                products = fullProducts;
-                
-                // Заполняем локальный кэш
-                Object.entries(fullProducts).forEach(([categoryId, categoryProducts]) => {
-                    adminProducts.set(categoryId, categoryProducts);
-                });
-            } catch (error) {
-                console.error('❌ Ошибка сохранения полного каталога:', error);
-                logger.error('❌ Ошибка сохранения полного каталога:', error.message);
-                products = fullProducts; // Используем как fallback
-            }
-        } else {
-            // ✅ ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ДАННЫЕ ИЗ БД (с изменениями пользователя)
-            console.log('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
-            logger.info('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
-        }
-        
-        res.json({ ok: true, products });
-    } catch (error) {
-        logger.error('Ошибка получения товаров:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Обновление товаров через админ панель
-app.put('/api/admin/products', (req, res, next) => {
-    console.log('🔍 API PUT /api/admin/products: МАРШРУТ ВЫЗВАН!');
-    console.log('🔍 Заголовки:', req.headers);
-    console.log('🔍 Query:', req.query);
-    next();
-}, requireAdminAuth, validateAdminData, async (req, res) => {
-    try {
-        console.log('🔍 API PUT /api/admin/products: ENDPOINT ВЫЗВАН!');
-        console.log('🔍 API: Обновление товаров через админ панель - ENDPOINT ВЫЗВАН!');
-        console.log('🔍 API: Тело запроса:', req.body);
-        const { products } = req.body;
-        
-        // 🗄️ СОХРАНЯЕМ В БАЗУ ДАННЫХ
-        await AdminProductsDB.saveAll(products);
-        
-        // Обновляем локальный кэш для совместимости
-        adminProducts.clear();
-        Object.entries(products).forEach(([categoryId, categoryProducts]) => {
-            adminProducts.set(categoryId, categoryProducts);
-        });
-        
-        logger.info('🔧 Товары обновлены через админ панель и сохранены в БД');
-        res.json({ ok: true, message: 'Товары успешно обновлены и сохранены в базе данных' });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка обновления товаров:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
+// Дублирующийся PUT маршрут удален - используется основной выше
 
 // Переключение доступности товара
 app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, validateProductId, async (req, res) => {
