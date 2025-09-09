@@ -1116,6 +1116,118 @@ app.use(express.static(webRoot));
 // CORS для всех запросов
 app.use(cors());
 
+// 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ
+app.get('/admin', (req, res) => {
+    console.log('🔍 Обработка запроса /admin');
+    console.log('🔍 Полный URL:', req.url);
+    console.log('🔍 Query параметры:', req.query);
+    const adminPassword = config.ADMIN_PASSWORD;
+    const providedPassword = req.query.password;
+    console.log('🔍 Пароль из конфига:', adminPassword);
+    console.log('🔍 Переданный пароль:', providedPassword);
+    
+    if (providedPassword !== adminPassword) {
+        res.status(401).send(`
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в админ панель</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0b5c56, #2C5530);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .login-container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .login-icon { font-size: 60px; margin-bottom: 20px; }
+        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
+        .login-subtitle { opacity: 0.9; margin-bottom: 30px; }
+        .login-form { margin-top: 30px; }
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.9);
+            color: #2c3e50;
+        }
+        .login-btn {
+            width: 100%;
+            background: #D4A574;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .login-btn:hover {
+            background: #C1965F;
+            transform: translateY(-2px);
+        }
+        .login-error {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .login-help {
+            margin-top: 30px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-icon">🔐</div>
+        <h1 class="login-title">Админ панель</h1>
+        <p class="login-subtitle">Tundra Gourmet</p>
+        
+        <div class="login-error">
+            ❌ Неверный пароль. Попробуйте еще раз.
+        </div>
+        
+        <form class="login-form" method="GET">
+            <input type="password" name="password" class="login-input" placeholder="Введите пароль" required>
+            <button type="submit" class="login-btn">Войти</button>
+        </form>
+        
+        <div class="login-help">
+            💡 Если забыли пароль, обратитесь к разработчику
+        </div>
+    </div>
+</body>
+</html>
+        `);
+    } else {
+        res.sendFile(path.join(webRoot, 'admin.html'));
+    }
+});
+
 // Health check endpoints
 app.get('/health', (req, res) => {
     res.status(200).json({ 
@@ -2547,15 +2659,6 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
     }
 });
 
-// 🔐 АДМИН ПАНЕЛЬ - ОТДЕЛЬНЫЙ МАРШРУТ
-app.get('/admin', (req, res) => {
-    console.log('🔍 Обработка запроса /admin');
-    console.log('🔍 Полный URL:', req.url);
-    console.log('🔍 Query параметры:', req.query);
-    const adminPassword = config.ADMIN_PASSWORD;
-    const providedPassword = req.query.password;
-    console.log('🔍 Пароль из конфига:', adminPassword);
-    console.log('🔍 Переданный пароль:', providedPassword);
     
     if (providedPassword !== adminPassword) {
         res.status(401).send(`
@@ -2648,20 +2751,10 @@ app.get('/admin', (req, res) => {
 </body>
 </html>
             `);
-        } else {
-            res.sendFile(path.join(webRoot, 'admin.html'));
-        }
-});
 
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
     console.log('🔍 SPA fallback для пути:', req.path);
-    console.log('🔍 Полный URL в SPA fallback:', req.url);
-    if (req.path === '/admin') {
-        console.log('❌ SPA fallback перехватывает /admin!');
-        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
-    }
-    console.log('🔍 SPA fallback отправляет index.html');
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
@@ -2861,6 +2954,8 @@ setInterval(async () => {
         logger.error('❌ Ошибка очистки памяти:', error.message);
     }
 }, 60 * 60 * 1000); // Каждый час
+
+} // Закрытие функции startServer()
 
 // Graceful shutdown с очисткой ресурсов
 process.on('SIGTERM', () => {
