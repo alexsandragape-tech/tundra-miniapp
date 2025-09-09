@@ -954,11 +954,11 @@ let products = {
 // 🔄 ЗАГРУЗКА ТОВАРОВ С СЕРВЕРА
 async function loadProductsFromServer() {
     try {
-        console.log('🔄 Загружаем товары с сервера...');
         const response = await fetch(`${API_BASE}/api/products`);
         
         if (response.ok) {
             const result = await response.json();
+            
             if (result.ok && result.products) {
                 // Обновляем товары, если получили с сервера
                 const serverProducts = result.products;
@@ -969,7 +969,6 @@ async function loadProductsFromServer() {
                 );
                 
                 if (hasServerProducts) {
-                    console.log('✅ Товары загружены с сервера');
                     products = serverProducts;
                     updateCategoryCounts();
                     return true;
@@ -977,11 +976,9 @@ async function loadProductsFromServer() {
             }
         }
         
-        console.log('⚠️ Используем товары по умолчанию (fallback)');
         return false;
     } catch (error) {
         console.error('❌ Ошибка загрузки товаров с сервера:', error);
-        console.log('⚠️ Используем товары по умолчанию (fallback)');
         return false;
     }
 }
@@ -1590,11 +1587,17 @@ async function showMyOrders() {
 async function loadUserOrders() {
     try {
         const userId = getUserId();
+        console.log(`🔍 CLIENT: Загружаем заказы для пользователя ${userId}`);
+        
         const response = await fetch(`${API_BASE}/api/orders/user/${userId}`);
+        console.log(`🔍 CLIENT: Ответ сервера: ${response.status}`);
         
         if (response.ok) {
             const result = await response.json();
+            console.log(`🔍 CLIENT: Результат:`, result);
+            
             if (result.ok) {
+                console.log(`🔍 CLIENT: Заказов получено: ${result.orders.length}`);
                 displayOrders(result.orders);
             } else {
                 console.error('Ошибка загрузки заказов:', result.error);
@@ -1612,17 +1615,26 @@ async function loadUserOrders() {
 
 // Отображение списка заказов
 function displayOrders(orders) {
+    console.log(`🔍 CLIENT: displayOrders вызвана с ${orders.length} заказами`);
+    
     const ordersList = document.getElementById('orders-list');
     const emptyOrders = document.getElementById('empty-orders');
     
     if (orders.length === 0) {
+        console.log('🔍 CLIENT: Нет заказов, показываем пустой экран');
         showEmptyOrders();
         return;
     }
     
+    console.log('🔍 CLIENT: Отображаем заказы');
     ordersList.innerHTML = '';
     
-    orders.forEach(order => {
+    orders.forEach((order, index) => {
+        console.log(`🔍 CLIENT: Заказ ${index + 1}:`, {
+            order_id: order.order_id,
+            status: order.status,
+            total_amount: order.total_amount
+        });
         const orderItem = createOrderItem(order);
         ordersList.appendChild(orderItem);
     });
@@ -1653,9 +1665,9 @@ function createOrderItem(order) {
         ? items.map(item => `${item.name} x${item.quantity}`).join(', ')
         : 'Состав недоступен';
     
-    // Форматируем дату и сумму
-    const orderDate = order.created_at || order.createdAt;
-    const orderAmount = order.total_amount || order.totals?.total || 0;
+    // Форматируем дату и сумму (для purchase_history используем purchase_date и amount)
+    const orderDate = order.purchase_date || order.created_at || order.createdAt;
+    const orderAmount = order.amount || order.total_amount || order.totals?.total || 0;
     
     orderItem.innerHTML = `
         <div class="order-header">
