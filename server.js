@@ -1109,6 +1109,8 @@ function cancelOrderTimer(orderId) {
 
 // Настройка статических файлов (ПОЛНОСТЬЮ БЕЗ ОГРАНИЧЕНИЙ)
 const webRoot = path.join(__dirname, 'webapp');
+console.log('🔍 WebRoot путь:', webRoot);
+console.log('🔍 Существует ли admin.html:', require('fs').existsSync(path.join(webRoot, 'admin.html')));
 app.use(express.static(webRoot));
 
 // CORS для всех запросов
@@ -2548,6 +2550,8 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
 // 🔐 АДМИН ПАНЕЛЬ - ОТДЕЛЬНЫЙ МАРШРУТ
 app.get('/admin', (req, res) => {
     console.log('🔍 Обработка запроса /admin');
+    console.log('🔍 Полный URL:', req.url);
+    console.log('🔍 Query параметры:', req.query);
     const adminPassword = config.ADMIN_PASSWORD;
     const providedPassword = req.query.password;
     console.log('🔍 Пароль из конфига:', adminPassword);
@@ -2652,10 +2656,12 @@ app.get('/admin', (req, res) => {
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
     console.log('🔍 SPA fallback для пути:', req.path);
+    console.log('🔍 Полный URL в SPA fallback:', req.url);
     if (req.path === '/admin') {
         console.log('❌ SPA fallback перехватывает /admin!');
         return res.status(404).json({ error: 'Страница не найдена', path: req.path });
     }
+    console.log('🔍 SPA fallback отправляет index.html');
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
