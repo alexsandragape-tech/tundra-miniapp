@@ -1869,6 +1869,13 @@ async function syncPaidOrdersToLoyalty(userId) {
         // Получаем все заказы пользователя из БД
         const orders = await OrdersDB.getByUserId(userId);
         logger.info(`🔄 СИНХРОНИЗАЦИЯ: Найдено ${orders.length} заказов в БД`);
+        console.log(`🔍 СИНХРОНИЗАЦИЯ: Все заказы:`, orders.map(o => ({
+            order_id: o.order_id,
+            payment_status: o.payment_status,
+            status: o.status,
+            payment_id: o.payment_id,
+            total_amount: o.total_amount
+        })));
         
         // Получаем существующие записи в purchase_history
         const existingPurchases = await PurchaseHistoryDB.getByUserId(userId);
@@ -1879,13 +1886,26 @@ async function syncPaidOrdersToLoyalty(userId) {
         
         // Проверяем каждый заказ
         for (const order of orders) {
+            console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id}:`, {
+                payment_status: order.payment_status,
+                status: order.status,
+                total_amount: order.total_amount
+            });
+            
             // Пропускаем если уже есть в purchase_history
             if (existingOrderIds.has(order.order_id)) {
+                console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} уже есть в purchase_history`);
                 continue;
             }
             
-            // Проверяем статус оплаты
-            if (order.payment_status === 'paid' || order.status === 'completed') {
+            // Проверяем статус оплаты (расширенные условия)
+            const isPaid = order.payment_status === 'paid' || 
+                          order.status === 'completed' || 
+                          order.status === 'delivered' ||
+                          order.status === 'accepted' ||
+                          (order.payment_id && order.payment_id !== '');
+            
+            if (isPaid) {
                 logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ${order.order_id} в лояльность`);
                 logger.info(`🔄 СИНХРОНИЗАЦИЯ: Данные заказа:`, {
                     order_id: order.order_id,
@@ -1914,6 +1934,8 @@ async function syncPaidOrdersToLoyalty(userId) {
                 } catch (error) {
                     logger.error(`❌ СИНХРОНИЗАЦИЯ: Ошибка добавления заказа ${order.order_id}:`, error.message);
                 }
+            } else {
+                console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} не подходит - payment_status: ${order.payment_status}, status: ${order.status}, payment_id: ${order.payment_id}`);
             }
         }
         
@@ -2668,6 +2690,8 @@ app.get('/api/orders/user/:userId', async (req, res) => {
                 amount: orders[0].amount,
                 purchase_date: orders[0].purchase_date
             });
+        } else {
+            console.log(`🔍 API: НЕТ ЗАКАЗОВ в purchase_history для пользователя ${userId}`);
         }
         
         logger.info(`📋 Загружено ${orders.length} заказов для пользователя ${userId}`);
