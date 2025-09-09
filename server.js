@@ -2650,13 +2650,28 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
 app.get('/api/orders/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        const orders = await OrdersDB.getByUserId(userId);
+        console.log(`🔍 API: Загрузка заказов для пользователя ${userId}`);
         
-        // Показываем все заказы кроме отмененных
-        const activeOrders = orders.filter(order => order.status !== 'cancelled' && order.status !== 'expired');
+        // 🔄 СНАЧАЛА ПРОВЕРЯЕМ И СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ
+        await syncPaidOrdersToLoyalty(userId);
         
-        logger.info(`📋 Загружено ${activeOrders.length} активных заказов для пользователя ${userId}`);
-        res.json({ ok: true, orders: activeOrders });
+        // Используем PurchaseHistoryDB вместо OrdersDB для консистентности с профилем
+        const orders = await PurchaseHistoryDB.getByUserId(userId);
+        console.log(`🔍 API: Найдено ${orders.length} заказов в purchase_history`);
+        
+        // Показываем все заказы (в purchase_history уже только оплаченные)
+        console.log(`🔍 API: Заказов для отображения: ${orders.length}`);
+        
+        if (orders.length > 0) {
+            console.log(`🔍 API: Первый заказ:`, {
+                order_id: orders[0].order_id,
+                amount: orders[0].amount,
+                purchase_date: orders[0].purchase_date
+            });
+        }
+        
+        logger.info(`📋 Загружено ${orders.length} заказов для пользователя ${userId}`);
+        res.json({ ok: true, orders: orders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
         res.status(500).json({ ok: false, error: error.message });
