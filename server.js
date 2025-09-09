@@ -1204,8 +1204,14 @@ app.use('/api', apiLimiter);
 app.use('/webhook', cors(corsOptions));
 app.use('/webhook', webhookLimiter);
 
-// Общий rate limiting для всех остальных запросов
-app.use(limiter);
+// Общий rate limiting для всех остальных запросов (кроме админ-панели)
+app.use((req, res, next) => {
+    // Исключаем админ-панель из rate limiting
+    if (req.path === '/admin') {
+        return next();
+    }
+    return limiter(req, res, next);
+});
 
 // Health check endpoints
 app.get('/health', (req, res) => {
