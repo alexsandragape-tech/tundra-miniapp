@@ -868,12 +868,35 @@ function renderProducts() {
         
         container.innerHTML += categoryHtml;
     });
+    
+    // Добавляем обработчики событий для кнопок
+    setTimeout(() => {
+        const toggleButtons = document.querySelectorAll('.toggle-btn');
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const categoryId = this.getAttribute('data-category');
+                const productId = this.getAttribute('data-product');
+                console.log('🔍 КНОПКА НАЖАТА через addEventListener!');
+                console.log('🔍 categoryId:', categoryId);
+                console.log('🔍 productId:', productId);
+                toggleProductAvailability(categoryId, productId);
+            });
+        });
+        console.log(`🔍 Добавлено ${toggleButtons.length} обработчиков событий для кнопок`);
+    }, 100);
 }
 
 // Отображение карточки товара
 function renderProductCard(categoryId, product) {
     const isHidden = product.available === false;
     const isModified = hasProductChanged(categoryId, product);
+    
+    console.log(`🔍 renderProductCard: ${product.name} (${product.id}), available: ${product.available}, isHidden: ${isHidden}`);
+    
+    // Экранируем специальные символы для JavaScript
+    const safeCategoryId = categoryId.replace(/'/g, "\\'");
+    const safeProductId = product.id.replace(/'/g, "\\'");
     
     return `
         <div class="product-card ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}" 
@@ -892,10 +915,12 @@ function renderProductCard(categoryId, product) {
                 </div>
                 <div class="product-actions">
                     <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
-                            onclick="console.log('🔍 КНОПКА НАЖАТА!'); toggleProductAvailability('${categoryId}', '${product.id}')">
+                            data-category="${safeCategoryId}" 
+                            data-product="${safeProductId}"
+                            onclick="console.log('🔍 КНОПКА НАЖАТА!'); console.log('🔍 categoryId:', '${safeCategoryId}'); console.log('🔍 productId:', '${safeProductId}'); toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
                         ${isHidden ? '👁️ Показать' : '🙈 Скрыть'}
                     </button>
-                    <button class="edit-btn" onclick="editProduct('${categoryId}', '${product.id}')">
+                    <button class="edit-btn" onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
                         ✏️ Изменить
                     </button>
                 </div>
