@@ -2360,7 +2360,9 @@ ${order.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price
 
 // 🔧 MIDDLEWARE ДЛЯ ЗАЩИТЫ АДМИН API
 function requireAdminAuth(req, res, next) {
-    console.log('🔍 requireAdminAuth: Проверка авторизации');
+    console.log('🔍 requireAdminAuth: Проверка авторизации - MIDDLEWARE ВЫЗВАН!');
+    console.log('🔍 requireAdminAuth: URL:', req.url);
+    console.log('🔍 requireAdminAuth: Метод:', req.method);
     console.log('🔍 requireAdminAuth: Заголовки:', req.headers['x-admin-password']);
     console.log('🔍 requireAdminAuth: Query:', req.query.password);
     const providedPassword = req.headers['x-admin-password'] || req.query.password;
@@ -2497,26 +2499,37 @@ function validateProductId(req, res, next) {
 // Получение товаров для основного приложения (публичный API)
 app.get('/api/products', async (req, res) => {
     try {
+        console.log('🔍 API: Загрузка товаров для основного приложения');
+        
         // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
         let allProducts = await AdminProductsDB.loadAll();
         
+        console.log('🔍 API: Загружено товаров из БД:', Object.keys(allProducts).length);
+        
         // Если в БД нет товаров, используем данные из памяти
         if (Object.keys(allProducts).length === 0 && adminProducts.size > 0) {
+            console.log('🔍 API: Используем данные из памяти (БД пуста)');
             allProducts = Object.fromEntries(adminProducts);
         }
         
         // Фильтруем только доступные товары для клиентов
         const productsObj = {};
+        let totalAvailable = 0;
         for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
             const availableProducts = categoryProducts.filter(product => product.available !== false);
             if (availableProducts.length > 0) {
                 productsObj[categoryId] = availableProducts;
+                totalAvailable += availableProducts.length;
             }
+            console.log(`🔍 API: Категория ${categoryId}: ${availableProducts.length}/${categoryProducts.length} доступно`);
         }
+        
+        console.log(`🔍 API: Всего доступно товаров для клиентов: ${totalAvailable}`);
         
         res.json({ ok: true, products: productsObj });
         
     } catch (error) {
+        console.error('❌ Ошибка получения товаров:', error);
         logger.error('❌ Ошибка получения товаров:', error.message);
         res.status(500).json({ ok: false, error: error.message });
     }
@@ -2558,11 +2571,16 @@ app.get('/api/orders/user/:userId', async (req, res) => {
 // Получение всех товаров для админ панели
 app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     try {
+        console.log('🔍 API: Загрузка товаров для админ-панели');
+        
         // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
         let products = await AdminProductsDB.loadAll();
         
+        console.log('🔍 API: Загружено товаров из БД:', Object.keys(products).length);
+        
         // 🔄 ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ЕСЛИ БД ПОЛНОСТЬЮ ПУСТА (ПЕРВЫЙ ЗАПУСК)
         if (Object.keys(products).length === 0) {
+            console.log('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
             logger.info('🔄 БД пуста, инициализируем полным ассортиментом товаров...');
             
             // Полный ассортимент товаров (все 49 товаров)
@@ -2571,6 +2589,7 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
             // Сохраняем в БД ТОЛЬКО ОДИН РАЗ
             try {
                 await AdminProductsDB.saveAll(fullProducts);
+                console.log('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
                 logger.info('✅ Полный каталог товаров сохранен в БД ПЕРВЫЙ РАЗ');
                 products = fullProducts;
                 
@@ -2579,11 +2598,13 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
                     adminProducts.set(categoryId, categoryProducts);
                 });
             } catch (error) {
+                console.error('❌ Ошибка сохранения полного каталога:', error);
                 logger.error('❌ Ошибка сохранения полного каталога:', error.message);
                 products = fullProducts; // Используем как fallback
             }
         } else {
             // ✅ ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ДАННЫЕ ИЗ БД (с изменениями пользователя)
+            console.log('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
             logger.info('✅ Загружены сохраненные товары из БД с пользовательскими изменениями');
         }
         
@@ -2597,7 +2618,7 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 // Обновление товаров через админ панель
 app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, res) => {
     try {
-        console.log('🔍 API: Обновление товаров через админ панель');
+        console.log('🔍 API: Обновление товаров через админ панель - ENDPOINT ВЫЗВАН!');
         console.log('🔍 API: Тело запроса:', req.body);
         const { products } = req.body;
         
@@ -2668,8 +2689,16 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
     }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html
+// SPA fallback - только для статических страниц (НЕ для API)
 app.get('*', (req, res) => {
+    // Исключаем API маршруты
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ 
+            error: 'API endpoint не найден', 
+            path: req.path,
+            timestamp: new Date().toISOString()
+        });
+    }
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
@@ -2831,11 +2860,7 @@ startServer();
             `);
 */
 
-// SPA fallback - все остальные маршруты ведут на index.html
-app.get('*', (req, res) => {
-    console.log('🔍 SPA fallback для пути:', req.path);
-    res.sendFile(path.join(webRoot, 'index.html'));
-});
+// Второй SPA fallback удален - дублирует первый
 
 // Запуск сервера с инициализацией БД
 async function startServer() {
