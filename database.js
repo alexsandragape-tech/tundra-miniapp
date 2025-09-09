@@ -466,28 +466,42 @@ class AdminProductsDB {
     static async saveAll(productsData) {
         console.log('🔍 AdminProductsDB.saveAll: Начинаем сохранение товаров');
         console.log('🔍 AdminProductsDB.saveAll: Данные:', Object.keys(productsData));
+        
+        // Подсчитываем общее количество товаров
+        let totalProducts = 0;
+        for (const [categoryId, products] of Object.entries(productsData)) {
+            totalProducts += products.length;
+            console.log(`🔍 Категория ${categoryId}: ${products.length} товаров`);
+        }
+        console.log(`🔍 Всего товаров для сохранения: ${totalProducts}`);
+        
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
             
             // Очищаем старые данные
+            console.log('🔍 Очищаем старые данные из admin_products');
             await client.query('DELETE FROM admin_products');
             
             // Добавляем новые
+            let savedCount = 0;
             for (const [categoryId, products] of Object.entries(productsData)) {
                 for (const product of products) {
+                    console.log(`🔍 Сохраняем товар: ${product.name} (${product.id}), available: ${product.available}`);
                     await client.query(
                         `INSERT INTO admin_products (category_id, product_id, product_data, is_available) 
                          VALUES ($1, $2, $3, $4)`,
                         [categoryId, product.id, JSON.stringify(product), product.available !== false]
                     );
+                    savedCount++;
                 }
             }
             
             await client.query('COMMIT');
-            console.log('✅ Товары админки сохранены в БД');
+            console.log(`✅ Товары админки сохранены в БД: ${savedCount} товаров`);
             
         } catch (error) {
+            console.error('❌ Ошибка сохранения товаров:', error);
             await client.query('ROLLBACK');
             throw error;
         } finally {
@@ -497,8 +511,11 @@ class AdminProductsDB {
     
     // Загрузить все товары
     static async loadAll() {
+        console.log('🔍 AdminProductsDB.loadAll: Загружаем товары из БД');
         const query = 'SELECT * FROM admin_products ORDER BY category_id, product_id';
         const result = await pool.query(query);
+        
+        console.log(`🔍 Найдено записей в БД: ${result.rows.length}`);
         
         const products = {};
         for (const row of result.rows) {
@@ -519,10 +536,16 @@ class AdminProductsDB {
                 
                 productData.available = row.is_available;
                 products[row.category_id].push(productData);
+                console.log(`🔍 Загружен товар: ${productData.name} (${row.product_id}), available: ${row.is_available}`);
             } catch (error) {
                 console.error('❌ Ошибка парсинга товара:', error, 'Данные:', row.product_data);
                 continue;
             }
+        }
+        
+        console.log(`🔍 Загружено категорий: ${Object.keys(products).length}`);
+        for (const [categoryId, categoryProducts] of Object.entries(products)) {
+            console.log(`🔍 Категория ${categoryId}: ${categoryProducts.length} товаров`);
         }
         
         return products;
