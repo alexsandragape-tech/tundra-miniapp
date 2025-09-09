@@ -2360,16 +2360,21 @@ ${order.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price
 
 // 🔧 MIDDLEWARE ДЛЯ ЗАЩИТЫ АДМИН API
 function requireAdminAuth(req, res, next) {
+    console.log('🔍 requireAdminAuth: Проверка авторизации');
+    console.log('🔍 requireAdminAuth: Заголовки:', req.headers['x-admin-password']);
+    console.log('🔍 requireAdminAuth: Query:', req.query.password);
     const providedPassword = req.headers['x-admin-password'] || req.query.password;
     const adminPassword = config.ADMIN_PASSWORD;
     
     if (providedPassword !== adminPassword) {
+        console.log('❌ requireAdminAuth: Неверный пароль');
         return res.status(401).json({ 
             ok: false, 
             error: 'Unauthorized. Admin password required.' 
         });
     }
     
+    console.log('✅ requireAdminAuth: Авторизация успешна');
     next();
 }
 
@@ -2592,6 +2597,8 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 // Обновление товаров через админ панель
 app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, res) => {
     try {
+        console.log('🔍 API: Обновление товаров через админ панель');
+        console.log('🔍 API: Тело запроса:', req.body);
         const { products } = req.body;
         
         // 🗄️ СОХРАНЯЕМ В БАЗУ ДАННЫХ
@@ -2615,6 +2622,8 @@ app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, 
 // Переключение доступности товара
 app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth, validateProductId, async (req, res) => {
     try {
+        console.log('🔍 API: Переключение товара');
+        console.log('🔍 API: Параметры:', req.params);
         const { categoryId, productId } = req.params;
         
         // 🗄️ ЗАГРУЖАЕМ ВСЕ ТОВАРЫ ИЗ БД
