@@ -2569,8 +2569,14 @@ app.get('/api/orders/user/:userId', async (req, res) => {
 // Дублирующийся endpoint удален - используется основной /api/orders/:orderId выше
 
 // Получение всех товаров для админ панели
-app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
+app.get('/api/admin/products', (req, res, next) => {
+    console.log('🔍 API GET /api/admin/products: МАРШРУТ ВЫЗВАН!');
+    console.log('🔍 Заголовки:', req.headers);
+    console.log('🔍 Query:', req.query);
+    next();
+}, requireAdminAuth, async (req, res) => {
     try {
+        console.log('🔍 API GET /api/admin/products: ENDPOINT ВЫЗВАН!');
         console.log('🔍 API: Загрузка товаров для админ-панели');
         
         // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
@@ -2616,8 +2622,14 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 });
 
 // Обновление товаров через админ панель
-app.put('/api/admin/products', requireAdminAuth, validateAdminData, async (req, res) => {
+app.put('/api/admin/products', (req, res, next) => {
+    console.log('🔍 API PUT /api/admin/products: МАРШРУТ ВЫЗВАН!');
+    console.log('🔍 Заголовки:', req.headers);
+    console.log('🔍 Query:', req.query);
+    next();
+}, requireAdminAuth, validateAdminData, async (req, res) => {
     try {
+        console.log('🔍 API PUT /api/admin/products: ENDPOINT ВЫЗВАН!');
         console.log('🔍 API: Обновление товаров через админ панель - ENDPOINT ВЫЗВАН!');
         console.log('🔍 API: Тело запроса:', req.body);
         const { products } = req.body;
@@ -2691,14 +2703,17 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
 
 // SPA fallback - только для статических страниц (НЕ для API)
 app.get('*', (req, res) => {
-    // Исключаем API маршруты
+    // Исключаем API маршруты - они должны быть обработаны выше
     if (req.path.startsWith('/api/')) {
+        console.log('🔍 SPA fallback: API запрос не должен попадать сюда:', req.path);
         return res.status(404).json({ 
             error: 'API endpoint не найден', 
             path: req.path,
             timestamp: new Date().toISOString()
         });
     }
+    
+    console.log('🔍 SPA fallback: Обрабатываем статический запрос:', req.path);
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
