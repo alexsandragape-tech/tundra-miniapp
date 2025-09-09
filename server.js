@@ -1115,7 +1115,9 @@ app.use(express.static(webRoot));
 
 // Логирование всех входящих запросов
 app.use((req, res, next) => {
-    console.log('🔍 ВХОДЯЩИЙ ЗАПРОС:', req.method, req.path);
+    if (req.path.startsWith('/api/')) {
+        console.log('🔍 API:', req.method, req.path);
+    }
     next();
 });
 
@@ -1124,12 +1126,7 @@ app.use(cors());
 
 // 🔧 API МАРШРУТЫ - ПЕРЕД ВСЕМИ ОСТАЛЬНЫМИ
 // Получение всех товаров для админ панели
-app.get('/api/admin/products', (req, res, next) => {
-    console.log('🔍 API GET /api/admin/products: МАРШРУТ ВЫЗВАН!');
-    console.log('🔍 Заголовки:', req.headers);
-    console.log('🔍 Query:', req.query);
-    next();
-}, requireAdminAuth, async (req, res) => {
+app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     // Принудительно отключаем кэширование
     res.set({
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -1228,15 +1225,11 @@ app.get('/api/products', async (req, res) => {
         // 🗄️ ЗАГРУЖАЕМ ИЗ БАЗЫ ДАННЫХ
         let allProducts = await AdminProductsDB.loadAll();
         
-        console.log('🔍 API: Загружено товаров из БД:', Object.keys(allProducts).length);
-        
         // Если в БД нет товаров, инициализируем полным каталогом
         if (Object.keys(allProducts).length === 0) {
-            console.log('🔍 API: БД пуста, инициализируем полным каталогом...');
             const fullProducts = await loadFullProductCatalog();
             await AdminProductsDB.saveAll(fullProducts);
             allProducts = fullProducts;
-            console.log('✅ Полный каталог сохранен в БД для основного приложения');
         }
         
         // Фильтруем только доступные товары для клиентов
@@ -1248,17 +1241,9 @@ app.get('/api/products', async (req, res) => {
                 productsObj[categoryId] = availableProducts;
                 totalAvailable += availableProducts.length;
             }
-            console.log(`🔍 API: Категория ${categoryId}: ${availableProducts.length}/${categoryProducts.length} доступно`);
         }
         
-        console.log(`🔍 API: Всего доступно товаров для клиентов: ${totalAvailable}`);
-        
-        // 🔍 ЛОГИРУЕМ СТАТУС ТОВАРОВ ДЛЯ ОТЛАДКИ
-        for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
-            const hiddenCount = categoryProducts.filter(p => p.available === false).length;
-            const availableCount = categoryProducts.filter(p => p.available !== false).length;
-            console.log(`🔍 API: ${categoryId}: ${availableCount} доступно, ${hiddenCount} скрыто`);
-        }
+        console.log(`📦 API: Загружено ${totalAvailable} товаров для клиентов`);
         
         res.json({ ok: true, products: productsObj });
         
