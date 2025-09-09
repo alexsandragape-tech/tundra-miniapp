@@ -2643,17 +2643,13 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
     }
 });
 
-// SPA fallback - все остальные маршруты ведут на index.html
-app.get(/^\/(?!api).*/, (req, res) => {
-    const requestedPath = req.path;
+// 🔐 АДМИН ПАНЕЛЬ - ОТДЕЛЬНЫЙ МАРШРУТ
+app.get('/admin', (req, res) => {
+    const adminPassword = config.ADMIN_PASSWORD;
+    const providedPassword = req.query.password;
     
-    // Если запрашивается admin.html, проверяем пароль
-    if (requestedPath === '/admin' || requestedPath === '/admin.html') {
-        const adminPassword = config.ADMIN_PASSWORD;
-        const providedPassword = req.query.password;
-        
-        if (providedPassword !== adminPassword) {
-            res.status(401).send(`
+    if (providedPassword !== adminPassword) {
+        res.status(401).send(`
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -2743,13 +2739,13 @@ app.get(/^\/(?!api).*/, (req, res) => {
 </body>
 </html>
             `);
-            return;
+        } else {
+            res.sendFile(path.join(webRoot, 'admin.html'));
         }
-        
-        res.sendFile(path.join(webRoot, 'admin.html'));
-        return;
-    }
-    
+});
+
+// SPA fallback - все остальные маршруты ведут на index.html
+app.get(/^\/(?!api).*/, (req, res) => {
     // Остальные маршруты ведут на основное приложение
     res.sendFile(path.join(webRoot, 'index.html'));
 });
