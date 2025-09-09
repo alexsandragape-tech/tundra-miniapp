@@ -3,6 +3,9 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
     ? 'http://localhost:3000' 
     : 'https://tundra-miniapp-production.up.railway.app';
 
+console.log('🔍 admin-script.js загружен');
+console.log('🔍 API_BASE:', API_BASE);
+
 // Глобальные переменные
 let products = {};
 let originalProducts = {};
@@ -21,6 +24,7 @@ function getAdminPassword() {
 
 // Инициализация админ панели
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔍 DOM загружен, инициализируем админ-панель');
     loadProducts();
     
     // Обработчик закрытия модального окна при клике вне его
@@ -799,6 +803,7 @@ async function loadProductsFromClient() {
 
 // Отображение товаров
 function renderProducts() {
+    console.log('🔍 renderProducts: Начинаем отрисовку товаров');
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
     
