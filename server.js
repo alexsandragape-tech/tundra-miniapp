@@ -2659,44 +2659,113 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
     }
 });
 
+// SPA fallback - все остальные маршруты ведут на index.html
+app.get('*', (req, res) => {
+    res.sendFile(path.join(webRoot, 'index.html'));
+});
+
+// Запуск сервера с инициализацией БД
+async function startServer() {
+    try {
+        console.log('🔄 Начинаем инициализацию сервера...');
+        
+        // Инициализируем базу данных
+        console.log('🔄 Инициализируем базу данных...');
+        await initializeDatabase();
+        console.log('✅ База данных инициализирована');
+        
+        // Инициализируем счетчик заказов из БД
+        await initializeOrderCounter();
+        
+        // Инициализируем ЮKassa
+        await initializeYooKassa();
+        
+        // Загружаем товары из БД если есть
+        try {
+            const dbProducts = await AdminProductsDB.loadAll();
+            if (Object.keys(dbProducts).length > 0) {
+                logger.info('✅ Товары загружены из базы данных');
+                // Преобразуем в Map для совместимости с текущим кодом
+                adminProducts.clear();
+                for (const [categoryId, products] of Object.entries(dbProducts)) {
+                    adminProducts.set(categoryId, products);
+                }
+            }
+        } catch (error) {
+            logger.warn('⚠️ Товары из БД не загружены, используем fallback');
+        }
+        
+        // Запускаем сервер
+        app.listen(PORT, async () => {
+            console.log(`🚀 Сервер запущен на порту ${PORT}`);
+            console.log(`📁 Статические файлы из: ${webRoot}`);
+            console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+            console.log(`🗄️ База данных подключена`);
+            console.log(`🔐 Админ-панель: http://localhost:${PORT}/admin?password=TundraAdmin2024!`);
+            
+            // Проверяем настройки Telegram
+            logger.info('🔍 Проверка настроек Telegram:');
+            logger.info(`   Токен бота: ${config.TELEGRAM_BOT_TOKEN ? '✅ Настроен' : '❌ Не настроен'}`);
+            logger.info(`   Chat ID: ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
+            
+            if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+                logger.info('✅ Telegram настроен полностью');
+            } else {
+                logger.warn('⚠️ Telegram не настроен полностью');
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка запуска сервера:', error.message);
+        process.exit(1);
+    }
+}
+
+// Функция очистки ресурсов
+function cleanup() {
+    logger.info('🧹 Очистка ресурсов...');
     
-    if (providedPassword !== adminPassword) {
-        res.status(401).send(`
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход в админ панель</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0b5c56, #2C5530);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-        .login-container {
-            background: rgba(255,255,255,0.1);
-            padding: 40px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-        .login-icon { font-size: 60px; margin-bottom: 20px; }
-        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
-        .login-subtitle { opacity: 0.9; margin-bottom: 30px; }
-        .login-form { margin-top: 30px; }
-        .login-input {
-            width: 100%;
-            padding: 15px;
-            border: none;
+    // Очищаем все таймеры заказов
+    let clearedTimers = 0;
+    for (const [orderId, timer] of orderTimers.entries()) {
+        clearTimeout(timer);
+        clearedTimers++;
+    }
+    orderTimers.clear();
+    
+    if (clearedTimers > 0) {
+        logger.info(`🗑️ Очищено ${clearedTimers} таймеров заказов`);
+    }
+    
+    logger.info('✅ Ресурсы очищены');
+}
+
+// Graceful shutdown с очисткой ресурсов
+process.on('SIGTERM', () => {
+    logger.info('🛑 Получен сигнал SIGTERM, завершаем работу...');
+    cleanup();
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    logger.info('🛑 Получен сигнал SIGINT, завершаем работу...');
+    cleanup();
+    process.exit(0);
+});
+
+// Обработчики ошибок
+process.on('uncaughtException', (error) => {
+    console.error('💥 Неперехваченная ошибка:', error.message);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 Неперехваченное отклонение промиса:', reason);
+});
+
+// Запускаем сервер
+startServer();
+
+/*
             border-radius: 12px;
             font-size: 16px;
             margin-bottom: 20px;
@@ -2732,7 +2801,7 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
         <div class="login-title">Админ панель</div>
         <div class="login-subtitle">Tundra Gourmet</div>
         
-        ${providedPassword ? '<div class="error-msg">❌ Неверный пароль</div>' : ''}
+        <div class="error-msg">❌ Неверный пароль</div>
         
         <form class="login-form" method="GET">
             <input type="password" 
@@ -2751,6 +2820,7 @@ app.patch('/api/admin/products/:categoryId/:productId/toggle', requireAdminAuth,
 </body>
 </html>
             `);
+*/
 
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
@@ -2955,7 +3025,6 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000); // Каждый час
 
-} // Закрытие функции startServer()
 
 // Graceful shutdown с очисткой ресурсов
 process.on('SIGTERM', () => {
