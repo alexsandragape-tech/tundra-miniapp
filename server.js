@@ -1,30 +1,12 @@
-// 🔧 СИСТЕМА ЛОГИРОВАНИЯ
-const LOG_LEVELS = {
-    ERROR: 0,
-    WARN: 1,
-    INFO: 2,
-    DEBUG: 3
-};
-
-const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL || LOG_LEVELS.INFO;
-
-function log(level, message, ...args) {
-    if (level <= CURRENT_LOG_LEVEL) {
-        const timestamp = new Date().toISOString();
-        const levelNames = ['❌ ERROR', '⚠️ WARN', 'ℹ️ INFO', '🔍 DEBUG'];
-        console.log(`[${timestamp}] ${levelNames[level]} ${message}`, ...args);
-    }
-}
-
-// Алиасы для удобства
+// Простое логирование
 const logger = {
-    error: (msg, ...args) => log(LOG_LEVELS.ERROR, msg, ...args),
-    warn: (msg, ...args) => log(LOG_LEVELS.WARN, msg, ...args),
-    info: (msg, ...args) => log(LOG_LEVELS.INFO, msg, ...args),
-    debug: (msg, ...args) => log(LOG_LEVELS.DEBUG, msg, ...args)
+    error: (msg, ...args) => console.error('❌', msg, ...args),
+    warn: (msg, ...args) => console.warn('⚠️', msg, ...args),
+    info: (msg, ...args) => console.log('ℹ️', msg, ...args),
+    debug: (msg, ...args) => console.log('🔍', msg, ...args)
 };
 
-logger.info('🚀 СТАРТ СЕРВЕРА - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ!');
+logger.info('🚀 СТАРТ СЕРВЕРА');
 logger.info('⏰ Время запуска:', new Date().toISOString());
 
 require('dotenv').config();
@@ -33,16 +15,6 @@ const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const helmet = require('helmet');
-
-// Защита от DDoS только для API (УПРОЩЕННАЯ)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // 100 запросов
-    message: 'Слишком много запросов, попробуйте позже',
-    trustProxy: true
-});
 // 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
 class YooKassaAPI {
     constructor(shopId, secretKey) {
@@ -120,17 +92,7 @@ const TELEGRAM_ADMIN_CHAT_ID = config.TELEGRAM_ADMIN_CHAT_ID;
 // Настройка для работы с прокси (Railway)
 app.set('trust proxy', 1);
 
-// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ (ОТКЛЮЧЕНЫ ДЛЯ TELEGRAM WEB APP)
-// Отключаем все ограничения безопасности для статических файлов
-
-// CORS только для API (не для статических файлов)
-const corsOrigins = config.CORS_ORIGIN.split(',');
-const corsOptions = {
-    origin: corsOrigins,
-    credentials: true
-};
-
-// Удаляем дублирующий limiter - используем уже объявленный выше
+// Простые настройки без ограничений
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
 logger.info('🔧 Инициализация ЮKassa...');
@@ -1149,11 +1111,8 @@ function cancelOrderTimer(orderId) {
 const webRoot = path.join(__dirname, 'webapp');
 app.use(express.static(webRoot));
 
-// Применяем CORS и rate limiting только к API
-app.use('/api', cors(corsOptions));
-app.use('/api', limiter);
-app.use('/webhook', cors(corsOptions));
-app.use('/webhook', limiter);
+// CORS для всех запросов
+app.use(cors());
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -2689,37 +2648,14 @@ app.get('/admin', (req, res) => {
 
 // SPA fallback - все остальные маршруты ведут на index.html
 app.get('*', (req, res) => {
-    // Исключаем API и админ-панель
-    if (req.path.startsWith('/api') || req.path === '/admin') {
-        return res.status(404).json({ error: 'Страница не найдена', path: req.path });
-    }
-    // Остальные маршруты ведут на основное приложение
     res.sendFile(path.join(webRoot, 'index.html'));
 });
 
 // Запуск сервера с инициализацией БД
 async function startServer() {
     try {
-        logger.info('🔄 Начинаем инициализацию сервера...');
-        
-        // 🗄️ ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БД (если установлена переменная)
-        if (process.env.CLEAR_DATABASE === 'true') {
-            logger.warn('🚨 ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БАЗЫ ДАННЫХ...');
-            try {
-                const { Pool } = require('pg');
-                const pool = new Pool({ connectionString: config.DATABASE_URL });
-                await pool.query('DELETE FROM admin_products');
-                await pool.end();
-                logger.info('✅ Таблица admin_products очищена');
-            } catch (error) {
-                logger.error('❌ Ошибка очистки БД:', error.message);
-            }
-        }
-        
         // Инициализируем базу данных
-        logger.info('🔄 Инициализируем базу данных...');
         await initializeDatabase();
-        logger.info('✅ База данных инициализирована');
         
         // Инициализируем счетчик заказов из БД
         await initializeOrderCounter();
@@ -2851,14 +2787,11 @@ async function startServer() {
 
 // 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
 process.on('uncaughtException', (error) => {
-    logger.error('💥 Неперехваченная ошибка:', error.message);
-    logger.debug('Stack:', error.stack);
-    // НЕ завершаем процесс, логируем и продолжаем
+    console.error('💥 Неперехваченная ошибка:', error.message);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('💥 Неперехваченное отклонение промиса:', reason);
-    // НЕ завершаем процесс, логируем и продолжаем
+    console.error('💥 Неперехваченное отклонение промиса:', reason);
 });
 
 startServer();
