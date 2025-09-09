@@ -1,4 +1,4 @@
-// 🔧 СИСТЕМА ЛОГИРОВАНИЯ
+// 🔧 ОПТИМИЗИРОВАННАЯ СИСТЕМА ЛОГИРОВАНИЯ
 const LOG_LEVELS = {
     ERROR: 0,
     WARN: 1,
@@ -8,11 +8,37 @@ const LOG_LEVELS = {
 
 const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL || LOG_LEVELS.INFO;
 
+// Кэш для предотвращения дублирования логов
+const logCache = new Map();
+const LOG_CACHE_TTL = 5000; // 5 секунд
+
 function log(level, message, ...args) {
     if (level <= CURRENT_LOG_LEVEL) {
         const timestamp = new Date().toISOString();
         const levelNames = ['❌ ERROR', '⚠️ WARN', 'ℹ️ INFO', '🔍 DEBUG'];
+        
+        // Предотвращаем дублирование логов
+        const logKey = `${level}-${message}`;
+        const now = Date.now();
+        
+        if (logCache.has(logKey)) {
+            const lastLog = logCache.get(logKey);
+            if (now - lastLog < LOG_CACHE_TTL) {
+                return; // Пропускаем дублирующий лог
+            }
+        }
+        
+        logCache.set(logKey, now);
         console.log(`[${timestamp}] ${levelNames[level]} ${message}`, ...args);
+        
+        // Очищаем старые записи из кэша
+        if (logCache.size > 100) {
+            for (const [key, time] of logCache.entries()) {
+                if (now - time > LOG_CACHE_TTL) {
+                    logCache.delete(key);
+                }
+            }
+        }
     }
 }
 
@@ -35,6 +61,37 @@ const crypto = require('crypto');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+
+// 🛡️ НАСТРОЙКИ БЕЗОПАСНОСТИ И ПРОИЗВОДИТЕЛЬНОСТИ
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 минут
+    max: 100, // максимум 100 запросов с одного IP
+    message: {
+        error: 'Слишком много запросов, попробуйте позже',
+        retryAfter: '15 минут'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Rate limiting для API endpoints
+const apiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 минута
+    max: 30, // максимум 30 API запросов в минуту
+    message: {
+        error: 'API rate limit exceeded',
+        retryAfter: '1 минута'
+    }
+});
+
+// Rate limiting для webhook
+const webhookLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 минута
+    max: 50, // максимум 50 webhook запросов в минуту
+    message: {
+        error: 'Webhook rate limit exceeded'
+    }
+});
 // 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
 class YooKassaAPI {
     constructor(shopId, secretKey) {
@@ -122,13 +179,7 @@ const corsOptions = {
     credentials: true
 };
 
-// Защита от DDoS только для API (УПРОЩЕННАЯ)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // 100 запросов
-    message: 'Слишком много запросов, попробуйте позже',
-    trustProxy: true
-});
+// Удаляем дублирующий limiter - используем уже объявленный выше
 
 // 💳 ИНИЦИАЛИЗАЦИЯ YOOKASSA
 logger.info('🔧 Инициализация ЮKassa...');
@@ -1149,9 +1200,12 @@ app.use(express.static(webRoot));
 
 // Применяем CORS и rate limiting только к API
 app.use('/api', cors(corsOptions));
-app.use('/api', limiter);
+app.use('/api', apiLimiter);
 app.use('/webhook', cors(corsOptions));
-app.use('/webhook', limiter);
+app.use('/webhook', webhookLimiter);
+
+// Общий rate limiting для всех остальных запросов
+app.use(limiter);
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -1159,6 +1213,30 @@ app.get('/health', (req, res) => {
         status: 'ok', 
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
+    });
+});
+
+// 🛡️ ГЛОБАЛЬНАЯ ОБРАБОТКА ОШИБОК
+app.use((err, req, res, next) => {
+    logger.error('❌ Необработанная ошибка:', err.message);
+    logger.error('❌ Stack trace:', err.stack);
+    
+    // Не показываем детали ошибки в продакшене
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    res.status(500).json({
+        error: 'Внутренняя ошибка сервера',
+        message: isDevelopment ? err.message : 'Что-то пошло не так',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Обработка 404
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Страница не найдена',
+        path: req.path,
+        timestamp: new Date().toISOString()
     });
 });
 
@@ -1745,8 +1823,8 @@ app.post('/api/admin/clear-database', async (req, res) => {
         
         logger.info('🗑️ АДМИН: Начинаем очистку базы данных...');
         
-        // Очищаем таблицы в правильном порядке
-        const tables = ['purchase_history', 'orders', 'products'];
+        // Очищаем только историю заказов (НЕ товары!)
+        const tables = ['purchase_history', 'orders'];
         const results = {};
         
         for (const table of tables) {
@@ -1755,9 +1833,8 @@ app.post('/api/admin/clear-database', async (req, res) => {
             logger.info(`🗑️ АДМИН: Таблица ${table} очищена: ${result.rowCount} записей`);
         }
         
-        // Сбрасываем счетчики
+        // Сбрасываем счетчики только для очищенных таблиц
         await pool.query("SELECT setval('orders_id_seq', 1, false)");
-        await pool.query("SELECT setval('products_id_seq', 1, false)");
         await pool.query("SELECT setval('purchase_history_id_seq', 1, false)");
         
         logger.info('🗑️ АДМИН: База данных очищена успешно');
@@ -1895,9 +1972,14 @@ app.get('/api/purchases/:userId', async (req, res) => {
         const totalPurchases = purchases.length;
         const totalSpent = purchases.reduce((sum, purchase) => {
             const amount = purchase.totalAmount || purchase.amount || 0;
-            logger.info(`💰 API: Покупка ${purchase.order_id}: totalAmount=${purchase.totalAmount}, amount=${purchase.amount}, используем=${amount}`);
+            // Убираем избыточное логирование - только при ошибках
+            if (!purchase.totalAmount && !purchase.amount) {
+                logger.warn(`⚠️ API: Покупка ${purchase.order_id} без суммы: totalAmount=${purchase.totalAmount}, amount=${purchase.amount}`);
+            }
             return sum + amount;
         }, 0);
+        
+        // Логируем только итоговую статистику
         logger.info(`💰 API: Общая сумма потрачена: ${totalSpent}₽, покупок: ${totalPurchases}`);
         
         // 🏆 ЛОГИКА КАРТЫ ЛОЯЛЬНОСТИ ПО УРОВНЯМ
@@ -2129,8 +2211,9 @@ async function handleCallbackQuery(callbackQuery) {
         // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
             try {
-                const clientMessage = `📦 <b>Обновление заказа #${orderId}</b>\n\n` +
+                const clientMessage = `📦 <b>Обновление заказа</b>\n\n` +
                     `Статус изменен на: ${statusEmoji} <b>${statusText}</b>\n\n` +
+                    `📋 Состав заказа:\n${order.cartItems?.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n') || '• Товары не найдены'}\n\n` +
                     `💰 Сумма: ${order.totals?.total || 0}₽\n` +
                     `📍 Адрес: ${order.address?.street}, ${order.address?.house}`;
                 
@@ -2788,6 +2871,28 @@ async function startServer() {
             }
         }
         
+        // 🛡️ ОБРАБОТКА НЕОБРАБОТАННЫХ ИСКЛЮЧЕНИЙ
+        process.on('uncaughtException', (error) => {
+            logger.error('❌ Необработанное исключение:', error.message);
+            logger.error('❌ Stack trace:', error.stack);
+            
+            // Graceful shutdown
+            process.exit(1);
+        });
+
+        process.on('unhandledRejection', (reason, promise) => {
+            logger.error('❌ Необработанное отклонение промиса:', reason);
+            logger.error('❌ Promise:', promise);
+            
+            // Не завершаем процесс, только логируем
+        });
+
+        // Обработка предупреждений
+        process.on('warning', (warning) => {
+            logger.warn('⚠️ Предупреждение Node.js:', warning.message);
+            logger.warn('⚠️ Stack trace:', warning.stack);
+        });
+
         // Запускаем сервер
         app.listen(PORT, async () => {
             logger.info(`🚀 Сервер запущен на порту ${PORT}`);
