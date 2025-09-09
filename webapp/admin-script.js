@@ -4,13 +4,6 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
     : 'https://tundra-miniapp-production.up.railway.app';
 
 console.log('🔍 admin-script.js загружен');
-console.log('🔍 API_BASE:', API_BASE);
-
-// Проверяем, что все функции определены
-console.log('🔍 Проверка функций:');
-console.log('🔍 toggleProductAvailability:', typeof toggleProductAvailability);
-console.log('🔍 saveProductsToServer:', typeof saveProductsToServer);
-console.log('🔍 renderProducts:', typeof renderProducts);
 
 // Глобальные переменные
 let products = {};
@@ -95,11 +88,9 @@ async function loadProductsFromServer() {
                     for (const product of categoryProducts) {
                         if (product.available === false) {
                             hiddenCount++;
-                            console.log(`🔍 Скрытый товар при загрузке: ${product.name} (${categoryId})`);
                         }
                     }
                 }
-                console.log(`🔍 Всего товаров: ${Object.values(products).flat().length}, скрыто: ${hiddenCount}`);
                 
                 return true;
             }
@@ -828,7 +819,6 @@ async function loadProductsFromClient() {
 
 // Отображение товаров
 function renderProducts() {
-    console.log('🔍 renderProducts: Начинаем отрисовку товаров');
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
     
@@ -877,13 +867,9 @@ function renderProducts() {
                 e.preventDefault();
                 const categoryId = this.getAttribute('data-category');
                 const productId = this.getAttribute('data-product');
-                console.log('🔍 КНОПКА НАЖАТА через addEventListener!');
-                console.log('🔍 categoryId:', categoryId);
-                console.log('🔍 productId:', productId);
                 toggleProductAvailability(categoryId, productId);
             });
         });
-        console.log(`🔍 Добавлено ${toggleButtons.length} обработчиков событий для кнопок`);
     }, 100);
 }
 
@@ -891,8 +877,6 @@ function renderProducts() {
 function renderProductCard(categoryId, product) {
     const isHidden = product.available === false;
     const isModified = hasProductChanged(categoryId, product);
-    
-    console.log(`🔍 renderProductCard: ${product.name} (${product.id}), available: ${product.available}, isHidden: ${isHidden}`);
     
     // Экранируем специальные символы для JavaScript
     const safeCategoryId = categoryId.replace(/'/g, "\\'");
@@ -917,7 +901,7 @@ function renderProductCard(categoryId, product) {
                     <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
                             data-category="${safeCategoryId}" 
                             data-product="${safeProductId}"
-                            onclick="console.log('🔍 КНОПКА НАЖАТА!'); console.log('🔍 categoryId:', '${safeCategoryId}'); console.log('🔍 productId:', '${safeProductId}'); toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
+                            onclick="toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
                         ${isHidden ? '👁️ Показать' : '🙈 Скрыть'}
                     </button>
                     <button class="edit-btn" onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
@@ -962,9 +946,6 @@ async function toggleProductAvailability(categoryId, productId) {
     if (typeof window !== 'undefined') {
         window.toggleProductAvailability = toggleProductAvailability;
     }
-    console.log('🔍 ===== НАЧАЛО toggleProductAvailability =====');
-    console.log('🔍 toggleProductAvailability вызвана:', categoryId, productId);
-    console.log('🔍 Текущие products:', Object.keys(products));
     
     const product = products[categoryId].find(p => p.id === productId);
     if (!product) {
@@ -972,10 +953,7 @@ async function toggleProductAvailability(categoryId, productId) {
         return;
     }
     
-    console.log('🔍 Товар найден:', product.name, 'текущий статус:', product.available);
-    
     product.available = !product.available;
-    console.log('🔍 Новый статус товара:', product.available);
     
     markAsChanged();
     renderProducts();
@@ -983,8 +961,6 @@ async function toggleProductAvailability(categoryId, productId) {
     
     const status = product.available ? 'показан' : 'скрыт';
     showNotification(`Товар "${product.name}" ${status}`, 'info');
-    
-    console.log('🔍 Пытаемся сохранить на сервер...');
     
     // 🔥 АВТОМАТИЧЕСКИ СОХРАНЯЕМ НА СЕРВЕР
     try {
@@ -995,8 +971,6 @@ async function toggleProductAvailability(categoryId, productId) {
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
         document.getElementById('save-btn').disabled = true;
-        
-        console.log('✅ Товар успешно сохранен на сервере');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения:', error);
@@ -1060,7 +1034,6 @@ async function saveProduct() {
     
     // Автоматически сохраняем на сервер
     try {
-        console.log('🔍 Пытаемся сохранить изменения товара на сервер...');
         await saveProductsToServer();
         showNotification(`Товар "${product.name}" сохранен на сервере!`, 'success');
         
@@ -1068,8 +1041,6 @@ async function saveProduct() {
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
         document.getElementById('save-btn').disabled = true;
-        
-        console.log('✅ Изменения товара успешно сохранены на сервере');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения изменений товара:', error);
@@ -1159,27 +1130,8 @@ async function saveProductsToServer() {
         throw new Error('Пароль не найден');
     }
     
-    console.log('🔍 ===== НАЧАЛО saveProductsToServer =====');
-    console.log('🔍 Отправляем данные на сервер:', Object.keys(products));
-    
-    // Подсчитываем скрытые товары для отладки
-    let hiddenCount = 0;
-    let availableCount = 0;
-    for (const [categoryId, categoryProducts] of Object.entries(products)) {
-        for (const product of categoryProducts) {
-            if (product.available === false) {
-                hiddenCount++;
-                console.log(`🔍 Скрытый товар: ${product.name} (${categoryId})`);
-            } else {
-                availableCount++;
-            }
-        }
-    }
-    console.log(`🔍 Всего товаров: ${availableCount + hiddenCount}, доступно: ${availableCount}, скрыто: ${hiddenCount}`);
-    
     // API запрос к серверу
     try {
-        console.log('🔍 Отправляем PUT запрос на:', `${API_BASE}/api/admin/products`);
         const response = await fetch(`${API_BASE}/api/admin/products`, {
             method: 'PUT',
             headers: { 
@@ -1189,8 +1141,6 @@ async function saveProductsToServer() {
             body: JSON.stringify({ products })
         });
         
-        console.log('🔍 Ответ сервера:', response.status, response.statusText);
-        
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ Ошибка сервера:', errorText);
@@ -1198,7 +1148,6 @@ async function saveProductsToServer() {
         }
         
         const result = await response.json();
-        console.log('🔍 Результат сервера:', result);
         
         if (!result.ok) {
             throw new Error(result.error || 'Ошибка сервера');
@@ -1206,13 +1155,11 @@ async function saveProductsToServer() {
         
         // Сохраняем в localStorage как backup
         localStorage.setItem('admin_products', JSON.stringify(products));
-        console.log('✅ saveProductsToServer: Успешно сохранено на сервер и в localStorage');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения на сервер:', error);
         // Fallback - сохраняем локально
         localStorage.setItem('admin_products', JSON.stringify(products));
-        console.log('⚠️ saveProductsToServer: Fallback - сохранено только локально');
         throw error;
     }
 }
