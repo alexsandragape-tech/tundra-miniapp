@@ -479,22 +479,39 @@ class AdminProductsDB {
         try {
             await client.query('BEGIN');
             
-            // Очищаем старые данные
-            console.log('🔍 Очищаем старые данные из admin_products');
-            await client.query('DELETE FROM admin_products');
-            
-            // Добавляем новые
+            // Используем UPSERT (INSERT ... ON CONFLICT) для обновления существующих товаров
             let savedCount = 0;
             for (const [categoryId, products] of Object.entries(productsData)) {
                 for (const product of products) {
                     console.log(`🔍 Сохраняем товар: ${product.name} (${product.id}), available: ${product.available}`);
                     await client.query(
-                        `INSERT INTO admin_products (category_id, product_id, product_data, is_available) 
-                         VALUES ($1, $2, $3, $4)`,
+                        `INSERT INTO admin_products (category_id, product_id, product_data, is_available, updated_at) 
+                         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                         ON CONFLICT (category_id, product_id) 
+                         DO UPDATE SET 
+                             product_data = EXCLUDED.product_data,
+                             is_available = EXCLUDED.is_available,
+                             updated_at = CURRENT_TIMESTAMP`,
                         [categoryId, product.id, JSON.stringify(product), product.available !== false]
                     );
                     savedCount++;
                 }
+            }
+            
+            // Удаляем товары, которых нет в новых данных
+            console.log('🔍 Удаляем товары, которых нет в новых данных...');
+            const allProductIds = [];
+            for (const [categoryId, products] of Object.entries(productsData)) {
+                for (const product of products) {
+                    allProductIds.push(`('${categoryId}', '${product.id}')`);
+                }
+            }
+            
+            if (allProductIds.length > 0) {
+                await client.query(`
+                    DELETE FROM admin_products 
+                    WHERE (category_id, product_id) NOT IN (${allProductIds.join(', ')})
+                `);
             }
             
             await client.query('COMMIT');
