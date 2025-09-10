@@ -106,7 +106,9 @@ async function initializeYooKassa() {
             throw new Error('Не настроены ключи ЮKassa');
         }
         
+        logger.info('🔧 Инициализируем ЮKassa API...');
         checkout = new YooKassaAPI(config.YOOKASSA_SHOP_ID, config.YOOKASSA_SECRET_KEY);
+        logger.info('✅ ЮKassa API объект создан');
         
         // Тестируем доступность API ЮKassa
         try {
@@ -1316,6 +1318,11 @@ app.get('/api/orders/:orderId', async (req, res) => {
             if (order.payment_id && order.payment_status === 'pending') {
                 logger.info('🔍 API: Принудительная проверка статуса платежа для заказа ' + orderId);
                 try {
+                    // Проверяем, что checkout инициализирован
+                    if (!checkout) {
+                        logger.error('❌ API: checkout не инициализирован');
+                        return;
+                    }
                     const payment = await checkout.getPayment(order.payment_id);
                     logger.info('🔍 API: Статус платежа в ЮKassa:', {
                         id: payment.id,
@@ -1400,6 +1407,11 @@ app.get('/api/orders/:orderId', async (req, res) => {
             if (order && order.paymentId) {
                 logger.info('🔍 API: Проверяем статус платежа в ЮKassa для заказа ' + orderId);
                 try {
+                    // Проверяем, что checkout инициализирован
+                    if (!checkout) {
+                        logger.error('❌ API: checkout не инициализирован');
+                        return;
+                    }
                     const payment = await checkout.getPayment(order.paymentId);
                     logger.info('🔍 API: Статус платежа в ЮKassa:', {
                         id: payment.id,
@@ -2051,6 +2063,10 @@ app.get('/test-payment/:orderId', async (req, res) => {
         }
         
         // Проверяем статус платежа в ЮKassa
+        if (!checkout) {
+            logger.error('❌ ТЕСТ: checkout не инициализирован');
+            return res.status(500).json({ error: 'checkout не инициализирован' });
+        }
         const payment = await checkout.getPayment(orderData.payment_id);
         logger.info('🧪 ТЕСТ: Статус платежа в ЮKassa:', {
             id: payment.id,
@@ -2130,6 +2146,10 @@ app.get('/payment/success', async (req, res) => {
                 logger.info('🔍 Проверяем статус платежа в ЮKassa:', orderData.payment_id);
                 
                 // Проверяем статус платежа в ЮKassa
+                if (!checkout) {
+                    logger.error('❌ checkout не инициализирован');
+                    return;
+                }
                 const payment = await checkout.getPayment(orderData.payment_id);
                 logger.info('🔍 Статус платежа в ЮKassa:', {
                     id: payment.id,
@@ -2215,13 +2235,22 @@ app.get('/payment/success', async (req, res) => {
                 <div class="icon">✅</div>
                 <div class="title">Оплата успешна!</div>
                 <div class="message">Ваш заказ #${order || 'неизвестен'} оплачен</div>
-                <a href="/" class="button">Вернуться в магазин</a>
+                <button onclick="goBack()" class="button">Вернуться в магазин</button>
             </div>
             <script>
+                function goBack() {
+                    // Проверяем, находимся ли мы в Telegram WebApp
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        // Закрываем WebApp и возвращаемся в Telegram
+                        window.Telegram.WebApp.close();
+                    } else {
+                        // Обычный браузер - перенаправляем на главную
+                        window.location.href = '/';
+                    }
+                }
+                
                 // Автоматический редирект через 3 секунды
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 3000);
+                setTimeout(goBack, 3000);
             </script>
         </body>
         </html>
@@ -3285,6 +3314,12 @@ async function startServer() {
         
         // Инициализируем ЮKassa
         await initializeYooKassa();
+        
+        // Проверяем, что checkout инициализирован
+        if (!checkout) {
+            throw new Error('❌ Не удалось инициализировать ЮKassa API');
+        }
+        logger.info('✅ ЮKassa API готов к работе');
         
         // Загружаем товары из БД если есть
         try {
