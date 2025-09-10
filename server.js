@@ -3138,19 +3138,23 @@ app.post('/api/telegram/webhook', async (req, res) => {
     try {
         logger.info('🔔 TELEGRAM WEBHOOK: Получен запрос от Telegram');
         logger.info('🔔 TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
+        logger.info('🔔 TELEGRAM WEBHOOK: req.headers:', JSON.stringify(req.headers, null, 2));
         
         const { message, callback_query } = req.body;
         
         if (callback_query) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
+            logger.info('🔔 TELEGRAM WEBHOOK: callback_query полные данные:', JSON.stringify(callback_query, null, 2));
             // Обрабатываем нажатие на inline-кнопку
             await handleCallbackQuery(callback_query);
+            logger.info('🔔 TELEGRAM WEBHOOK: callback_query обработан успешно');
         } else if (message) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
             // Обрабатываем обычные сообщения
             logger.debug('Получено сообщение:', message.text);
         } else {
             logger.warn('🔔 TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body));
+            logger.warn('🔔 TELEGRAM WEBHOOK: Полные данные:', JSON.stringify(req.body, null, 2));
         }
         
         res.json({ ok: true });
