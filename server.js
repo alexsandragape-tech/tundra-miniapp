@@ -987,64 +987,7 @@ async function initializeOrderCounter() {
     }
 }
 
-// Функции для работы с заказами
-async function createOrder(orderData) {
-    orderCounter++;
-    const orderId = orderCounter.toString();
-    
-    
-    const order = {
-        id: orderId,
-        status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
-        paymentStatus: 'pending', // pending, paid, cancelled, expired
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
-        ...orderData
-    };
-    
-    // 💾 СОХРАНЯЕМ В БД И В ПАМЯТЬ
-    orders.set(orderId, order);
-    
-    // Сохраняем в базу данных
-    try {
-        const dbOrder = {
-            orderId: order.id,
-            userId: orderData.userId || order.userId || order.telegramUserId || 'unknown',
-            userName: order.customerName || 'Клиент',
-            phone: order.phone || '',
-            deliveryZone: order.deliveryZone || 'moscow',
-            address: JSON.stringify(order.address || {}),
-            items: JSON.stringify(order.cartItems || []),
-            totalAmount: order.totals?.total || 0,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-            paymentId: order.paymentId || null,
-            paymentUrl: order.paymentUrl || null,
-            comment: order.comment || '',
-            telegramUsername: order.telegramUsername || null
-        };
-        
-        // Логируем userId для диагностики
-        logger.info(`💾 Создание заказа ${order.id} с userId: ${dbOrder.userId}`);
-        
-        await OrdersDB.create(dbOrder);
-        logger.debug(`💾 Заказ ${orderId} сохранен в БД`);
-    } catch (error) {
-        logger.error(`❌ Ошибка сохранения заказа ${orderId} в БД:`, error.message);
-    }
-    
-    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
-    const timer = setTimeout(() => {
-        autoExpireOrder(orderId);
-    }, 10 * 60 * 1000); // 10 минут
-    
-    orderTimers.set(orderId, timer);
-    
-    logger.debug(`🔥 Заказ ${orderId} создан. Автоотмена через 10 минут.`);
-    
-    return order;
-}
+// Функции для работы с заказами ПЕРЕМЕЩЕНЫ ВЫШЕ - ПЕРЕД API МАРШРУТАМИ
 
 function updateOrderStatus(orderId, newStatus) {
     const order = orders.get(orderId);
@@ -1402,6 +1345,40 @@ app.get('/api/orders/:orderId', async (req, res) => {
     }
 });
 
+// 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАКАЗАМИ - ПЕРЕД API МАРШРУТАМИ
+// Функции для работы с заказами
+async function createOrder(orderData) {
+    orderCounter++;
+    const orderId = orderCounter.toString();
+    
+    
+    const order = {
+        id: orderId,
+        status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
+        paymentStatus: 'pending', // pending, paid, cancelled, expired
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
+        ...orderData
+    };
+    
+    // 💾 СОХРАНЯЕМ В ПАМЯТЬ (в БД сохраняется в API-маршруте)
+    orders.set(orderId, order);
+    
+    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
+    const timer = setTimeout(() => {
+        autoExpireOrder(orderId);
+    }, 10 * 60 * 1000); // 10 минут
+    
+    orderTimers.set(orderId, timer);
+    
+    logger.debug('🔥 Заказ ' + orderId + ' создан. Автоотмена через 10 минут.');
+    
+    return order;
+}
+
+// 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД API МАРШРУТАМИ
+
 // 🔧 API ДЛЯ СОЗДАНИЯ ЗАКАЗА - ПЕРЕД SPA FALLBACK
 // API для заказов
 app.post('/api/orders', validateOrderData, async (req, res) => {
@@ -1462,17 +1439,18 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         // Сохраняем в базу данных
         await OrdersDB.create({
-            order_id: order.id,
-            user_id: orderData.userId,
-            user_name: customerName,
+            orderId: order.id,
+            userId: orderData.userId,
+            userName: customerName,
             phone: order.phone,
-            address: JSON.stringify(order.address),
-            items: JSON.stringify(order.items),
-            total_amount: totalAmount,
+            deliveryZone: orderData.deliveryZone || 'moscow',
+            address: JSON.stringify(orderData.address),
+            items: orderData.cartItems,
+            totalAmount: totalAmount,
             status: 'new',
-            payment_status: 'pending',
-            payment_id: payment.id,
-            created_at: new Date().toISOString()
+            paymentStatus: 'pending',
+            paymentId: payment.id,
+            paymentUrl: order.paymentUrl
         });
         
         logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
@@ -2660,90 +2638,7 @@ function requireAdminAuth(req, res, next) {
 }
 
 // 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ
-function validateOrderData(req, res, next) {
-    const { cartItems, address, phone, customerName, deliveryZone } = req.body;
-    
-    // Логируем входящие данные для отладки
-    logger.debug('🔍 Валидация заказа:', {
-        cartItems: cartItems?.length || 0,
-        address: address ? 'есть' : 'нет',
-        phone: phone ? 'есть' : 'нет',
-        customerName: customerName ? 'есть' : 'нет',
-        deliveryZone: deliveryZone || 'нет'
-    });
-    
-    // Проверяем обязательные поля
-    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
-        logger.error('❌ Валидация: Корзина пуста');
-        return res.status(400).json({
-            ok: false,
-            error: 'Корзина не может быть пустой'
-        });
-    }
-    
-    if (!address || !address.street || !address.house) {
-        logger.error('❌ Валидация: Адрес неполный:', address);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать адрес доставки'
-        });
-    }
-    
-    if (!phone || typeof phone !== 'string' || phone.trim().length < 10) {
-        logger.error('❌ Валидация: Телефон некорректный:', phone);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать корректный номер телефона'
-        });
-    }
-    
-    // Имя клиента не обязательно (не отправляется из frontend)
-    // if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
-    //     logger.error('❌ Валидация: Имя клиента некорректное:', customerName);
-    //     return res.status(400).json({
-    //         ok: false,
-    //         error: 'Необходимо указать имя клиента'
-    //     });
-    // }
-    
-    if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
-        logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо выбрать зону доставки'
-        });
-    }
-    
-    // Валидируем товары в корзине
-    for (const item of cartItems) {
-        if (!item.productId || !item.name || !item.price || !item.quantity) {
-            logger.error('❌ Валидация: Товар некорректный:', item);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректные данные товара в корзине'
-            });
-        }
-        
-        if (typeof item.price !== 'number' || item.price <= 0) {
-            logger.error('❌ Валидация: Цена товара некорректная:', item.price);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректная цена товара'
-            });
-        }
-        
-        if (typeof item.quantity !== 'number' || item.quantity <= 0 || item.quantity > 50) {
-            logger.error('❌ Валидация: Количество товара некорректное:', item.quantity);
-            return res.status(400).json({
-                ok: false,
-                error: 'Некорректное количество товара'
-            });
-        }
-    }
-    
-    logger.info('✅ Валидация заказа прошла успешно');
-    next();
-}
+// Функция validateOrderData ПЕРЕМЕЩЕНА ВЫШЕ - ПЕРЕД API МАРШРУТАМИ
 
 // Middleware для валидации админских запросов
 function validateAdminData(req, res, next) {
