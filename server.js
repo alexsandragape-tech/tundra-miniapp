@@ -3029,121 +3029,6 @@ startServer();
 
 // Второй SPA fallback удален - дублирует первый
 
-// Запуск сервера с инициализацией БД
-async function startServer() {
-    try {
-        console.log('🔄 Начинаем инициализацию сервера...');
-        
-        // Инициализируем базу данных
-        console.log('🔄 Инициализируем базу данных...');
-        await initializeDatabase();
-        console.log('✅ База данных инициализирована');
-        
-        // Инициализируем счетчик заказов из БД
-        await initializeOrderCounter();
-        
-        // Инициализируем ЮKassa
-        await initializeYooKassa();
-        
-        // Загружаем товары из БД если есть
-        try {
-            const dbProducts = await AdminProductsDB.loadAll();
-            if (Object.keys(dbProducts).length > 0) {
-                logger.info('✅ Товары загружены из базы данных');
-                // Преобразуем в Map для совместимости с текущим кодом
-                adminProducts.clear();
-                for (const [categoryId, products] of Object.entries(dbProducts)) {
-                    adminProducts.set(categoryId, products);
-                }
-            }
-        } catch (error) {
-            logger.warn('⚠️ Товары из БД не загружены, используем fallback');
-        }
-        
-        // Функция для получения Chat ID (группы или личного чата)
-        async function getTelegramChatId() {
-            if (!config.TELEGRAM_BOT_TOKEN) {
-                logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен');
-                return null;
-            }
-            
-            try {
-                const response = await axios.get(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getUpdates`);
-                const updates = response.data.result;
-                
-                if (updates.length > 0) {
-                    // Ищем групповые чаты (ID начинается с минуса)
-                    const groupChats = updates
-                        .map(update => update.message?.chat || update.callback_query?.message?.chat)
-                        .filter(chat => chat && chat.id < 0)
-                        .map(chat => ({
-                            id: chat.id,
-                            title: chat.title || 'Группа',
-                            type: chat.type
-                        }));
-                    
-                    // Убираем дубликаты
-                    const uniqueGroups = groupChats.filter((chat, index, self) => 
-                        index === self.findIndex(c => c.id === chat.id)
-                    );
-                    
-                    if (uniqueGroups.length > 0) {
-                        logger.info('📱 Найдены групповые чаты:');
-                        uniqueGroups.forEach(group => {
-                            logger.info(`   🏢 ${group.title} (${group.type}): ${group.id}`);
-                        });
-                        
-                        const mainGroup = uniqueGroups[0];
-                        logger.info('💡 Добавьте эту переменную в Railway:');
-                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${mainGroup.id}`);
-                        logger.info(`   (ID группы: ${mainGroup.title})`);
-                        return mainGroup.id;
-                    }
-                    
-                    // Если групп нет, ищем личные чаты
-                    const personalChats = updates
-                        .map(update => update.message?.chat || update.callback_query?.message?.chat)
-                        .filter(chat => chat && chat.id > 0)
-                        .map(chat => ({
-                            id: chat.id,
-                            username: chat.username || 'Пользователь',
-                            first_name: chat.first_name || ''
-                        }));
-                    
-                    const uniquePersonal = personalChats.filter((chat, index, self) => 
-                        index === self.findIndex(c => c.id === chat.id)
-                    );
-                    
-                    if (uniquePersonal.length > 0) {
-                        logger.info('📱 Найдены личные чаты:');
-                        uniquePersonal.forEach(chat => {
-                            logger.info(`   👤 ${chat.first_name} (@${chat.username}): ${chat.id}`);
-                        });
-                        
-                        const mainChat = uniquePersonal[0];
-                        logger.info('💡 Добавьте эту переменную в Railway:');
-                        logger.info(`   TELEGRAM_ADMIN_CHAT_ID=${mainChat.id}`);
-                        logger.info(`   (Личный чат: ${mainChat.first_name})`);
-                        return mainChat.id;
-                    }
-                }
-                
-                logger.warn('⚠️ Chat ID не найден. Добавьте бота в группу или напишите ему сообщение.');
-                return null;
-            } catch (error) {
-                logger.error('❌ Ошибка получения Chat ID:', error.message);
-                return null;
-            }
-        }
-        
-        // Обработчики ошибок настроены глобально
-        
-    } catch (error) {
-        logger.error('❌ Ошибка запуска сервера:', error.message);
-        process.exit(1);
-    }
-}
-
 // 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
 process.on('uncaughtException', (error) => {
     console.error('💥 Неперехваченная ошибка:', error.message);
@@ -3152,8 +3037,6 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
     console.error('💥 Неперехваченное отклонение промиса:', reason);
 });
-
-startServer();
 
 // Keep-alive механизм для Railway
 setInterval(() => {
