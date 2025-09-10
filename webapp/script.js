@@ -1525,20 +1525,30 @@ function handlePaymentSuccess() {
     if (orderId) {
         console.log(`✅ Обрабатываем успешную оплату заказа #${orderId}`);
         
-        // Получаем данные заказа из localStorage
-        const pendingOrder = localStorage.getItem('pending_order');
-        if (pendingOrder) {
-            try {
-                const orderData = JSON.parse(pendingOrder);
-                
-                // Показываем экран успешной оплаты
+        // Проверяем статус заказа в базе данных
+        checkOrderStatusAndShowSuccess(orderId);
+    }
+}
+
+// 💳 ФУНКЦИЯ ПРОВЕРКИ СТАТУСА ЗАКАЗА И ПОКАЗА УСПЕХА
+async function checkOrderStatusAndShowSuccess(orderId) {
+    try {
+        console.log(`🔍 Проверяем статус заказа #${orderId} в базе данных...`);
+        
+        const response = await fetch(`/api/orders/${orderId}`);
+        if (response.ok) {
+            const order = await response.json();
+            console.log(`📦 Статус заказа #${orderId}:`, order);
+            
+            if (order.status === 'accepted' && order.paymentStatus === 'paid') {
+                // Заказ оплачен - показываем экран успеха
                 document.getElementById('success-order-id').textContent = orderId;
-                document.getElementById('success-amount').textContent = orderData.amount || 0;
+                document.getElementById('success-amount').textContent = order.totals?.total || 0;
                 showScreen('payment-success-screen');
                 
                 // Обновляем профиль пользователя
-                if (orderData.cartTotal) {
-                    userProfile.totalSpent += orderData.cartTotal.total || 0;
+                if (order.totals?.total) {
+                    userProfile.totalSpent += order.totals.total;
                     userProfile.completedOrders += 1;
                     localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
                     console.log('✅ Профиль пользователя обновлен после оплаты');
@@ -1547,20 +1557,60 @@ function handlePaymentSuccess() {
                 // Удаляем данные ожидающего заказа
                 localStorage.removeItem('pending_order');
                 
-                // Обновляем карту лояльности
-                updateLoyaltyCard();
-                
-                // Очищаем URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-            } catch (error) {
-                console.error('Ошибка обработки данных заказа:', error);
-                showMain();
+                console.log('✅ Экран успешной оплаты показан');
+            } else {
+                console.log(`⏳ Заказ #${orderId} еще не оплачен, статус: ${order.status}, платеж: ${order.paymentStatus}`);
+                // Показываем экран ожидания или обновляем через несколько секунд
+                setTimeout(() => checkOrderStatusAndShowSuccess(orderId), 3000);
             }
         } else {
-            console.warn('Данные заказа не найдены в localStorage');
+            console.error('❌ Ошибка получения заказа:', response.status);
+            // Fallback на данные из localStorage
+            showSuccessFromLocalStorage(orderId);
+        }
+    } catch (error) {
+        console.error('❌ Ошибка проверки статуса заказа:', error);
+        // Fallback на данные из localStorage
+        showSuccessFromLocalStorage(orderId);
+    }
+}
+
+// 💳 FALLBACK ФУНКЦИЯ ДЛЯ ПОКАЗА УСПЕХА ИЗ LOCALSTORAGE
+function showSuccessFromLocalStorage(orderId) {
+    const pendingOrder = localStorage.getItem('pending_order');
+    if (pendingOrder) {
+        try {
+            const orderData = JSON.parse(pendingOrder);
+            
+            // Показываем экран успешной оплаты
+            document.getElementById('success-order-id').textContent = orderId;
+            document.getElementById('success-amount').textContent = orderData.amount || 0;
+            showScreen('payment-success-screen');
+            
+            // Обновляем профиль пользователя
+            if (orderData.cartTotal) {
+                userProfile.totalSpent += orderData.cartTotal.total || 0;
+                userProfile.completedOrders += 1;
+                localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
+                console.log('✅ Профиль пользователя обновлен после оплаты');
+            }
+            
+            // Удаляем данные ожидающего заказа
+            localStorage.removeItem('pending_order');
+            
+            // Обновляем карту лояльности
+            updateLoyaltyCard();
+            
+            // Очищаем URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+        } catch (error) {
+            console.error('Ошибка обработки данных заказа:', error);
             showMain();
         }
+    } else {
+        console.log('❌ Нет данных о заказе в localStorage');
+        showMain();
     }
 }
 
