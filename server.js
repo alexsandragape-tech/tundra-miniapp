@@ -2673,40 +2673,34 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
 
 // Получение заказов пользователя (все заказы кроме отмененных)
 app.get('/api/orders/user/:userId', async (req, res) => {
-    console.log('🚀 API: ENDPOINT ВЫЗВАН! /api/orders/user/' + req.params.userId);
     try {
         const { userId } = req.params;
-        console.log('🔍 API: Загрузка заказов для пользователя ' + userId);
         
-        // 🔄 СНАЧАЛА ПРОВЕРЯЕМ И СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ
-        console.log('🔍 API: Вызываем syncPaidOrdersToLoyalty для ' + userId);
-        await syncPaidOrdersToLoyalty(userId);
-        console.log('🔍 API: syncPaidOrdersToLoyalty завершена');
+        // ПРОСТОЕ РЕШЕНИЕ: Берем заказы напрямую из таблицы orders
+        const orders = await OrdersDB.getByUserId(userId);
         
-        // Используем PurchaseHistoryDB вместо OrdersDB для консистентности с профилем
-        console.log('🔍 API: Загружаем заказы из purchase_history для ' + userId);
-        const orders = await PurchaseHistoryDB.getByUserId(userId);
-        console.log('🔍 API: Найдено ' + orders.length + ' заказов в purchase_history');
+        // Фильтруем только оплаченные заказы
+        const paidOrders = orders.filter(order => 
+            order.payment_status === 'paid' || 
+            order.status === 'completed' || 
+            order.status === 'delivered' ||
+            order.status === 'accepted' ||
+            (order.payment_id && order.payment_id !== '')
+        );
         
-        // Показываем все заказы (в purchase_history уже только оплаченные)
-        console.log('🔍 API: Заказов для отображения: ' + orders.length);
+        // Преобразуем в формат для клиента
+        const formattedOrders = paidOrders.map(order => ({
+            order_id: order.order_id,
+            amount: order.total_amount || order.totalAmount || 0,
+            purchase_date: order.created_at || order.createdAt,
+            items: order.items || [],
+            status: order.status,
+            payment_status: order.payment_status
+        }));
         
-        if (orders.length > 0) {
-            console.log('🔍 API: Первый заказ:', {
-                order_id: orders[0].order_id,
-                amount: orders[0].amount,
-                purchase_date: orders[0].purchase_date
-            });
-        } else {
-            console.log('🔍 API: НЕТ ЗАКАЗОВ в purchase_history для пользователя ' + userId);
-        }
-        
-        logger.info('📋 Загружено ' + orders.length + ' заказов для пользователя ' + userId);
-        console.log('🚀 API: ОТПРАВЛЯЕМ ОТВЕТ: ' + orders.length + ' заказов');
-        res.json({ ok: true, orders: orders });
+        res.json({ ok: true, orders: formattedOrders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
-        console.log('🚀 API: ОШИБКА: ' + error.message);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
