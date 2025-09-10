@@ -2060,7 +2060,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (result.ok) {
                     // 🔥 ЗАКАЗ СОЗДАН - ПОЛУЧАЕМ URL ДЛЯ ОПЛАТЫ
-                    currentOrderId = parseInt(result.orderId);
+                    currentOrderId = parseInt(result.order.id);
                     orderCounter = currentOrderId;
                     localStorage.setItem('tundra_order_counter', orderCounter.toString());
                     
@@ -2070,9 +2070,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         cartTotal: calculateCartTotal(),
                         cartItems: Object.values(cart).filter(i => i.quantity > 0),
                         timestamp: Date.now(),
-                        paymentId: result.paymentId,
-                        paymentUrl: result.paymentUrl,
-                        amount: result.amount
+                        paymentId: result.order.paymentId,
+                        paymentUrl: result.order.paymentUrl,
+                        amount: result.order.totals?.total
                     };
                     localStorage.setItem('pending_order', JSON.stringify(orderData));
                     
@@ -2099,20 +2099,20 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                         }, 1000);
                         
-                    } else if (result.paymentUrl) {
+                    } else if (result.order.paymentUrl) {
                         // ОБЫЧНЫЙ РЕЖИМ: Перенаправляем на оплату
-                        console.log(`🚀 Открываем страницу оплаты: ${result.paymentUrl}`);
+                        console.log(`🚀 Открываем страницу оплаты: ${result.order.paymentUrl}`);
                         console.log(`🤖 Telegram WebApp доступен:`, !!window.Telegram?.WebApp);
                         
                         // Проверяем, запускается ли в Telegram
                         if (window.Telegram?.WebApp) {
                             console.log(`📱 Открываем через Telegram WebApp...`);
                             // В Telegram Web App открываем через openLink
-                            window.Telegram.WebApp.openLink(result.paymentUrl);
+                            window.Telegram.WebApp.openLink(result.order.paymentUrl);
                         } else {
                             console.log(`🌐 Открываем в браузере...`);
                             // В обычном браузере открываем в том же окне
-                            window.location.href = result.paymentUrl;
+                            window.location.href = result.order.paymentUrl;
                         }
                         
                         // Показываем экран ожидания оплаты как fallback
