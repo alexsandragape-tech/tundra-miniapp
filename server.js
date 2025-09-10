@@ -1348,6 +1348,12 @@ app.get('/api/orders/:orderId', async (req, res) => {
 // 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАКАЗАМИ - ПЕРЕД API МАРШРУТАМИ
 // Функции для работы с заказами
 async function createOrder(orderData) {
+    // Проверяем, что orderCounter инициализирован
+    if (typeof orderCounter !== 'number' || isNaN(orderCounter)) {
+        logger.warn('⚠️ orderCounter не инициализирован, инициализируем...');
+        await initializeOrderCounter();
+    }
+    
     orderCounter++;
     const orderId = orderCounter.toString();
     
@@ -1505,9 +1511,27 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         // Создаем реальный платеж через ЮKassa
         const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
         
+        // Логируем детали платежа для отладки
+        logger.info('💳 Детали платежа ЮKassa:', {
+            paymentId: payment.id,
+            status: payment.status,
+            confirmation: payment.confirmation,
+            confirmationUrl: payment.confirmation?.confirmation_url
+        });
+        
         // Сохраняем ID платежа в заказе
         order.paymentId = payment.id;
         order.paymentUrl = payment.confirmation?.confirmation_url;
+        
+        // Проверяем, что URL получен
+        if (!order.paymentUrl) {
+            logger.error('❌ PaymentUrl не получен от ЮKassa!', {
+                payment: payment,
+                confirmation: payment.confirmation
+            });
+        } else {
+            logger.info('✅ PaymentUrl получен:', order.paymentUrl);
+        }
         
         // Обновляем заказ в памяти
         orders.set(order.id, order);
