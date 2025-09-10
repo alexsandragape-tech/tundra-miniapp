@@ -1304,7 +1304,11 @@ app.get('/api/orders/:orderId', async (req, res) => {
             logger.info('✅ API: Заказ ' + orderId + ' найден в БД:', {
                 status: order.status,
                 payment_status: order.payment_status,
-                total_amount: order.total_amount
+                total_amount: order.total_amount,
+                items_type: typeof order.items,
+                address_type: typeof order.address,
+                items_value: order.items,
+                address_value: order.address
             });
             
             // Конвертируем данные из БД в формат, ожидаемый клиентом
@@ -1368,6 +1372,14 @@ app.get('/api/orders/:orderId', async (req, res) => {
                         orders.set(orderId, order);
                         
                         logger.info('✅ API: Заказ ' + orderId + ' обновлен после проверки ЮKassa');
+                        
+                        // Отправляем уведомление в Telegram
+                        try {
+                            await sendTelegramNotification(order, 'paid');
+                            logger.info('✅ API: Уведомление об оплате отправлено в Telegram');
+                        } catch (telegramError) {
+                            logger.error('❌ API: Ошибка отправки уведомления в Telegram:', telegramError.message);
+                        }
                     }
                 } catch (error) {
                     logger.error('❌ API: Ошибка проверки статуса платежа в ЮKassa:', error.message);
@@ -1442,6 +1454,14 @@ async function sendTelegramNotification(order, type) {
         
         if (type === 'new') {
             message = `🆕 <b>НОВЫЙ ЗАКАЗ!</b>\n` +
+                     `📋 Номер: #${order.id}\n` +
+                     `👤 Клиент: ${order.customerName || 'Не указан'}\n` +
+                     `📞 Телефон: ${order.phone || 'Не указан'}\n` +
+                     `💰 Сумма: ${order.totals?.total || 0}₽\n` +
+                     `📍 Адрес: ${order.address ? JSON.parse(order.address).street + ', ' + JSON.parse(order.address).house : 'Не указан'}\n` +
+                     `🛒 Товары: ${order.items ? JSON.parse(order.items).map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
+        } else if (type === 'paid') {
+            message = `💰 <b>ЗАКАЗ ОПЛАЧЕН!</b>\n` +
                      `📋 Номер: #${order.id}\n` +
                      `👤 Клиент: ${order.customerName || 'Не указан'}\n` +
                      `📞 Телефон: ${order.phone || 'Не указан'}\n` +
@@ -1899,6 +1919,16 @@ app.get('/test-yookassa', async (req, res) => {
             secretKeyLength: config.YOOKASSA_SECRET_KEY?.length || 0
         });
     }
+});
+
+// Тестовый endpoint для проверки webhook'а
+app.get('/test-webhook', (req, res) => {
+    res.json({
+        ok: true,
+        message: 'Webhook endpoint доступен',
+        webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Webhook для обработки уведомлений от ЮKassa
