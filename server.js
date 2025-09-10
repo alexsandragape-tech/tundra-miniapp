@@ -1383,6 +1383,39 @@ async function createOrder(orderData) {
     return order;
 }
 
+// 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ В TELEGRAM
+async function sendTelegramNotification(order, type) {
+    if (!config.TELEGRAM_BOT_TOKEN || !config.TELEGRAM_ADMIN_CHAT_ID) {
+        logger.warn('⚠️ Telegram не настроен - уведомление не отправлено');
+        return;
+    }
+    
+    try {
+        let message = '';
+        
+        if (type === 'new') {
+            message = `🆕 <b>НОВЫЙ ЗАКАЗ!</b>\n` +
+                     `📋 Номер: #${order.id}\n` +
+                     `👤 Клиент: ${order.customerName || 'Не указан'}\n` +
+                     `📞 Телефон: ${order.phone || 'Не указан'}\n` +
+                     `💰 Сумма: ${order.totals?.total || 0}₽\n` +
+                     `📍 Адрес: ${order.address ? JSON.parse(order.address).street + ', ' + JSON.parse(order.address).house : 'Не указан'}\n` +
+                     `🛒 Товары: ${order.items ? JSON.parse(order.items).map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
+        }
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+            text: message,
+            parse_mode: 'HTML'
+        });
+        
+        logger.info('✅ Уведомление в Telegram отправлено');
+    } catch (error) {
+        logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+        throw error;
+    }
+}
+
 // 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ
 function validateOrderData(req, res, next) {
     const { cartItems, address, phone, customerName, deliveryZone } = req.body;
