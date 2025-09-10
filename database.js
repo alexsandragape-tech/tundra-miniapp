@@ -205,7 +205,23 @@ class OrdersDB {
         const result = await pool.query(query, [orderId]);
         if (result.rows.length > 0) {
             const order = result.rows[0];
-            order.items = JSON.parse(order.items);
+            
+            // Безопасный парсинг items
+            try {
+                order.items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+            } catch (e) {
+                console.warn('⚠️ Ошибка парсинга items в getById:', e.message);
+                order.items = [];
+            }
+            
+            // Безопасный парсинг address
+            try {
+                order.address = typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
+            } catch (e) {
+                console.warn('⚠️ Ошибка парсинга address в getById:', e.message);
+                order.address = {};
+            }
+            
             return order;
         }
         return null;
@@ -222,7 +238,15 @@ class OrdersDB {
         const result = await pool.query(query, [status, orderId]);
         if (result.rows.length > 0) {
             const order = result.rows[0];
-            order.items = JSON.parse(order.items);
+            
+            // Безопасный парсинг items
+            try {
+                order.items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+            } catch (e) {
+                console.warn('⚠️ Ошибка парсинга items в updateStatus:', e.message);
+                order.items = [];
+            }
+            
             return order;
         }
         return null;
