@@ -1254,6 +1254,98 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
+// 🔧 API ДЛЯ ЗАКАЗОВ ПОЛЬЗОВАТЕЛЯ - ПЕРЕД SPA FALLBACK
+// Получение заказов пользователя (все заказы кроме отмененных)
+app.get('/api/user-orders/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const orders = await OrdersDB.getByUserId(userId);
+        
+        const paidOrders = orders.filter(order => 
+            order.payment_status === 'paid' || 
+            order.status === 'completed' || 
+            order.status === 'delivered' ||
+            order.status === 'accepted' ||
+            (order.payment_id && order.payment_id !== '')
+        );
+        
+        const formattedOrders = paidOrders.map(order => ({
+            order_id: order.order_id,
+            amount: order.total_amount || order.totalAmount || 0,
+            purchase_date: order.created_at || order.createdAt,
+            items: order.items || [],
+            status: order.status,
+            payment_status: order.payment_status
+        }));
+        
+        res.json({ ok: true, orders: formattedOrders });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Получение покупок пользователя для лояльности
+app.get('/api/user-purchases/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const orders = await OrdersDB.getByUserId(userId);
+        
+        const paidOrders = orders.filter(order => 
+            order.payment_status === 'paid' || 
+            order.status === 'completed' || 
+            order.status === 'delivered' ||
+            order.status === 'accepted' ||
+            (order.payment_id && order.payment_id !== '')
+        );
+        
+        const totalPurchases = paidOrders.length;
+        const totalSpent = paidOrders.reduce((sum, order) => {
+            return sum + (order.total_amount || order.totalAmount || 0);
+        }, 0);
+        
+        let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
+        
+        if (totalSpent < 10000) {
+            loyaltyLevel = 0;
+            currentDiscount = 0;
+            nextLevelTarget = 10000;
+            nextLevelProgress = totalSpent;
+        } else if (totalSpent < 25000) {
+            loyaltyLevel = 1;
+            currentDiscount = 3;
+            nextLevelTarget = 25000;
+            nextLevelProgress = totalSpent - 10000;
+        } else if (totalSpent < 50000) {
+            loyaltyLevel = 2;
+            currentDiscount = 5;
+            nextLevelTarget = 50000;
+            nextLevelProgress = totalSpent - 25000;
+        } else {
+            loyaltyLevel = 3;
+            currentDiscount = 10;
+            nextLevelTarget = 50000;
+            nextLevelProgress = 25000;
+        }
+        
+        const stats = {
+            totalPurchases,
+            totalSpent,
+            loyaltyLevel,
+            currentDiscount,
+            nextLevelTarget,
+            nextLevelProgress
+        };
+        
+        res.json({
+            ok: true,
+            purchases: paidOrders,
+            stats: stats
+        });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ (только для /admin, НЕ для /api/admin/*)
 app.get('/admin', (req, res) => {
     console.log('🔍 Обработка запроса /admin');
@@ -2705,96 +2797,7 @@ app.get('/api/orders/user/:userId', async (req, res) => {
     }
 });
 
-// ДУБЛИРУЮЩИЙ ENDPOINT ДЛЯ БЫСТРОГО ИСПРАВЛЕНИЯ
-app.get('/api/user-orders/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const orders = await OrdersDB.getByUserId(userId);
-        
-        const paidOrders = orders.filter(order => 
-            order.payment_status === 'paid' || 
-            order.status === 'completed' || 
-            order.status === 'delivered' ||
-            order.status === 'accepted' ||
-            (order.payment_id && order.payment_id !== '')
-        );
-        
-        const formattedOrders = paidOrders.map(order => ({
-            order_id: order.order_id,
-            amount: order.total_amount || order.totalAmount || 0,
-            purchase_date: order.created_at || order.createdAt,
-            items: order.items || [],
-            status: order.status,
-            payment_status: order.payment_status
-        }));
-        
-        res.json({ ok: true, orders: formattedOrders });
-    } catch (error) {
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// ДУБЛИРУЮЩИЙ ENDPOINT ДЛЯ PURCHASES
-app.get('/api/user-purchases/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const orders = await OrdersDB.getByUserId(userId);
-        
-        const paidOrders = orders.filter(order => 
-            order.payment_status === 'paid' || 
-            order.status === 'completed' || 
-            order.status === 'delivered' ||
-            order.status === 'accepted' ||
-            (order.payment_id && order.payment_id !== '')
-        );
-        
-        const totalPurchases = paidOrders.length;
-        const totalSpent = paidOrders.reduce((sum, order) => {
-            return sum + (order.total_amount || order.totalAmount || 0);
-        }, 0);
-        
-        let loyaltyLevel, currentDiscount, nextLevelTarget, nextLevelProgress;
-        
-        if (totalSpent < 10000) {
-            loyaltyLevel = 0;
-            currentDiscount = 0;
-            nextLevelTarget = 10000;
-            nextLevelProgress = totalSpent;
-        } else if (totalSpent < 25000) {
-            loyaltyLevel = 1;
-            currentDiscount = 3;
-            nextLevelTarget = 25000;
-            nextLevelProgress = totalSpent - 10000;
-        } else if (totalSpent < 50000) {
-            loyaltyLevel = 2;
-            currentDiscount = 5;
-            nextLevelTarget = 50000;
-            nextLevelProgress = totalSpent - 25000;
-        } else {
-            loyaltyLevel = 3;
-            currentDiscount = 10;
-            nextLevelTarget = 50000;
-            nextLevelProgress = 25000;
-        }
-        
-        const stats = {
-            totalPurchases,
-            totalSpent,
-            loyaltyLevel,
-            currentDiscount,
-            nextLevelTarget,
-            nextLevelProgress
-        };
-        
-        res.json({
-            ok: true,
-            purchases: paidOrders,
-            stats: stats
-        });
-    } catch (error) {
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
+// ДУБЛИРУЮЩИЕ ENDPOINTS ПЕРЕМЕЩЕНЫ ВЫШЕ - ПЕРЕД SPA FALLBACK
 
 // Дублирующийся endpoint удален - используется основной /api/orders/:orderId выше
 // Дублирующийся API маршрут удален - используется основной выше
@@ -3134,30 +3137,6 @@ async function startServer() {
         }
         
         // Обработчики ошибок настроены глобально
-
-        // Запускаем сервер
-        app.listen(PORT, async () => {
-            console.log(`🚀 Сервер запущен на порту ${PORT}`);
-            console.log(`📁 Статические файлы из: ${webRoot}`);
-            console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-            console.log(`🗄️ База данных подключена`);
-            console.log(`🔐 Админ-панель: http://localhost:${PORT}/admin?password=TundraAdmin2024!`);
-            
-            // Проверяем настройки Telegram
-            logger.info('🔍 Проверка настроек Telegram:');
-            logger.info(`   Токен бота: ${config.TELEGRAM_BOT_TOKEN ? '✅ Настроен' : '❌ Не настроен'}`);
-            logger.info(`   Chat ID: ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
-            
-            if (config.TELEGRAM_BOT_TOKEN && !config.TELEGRAM_ADMIN_CHAT_ID) {
-                logger.info('🔍 Ищем Chat ID для Telegram бота...');
-                await getTelegramChatId();
-            } else if (!config.TELEGRAM_BOT_TOKEN) {
-                logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен в Railway');
-                logger.info('💡 Добавьте переменную TELEGRAM_BOT_TOKEN в Railway');
-            } else {
-                logger.info('✅ Telegram настроен полностью');
-            }
-        });
         
     } catch (error) {
         logger.error('❌ Ошибка запуска сервера:', error.message);
