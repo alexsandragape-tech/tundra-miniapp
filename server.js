@@ -1815,15 +1815,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
         
-        // Отправляем уведомление в Telegram
-        if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
-            try {
-                await sendTelegramNotification(order, 'new');
-                logger.info('✅ Уведомление в Telegram отправлено');
-            } catch (error) {
-                logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
-            }
-        }
+        // Уведомление о новом заказе убрано - будет отправляться только после оплаты
         
         // Возвращаем данные заказа клиенту
         res.json({
@@ -3024,22 +3016,40 @@ app.put('/api/orders/:orderId/status', (req, res) => {
     }
 });
 
+// Тестовый эндпоинт для проверки Telegram webhook'а
+app.get('/test-telegram-webhook', (req, res) => {
+    res.json({
+        ok: true,
+        message: 'Telegram webhook доступен',
+        url: 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Webhook для Telegram
 app.post('/api/telegram/webhook', (req, res) => {
     try {
+        logger.info('🔔 TELEGRAM WEBHOOK: Получен запрос от Telegram');
+        logger.info('🔔 TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
+        
         const { message, callback_query } = req.body;
         
         if (callback_query) {
+            logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
             // Обрабатываем нажатие на inline-кнопку
             handleCallbackQuery(callback_query);
         } else if (message) {
+            logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
             // Обрабатываем обычные сообщения
             logger.debug('Получено сообщение:', message.text);
+        } else {
+            logger.warn('🔔 TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body));
         }
         
         res.json({ ok: true });
     } catch (error) {
-        logger.error('Ошибка обработки Telegram webhook:', error.message);
+        logger.error('❌ TELEGRAM WEBHOOK: Ошибка обработки:', error.message);
+        logger.error('❌ TELEGRAM WEBHOOK: Стек ошибки:', error.stack);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
@@ -3082,6 +3092,7 @@ async function handleCallbackQuery(callbackQuery) {
                 statusEmoji = '🚚';
                 break;
             case 'completed':
+            case 'complete':
                 newStatus = 'completed';
                 statusText = 'Доставлен';
                 statusEmoji = '✅';
@@ -3106,6 +3117,48 @@ async function handleCallbackQuery(callbackQuery) {
         
         // Обновляем сообщение в админ-группе
         await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
+        
+        // 💰 ОБРАБОТКА ВОЗВРАТА СРЕДСТВ ПРИ ОТМЕНЕ
+        if (newStatus === 'cancelled' && order.payment_id) {
+            try {
+                logger.info(`💸 Инициируем возврат средств для заказа ${orderId}, payment_id: ${order.payment_id}`);
+                
+                // Создаем возврат через ЮKassa API
+                const refundData = {
+                    amount: {
+                        value: order.totals?.total?.toString() || '0',
+                        currency: 'RUB'
+                    },
+                    payment_id: order.payment_id
+                };
+                
+                const refundResponse = await axios.post('https://api.yookassa.ru/v3/refunds', refundData, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotence-Key': crypto.randomUUID()
+                    },
+                    auth: {
+                        username: config.YOOKASSA_SHOP_ID,
+                        password: config.YOOKASSA_SECRET_KEY
+                    },
+                    timeout: 30000
+                });
+                
+                logger.info(`✅ Возврат средств успешно создан: ${refundResponse.data.id}`);
+                
+                // Обновляем заказ с информацией о возврате
+                await OrdersDB.update(orderId, { 
+                    payment_status: 'refunded',
+                    refund_id: refundResponse.data.id
+                });
+                
+            } catch (refundError) {
+                logger.error(`❌ Ошибка создания возврата средств:`, refundError.message);
+                if (refundError.response) {
+                    logger.error(`❌ Детали ошибки возврата:`, refundError.response.data);
+                }
+            }
+        }
         
         // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
