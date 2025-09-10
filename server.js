@@ -1377,7 +1377,82 @@ async function createOrder(orderData) {
     return order;
 }
 
-// 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД API МАРШРУТАМИ
+// 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ
+function validateOrderData(req, res, next) {
+    const { cartItems, address, phone, customerName, deliveryZone } = req.body;
+    
+    // Логируем входящие данные для отладки
+    logger.debug('🔍 Валидация заказа:', {
+        cartItems: cartItems?.length || 0,
+        address: address ? 'есть' : 'нет',
+        phone: phone ? 'есть' : 'нет',
+        customerName: customerName ? 'есть' : 'нет',
+        deliveryZone: deliveryZone || 'нет'
+    });
+    
+    // Проверяем обязательные поля
+    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        logger.error('❌ Валидация: Корзина пуста');
+        return res.status(400).json({
+            ok: false,
+            error: 'Корзина не может быть пустой'
+        });
+    }
+    
+    if (!address || !address.street || !address.house) {
+        logger.error('❌ Валидация: Адрес неполный:', address);
+        return res.status(400).json({
+            ok: false,
+            error: 'Необходимо указать адрес доставки'
+        });
+    }
+    
+    if (!phone || typeof phone !== 'string' || phone.trim().length < 10) {
+        logger.error('❌ Валидация: Телефон некорректный:', phone);
+        return res.status(400).json({
+            ok: false,
+            error: 'Необходимо указать корректный номер телефона'
+        });
+    }
+    
+    if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
+        logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
+        return res.status(400).json({
+            ok: false,
+            error: 'Необходимо выбрать зону доставки'
+        });
+    }
+    
+    // Валидируем товары в корзине
+    for (const item of cartItems) {
+        if (!item.productId || !item.name || !item.price || !item.quantity) {
+            logger.error('❌ Валидация: Товар некорректный:', item);
+            return res.status(400).json({
+                ok: false,
+                error: 'Некорректные данные товара в корзине'
+            });
+        }
+        
+        if (typeof item.price !== 'number' || item.price <= 0) {
+            logger.error('❌ Валидация: Цена товара некорректная:', item.price);
+            return res.status(400).json({
+                ok: false,
+                error: 'Некорректная цена товара'
+            });
+        }
+        
+        if (typeof item.quantity !== 'number' || item.quantity <= 0 || item.quantity > 100) {
+            logger.error('❌ Валидация: Количество товара некорректное:', item.quantity);
+            return res.status(400).json({
+                ok: false,
+                error: 'Некорректное количество товара'
+            });
+        }
+    }
+    
+    logger.info('✅ Валидация заказа прошла успешно');
+    next();
+}
 
 // 🔧 API ДЛЯ СОЗДАНИЯ ЗАКАЗА - ПЕРЕД SPA FALLBACK
 // API для заказов
