@@ -3632,6 +3632,28 @@ async function startServer() {
         }
         logger.info('✅ ЮKassa API готов к работе');
         
+        // 🔧 АВТОМАТИЧЕСКАЯ НАСТРОЙКА TELEGRAM WEBHOOK
+        if (config.TELEGRAM_BOT_TOKEN) {
+            try {
+                const webhookUrl = 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook';
+                logger.info('🔧 Настраиваем Telegram webhook...');
+                
+                const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+                    url: webhookUrl
+                });
+                
+                if (response.data.ok) {
+                    logger.info('✅ Telegram webhook настроен успешно');
+                } else {
+                    logger.error('❌ Ошибка настройки webhook:', response.data);
+                }
+            } catch (error) {
+                logger.error('❌ Ошибка настройки Telegram webhook:', error.message);
+            }
+        } else {
+            logger.warn('⚠️ TELEGRAM_BOT_TOKEN не настроен - webhook не настроен');
+        }
+        
         // Загружаем товары из БД если есть
         try {
             const dbProducts = await AdminProductsDB.loadAll();
