@@ -1848,7 +1848,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         // Сохраняем в базу данных
         await OrdersDB.create({
             orderId: order.id,
-            userId: orderData.userId,
+            userId: order.telegramUserId || orderData.userId || 'unknown', // Используем telegramUserId для уведомлений
             userName: customerName,
             phone: order.phone,
             deliveryZone: orderData.deliveryZone || 'moscow',
@@ -3237,6 +3237,8 @@ async function handleCallbackQuery(callbackQuery) {
         }
         
         // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
+        logger.info(`📱 ПРОВЕРКА УВЕДОМЛЕНИЯ: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
+        
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
             try {
                 const items = order.items || order.cartItems || [];
@@ -3248,6 +3250,8 @@ async function handleCallbackQuery(callbackQuery) {
                     `💰 Сумма: ${order.totals?.total || 0}₽\n` +
                     `📍 Адрес: ${address.street || 'Не указан'}, ${address.house || 'Не указан'}`;
                 
+                logger.info(`📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ: chat_id=${order.telegramUserId}`);
+                
                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     chat_id: order.telegramUserId,
                     text: clientMessage,
@@ -3257,6 +3261,9 @@ async function handleCallbackQuery(callbackQuery) {
                 logger.info(`📱 Уведомление клиенту отправлено для заказа ${orderId}`);
             } catch (error) {
                 logger.error(`❌ Ошибка отправки уведомления клиенту:`, error.message);
+                if (error.response) {
+                    logger.error(`❌ Детали ошибки Telegram:`, error.response.data);
+                }
             }
         } else {
             logger.warn(`⚠️ Не удалось отправить уведомление клиенту: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
