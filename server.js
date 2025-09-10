@@ -1536,22 +1536,38 @@ async function sendTelegramNotification(order, type) {
     try {
         let message = '';
         
+        // Безопасно парсим данные
+        let addressObj = {};
+        let itemsArray = [];
+        
+        try {
+            addressObj = typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
+        } catch (e) {
+            logger.warn('⚠️ Ошибка парсинга address в уведомлении:', e.message);
+        }
+        
+        try {
+            itemsArray = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+        } catch (e) {
+            logger.warn('⚠️ Ошибка парсинга items в уведомлении:', e.message);
+        }
+        
         if (type === 'new') {
             message = `🆕 <b>НОВЫЙ ЗАКАЗ!</b>\n` +
                      `📋 Номер: #${order.id}\n` +
                      `👤 Клиент: ${order.customerName || 'Не указан'}\n` +
                      `📞 Телефон: ${order.phone || 'Не указан'}\n` +
                      `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                     `📍 Адрес: ${order.address ? JSON.parse(order.address).street + ', ' + JSON.parse(order.address).house : 'Не указан'}\n` +
-                     `🛒 Товары: ${order.items ? JSON.parse(order.items).map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
+                     `📍 Адрес: ${addressObj.street ? addressObj.street + ', ' + addressObj.house : 'Не указан'}\n` +
+                     `🛒 Товары: ${itemsArray.length > 0 ? itemsArray.map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
         } else if (type === 'paid') {
             message = `💰 <b>ЗАКАЗ ОПЛАЧЕН!</b>\n` +
                      `📋 Номер: #${order.id}\n` +
                      `👤 Клиент: ${order.customerName || 'Не указан'}\n` +
                      `📞 Телефон: ${order.phone || 'Не указан'}\n` +
                      `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                     `📍 Адрес: ${order.address ? JSON.parse(order.address).street + ', ' + JSON.parse(order.address).house : 'Не указан'}\n` +
-                     `🛒 Товары: ${order.items ? JSON.parse(order.items).map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
+                     `📍 Адрес: ${addressObj.street ? addressObj.street + ', ' + addressObj.house : 'Не указан'}\n` +
+                     `🛒 Товары: ${itemsArray.length > 0 ? itemsArray.map(item => `${item.name} x${item.quantity}`).join(', ') : 'Не указаны'}`;
         }
         
         await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
