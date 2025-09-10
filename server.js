@@ -1080,8 +1080,28 @@ function getAllOrders() {
 }
 
 // 🔥 ФУНКЦИЯ АВТОМАТИЧЕСКОЙ ОТМЕНЫ ЗАКАЗА
-function autoExpireOrder(orderId) {
-    const order = orders.get(orderId);
+async function autoExpireOrder(orderId) {
+    let order = orders.get(orderId);
+    
+    // Если заказ не найден в памяти, ищем в базе данных
+    if (!order) {
+        try {
+            const dbOrder = await OrdersDB.getById(orderId);
+            if (dbOrder) {
+                order = {
+                    id: dbOrder.order_id,
+                    status: dbOrder.status,
+                    paymentStatus: dbOrder.payment_status,
+                    totals: {
+                        total: parseFloat(dbOrder.total_amount || 0)
+                    }
+                };
+            }
+        } catch (error) {
+            logger.error(`❌ Ошибка загрузки заказа ${orderId} из БД для автоотмены:`, error.message);
+        }
+    }
+    
     if (!order) {
         logger.warn(`⚠️ Заказ ${orderId} не найден для автоотмены`);
         return;
@@ -1099,6 +1119,17 @@ function autoExpireOrder(orderId) {
     order.paymentStatus = 'expired';
     order.updatedAt = new Date();
     orders.set(orderId, order);
+    
+    // Обновляем в базе данных
+    try {
+        await OrdersDB.update(orderId, { 
+            status: 'expired',
+            payment_status: 'expired'
+        });
+        logger.info(`💾 Заказ ${orderId} отменен в БД`);
+    } catch (dbError) {
+        logger.error(`❌ Ошибка отмены заказа ${orderId} в БД:`, dbError.message);
+    }
     
     // Очищаем таймер
     clearOrderTimer(orderId);
@@ -1624,8 +1655,8 @@ async function createOrder(orderData) {
     orders.set(orderId, order);
     
     // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
-    const timer = setTimeout(() => {
-        autoExpireOrder(orderId);
+    const timer = setTimeout(async () => {
+        await autoExpireOrder(orderId);
     }, 10 * 60 * 1000); // 10 минут
     
     orderTimers.set(orderId, timer);
