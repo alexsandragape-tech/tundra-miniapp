@@ -86,8 +86,12 @@ function updateMainButton(screenId) {
 // Override showScreen to update Telegram buttons
 const originalShowScreen = window.showScreen;
 window.showScreen = function(screenId) {
-    originalShowScreen(screenId);
-    updateMainButton(screenId);
+    if (typeof originalShowScreen === 'function') {
+        originalShowScreen(screenId);
+    }
+    if (typeof updateMainButton === 'function') {
+        updateMainButton(screenId);
+    }
 };
 
 // Initial setup for Telegram buttons
@@ -1587,18 +1591,18 @@ async function showMyOrders() {
 async function loadUserOrders() {
     try {
         const userId = getUserId();
-        console.log(`🔍 CLIENT: Загружаем заказы для пользователя ${userId}`);
-        console.log(`🔍 CLIENT: URL: ${API_BASE}/api/user-orders/${userId}`);
+        console.log('🔍 CLIENT: Загружаем заказы для пользователя ' + userId);
+        console.log('🔍 CLIENT: URL: ' + API_BASE + '/api/user-orders/' + userId);
         
-        const response = await fetch(`${API_BASE}/api/user-orders/${userId}`);
-        console.log(`🔍 CLIENT: Ответ сервера: ${response.status}`);
+        const response = await fetch(API_BASE + '/api/user-orders/' + userId);
+        console.log('🔍 CLIENT: Ответ сервера: ' + response.status);
         
         if (response.ok) {
             const result = await response.json();
-            console.log(`🔍 CLIENT: Результат:`, result);
+            console.log('🔍 CLIENT: Результат:', result);
             
             if (result.ok) {
-                console.log(`🔍 CLIENT: Заказов получено: ${result.orders.length}`);
+                console.log('🔍 CLIENT: Заказов получено: ' + result.orders.length);
                 displayOrders(result.orders);
             } else {
                 console.error('Ошибка загрузки заказов:', result.error);
@@ -1616,10 +1620,16 @@ async function loadUserOrders() {
 
 // Отображение списка заказов
 function displayOrders(orders) {
-    console.log(`🔍 CLIENT: displayOrders вызвана с ${orders.length} заказами`);
+    console.log('🔍 CLIENT: displayOrders вызвана с ' + orders.length + ' заказами');
     
     const ordersList = document.getElementById('orders-list');
     const emptyOrders = document.getElementById('empty-orders');
+    
+    // Проверяем, что элементы существуют
+    if (!ordersList || !emptyOrders) {
+        console.error('❌ CLIENT: Не найдены элементы orders-list или empty-orders');
+        return;
+    }
     
     if (orders.length === 0) {
         console.log('🔍 CLIENT: Нет заказов, показываем пустой экран');
@@ -1631,13 +1641,15 @@ function displayOrders(orders) {
     ordersList.innerHTML = '';
     
     orders.forEach((order, index) => {
-        console.log(`🔍 CLIENT: Заказ ${index + 1}:`, {
+        console.log('🔍 CLIENT: Заказ ' + (index + 1) + ':', {
             order_id: order.order_id,
             status: order.status,
             total_amount: order.total_amount
         });
         const orderItem = createOrderItem(order);
-        ordersList.appendChild(orderItem);
+        if (orderItem) {
+            ordersList.appendChild(orderItem);
+        }
     });
     
     ordersList.style.display = 'block';
@@ -1656,38 +1668,61 @@ const ORDER_STATUS_TEXTS = {
 
 // Создание элемента заказа (упрощенный вид)
 function createOrderItem(order) {
-    const orderItem = document.createElement('div');
-    orderItem.className = 'order-item';
-    orderItem.onclick = () => showOrderDetails(order.order_id);
-    
-    // Получаем состав заказа
-    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-    const itemsText = Array.isArray(items) && items.length > 0 
-        ? items.map(item => `${item.name} x${item.quantity}`).join(', ')
-        : 'Состав недоступен';
-    
-    // Форматируем дату и сумму (для purchase_history используем purchase_date и amount)
-    const orderDate = order.purchase_date || order.created_at || order.createdAt;
-    const orderAmount = order.amount || order.total_amount || order.totals?.total || 0;
-    
-    orderItem.innerHTML = `
-        <div class="order-header">
-            <div class="order-date">${orderDate ? new Date(orderDate).toLocaleDateString('ru-RU') : 'Не указана'}</div>
-            <div class="order-time">${orderDate ? new Date(orderDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Не указано'}</div>
-        </div>
-        <div class="order-info">
-            <div class="order-composition">${itemsText}</div>
-            <div class="order-amount">${orderAmount}₽</div>
-        </div>
-    `;
-    
-    return orderItem;
+    try {
+        if (!order || !order.order_id) {
+            console.error('❌ CLIENT: Некорректные данные заказа:', order);
+            return null;
+        }
+        
+        const orderItem = document.createElement('div');
+        orderItem.className = 'order-item';
+        orderItem.onclick = () => showOrderDetails(order.order_id);
+        
+        // Получаем состав заказа
+        let itemsText = 'Состав недоступен';
+        try {
+            const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+            if (Array.isArray(items) && items.length > 0) {
+                itemsText = items.map(item => item.name + ' x' + item.quantity).join(', ');
+            }
+        } catch (e) {
+            console.warn('⚠️ CLIENT: Ошибка парсинга items:', e);
+        }
+        
+        // Форматируем дату и сумму (для purchase_history используем purchase_date и amount)
+        const orderDate = order.purchase_date || order.created_at || order.createdAt;
+        const orderAmount = order.amount || order.total_amount || order.totals?.total || 0;
+        
+        const orderDateText = orderDate ? new Date(orderDate).toLocaleDateString('ru-RU') : 'Не указана';
+        const orderTimeText = orderDate ? new Date(orderDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Не указано';
+        
+        orderItem.innerHTML = 
+            '<div class="order-header">' +
+                '<div class="order-date">' + orderDateText + '</div>' +
+                '<div class="order-time">' + orderTimeText + '</div>' +
+            '</div>' +
+            '<div class="order-info">' +
+                '<div class="order-composition">' + itemsText + '</div>' +
+                '<div class="order-amount">' + orderAmount + '₽</div>' +
+            '</div>';
+        
+        return orderItem;
+    } catch (error) {
+        console.error('❌ CLIENT: Ошибка создания элемента заказа:', error);
+        return null;
+    }
 }
 
 // Показать пустой список заказов
 function showEmptyOrders() {
     const ordersList = document.getElementById('orders-list');
     const emptyOrders = document.getElementById('empty-orders');
+    
+    // Проверяем, что элементы существуют
+    if (!ordersList || !emptyOrders) {
+        console.error('❌ CLIENT: Не найдены элементы orders-list или empty-orders в showEmptyOrders');
+        return;
+    }
     
     ordersList.style.display = 'none';
     emptyOrders.style.display = 'block';
