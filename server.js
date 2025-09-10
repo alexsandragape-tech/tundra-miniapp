@@ -1468,16 +1468,16 @@ app.get('/api/orders/:orderId', async (req, res) => {
                                 `📍 <b>Адрес:</b> ${addressText}\n\n` +
                                 `📦 <b>Состав заказа:</b>\n${orderItems}`;
                             
-                            // Создаем кнопки для оплаченного заказа
+                            // Создаем кнопки для оплаченного заказа согласно ТЗ
                             const inlineKeyboard = {
                                 inline_keyboard: [
                                     [
-                                        { text: '🟡 Принять', callback_data: `accept_${orderId}` },
-                                        { text: '🔴 Отменить', callback_data: `cancel_${orderId}` }
+                                        { text: '🟡 Принят в работу', callback_data: `accept_${orderId}` },
+                                        { text: '🔵 Готовится', callback_data: `preparing_${orderId}` }
                                     ],
                                     [
                                         { text: '🚚 В доставке', callback_data: `delivering_${orderId}` },
-                                        { text: '✅ Завершить', callback_data: `complete_${orderId}` }
+                                        { text: '✅ Доставлен', callback_data: `completed_${orderId}` }
                                     ]
                                 ]
                             };
@@ -2590,16 +2590,16 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                                     `📦 <b>Состав заказа:</b>\n${orderItems}` +
                                     (order.comment ? `\n💬 Комментарий: ${order.comment}` : '');
                                 
-                                // Создаем кнопки для оплаченного заказа
+                                // Создаем кнопки для оплаченного заказа согласно ТЗ
                                 const inlineKeyboard = {
                                     inline_keyboard: [
                                         [
-                                            { text: '🟡 Принять', callback_data: `accept_${orderId}` },
-                                            { text: '🔴 Отменить', callback_data: `cancel_${orderId}` }
+                                            { text: '🟡 Принят в работу', callback_data: `accept_${orderId}` },
+                                            { text: '🔵 Готовится', callback_data: `preparing_${orderId}` }
                                         ],
                                         [
                                             { text: '🚚 В доставке', callback_data: `delivering_${orderId}` },
-                                            { text: '✅ Завершить', callback_data: `complete_${orderId}` }
+                                            { text: '✅ Доставлен', callback_data: `completed_${orderId}` }
                                         ]
                                     ]
                                 };
@@ -3244,11 +3244,18 @@ async function handleCallbackQuery(callbackQuery) {
                 const items = order.items || order.cartItems || [];
                 const address = order.address || {};
                 
-                const clientMessage = `📦 <b>Обновление заказа</b>\n\n` +
-                    `Статус изменен на: ${statusEmoji} <b>${statusText}</b>\n\n` +
-                    `📋 Состав заказа:\n${items.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n') || '• Товары не найдены'}\n\n` +
-                    `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                    `📍 Адрес: ${address.street || 'Не указан'}, ${address.house || 'Не указан'}`;
+                // Форматируем время обновления
+                const updateTime = new Date().toLocaleTimeString('ru-RU', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                const clientMessage = `🔔 Статус вашего заказа #${orderId} изменился\n\n` +
+                    `📋 Заказ: ${items.map(item => `${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join(', ') || 'Товары не найдены'}\n` +
+                    `💰 Сумма: ${order.totals?.total || 0}₽\n\n` +
+                    `📍 Статус: ${statusEmoji} ${statusText}\n` +
+                    `⏰ Время обновления: ${updateTime}\n\n` +
+                    `Спасибо за ваш заказ! 🙏`;
                 
                 logger.info(`📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ: chat_id=${order.telegramUserId}`);
                 
@@ -3322,35 +3329,47 @@ ${items.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.qu
 
 [🟡 Принять] [🔵 Готовится] [🚚 Доставке] [✅ Доставлен]`;
 
-        // Создаем обновленные кнопки в зависимости от статуса
+        // Создаем обновленные кнопки в зависимости от статуса согласно ТЗ
         let inlineKeyboard;
-        if (newStatus === 'new') {
+        if (newStatus === 'new' || newStatus === 'paid') {
+            // Для новых заказов показываем все кнопки
             inlineKeyboard = {
                 inline_keyboard: [
                     [
-                        { text: '🟡 Принять', callback_data: `accept_${order.id}` },
-                        { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
+                        { text: '🟡 Принят в работу', callback_data: `accept_${order.id}` },
+                        { text: '🔵 Готовится', callback_data: `preparing_${order.id}` }
+                    ],
+                    [
+                        { text: '🚚 В доставке', callback_data: `delivering_${order.id}` },
+                        { text: '✅ Доставлен', callback_data: `completed_${order.id}` }
                     ]
                 ]
             };
         } else if (newStatus === 'accepted') {
+            // Для принятых заказов скрываем кнопку "Принят в работу"
             inlineKeyboard = {
                 inline_keyboard: [
                     [
                         { text: '🔵 Готовится', callback_data: `preparing_${order.id}` },
-                        { text: '🔴 Отменить', callback_data: `cancel_${order.id}` }
+                        { text: '🚚 В доставке', callback_data: `delivering_${order.id}` }
+                    ],
+                    [
+                        { text: '✅ Доставлен', callback_data: `completed_${order.id}` }
                     ]
                 ]
             };
         } else if (newStatus === 'preparing') {
+            // Для готовящихся заказов скрываем кнопки "Принят" и "Готовится"
             inlineKeyboard = {
                 inline_keyboard: [
                     [
-                        { text: '🚚 В доставку', callback_data: `delivering_${order.id}` }
+                        { text: '🚚 В доставке', callback_data: `delivering_${order.id}` },
+                        { text: '✅ Доставлен', callback_data: `completed_${order.id}` }
                     ]
                 ]
             };
         } else if (newStatus === 'delivering') {
+            // Для доставляемых заказов показываем только "Доставлен"
             inlineKeyboard = {
                 inline_keyboard: [
                     [
@@ -3359,12 +3378,12 @@ ${items.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.qu
                 ]
             };
         } else {
-            // Для завершенных или отмененных заказов убираем кнопки
+            // Для завершенных заказов убираем кнопки
             inlineKeyboard = { inline_keyboard: [] };
         }
         
         // Обновляем сообщение
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/editMessageText`, {
             chat_id: chatId,
             message_id: messageId,
             text: message,
