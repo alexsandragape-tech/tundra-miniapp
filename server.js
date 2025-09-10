@@ -1695,7 +1695,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             phone: order.phone,
             deliveryZone: orderData.deliveryZone || 'moscow',
             address: JSON.stringify(orderData.address),
-            items: orderData.cartItems,
+            items: JSON.stringify(orderData.cartItems),
             totalAmount: totalAmount,
             status: 'new',
             paymentStatus: 'pending',
@@ -1982,6 +1982,51 @@ app.get('/test-webhook', (req, res) => {
     });
 });
 
+// Простой endpoint для тестирования webhook'а (GET запрос)
+app.get('/webhook/yookassa', (req, res) => {
+    logger.info('🧪 ТЕСТ WEBHOOK: Получен GET запрос на webhook');
+    res.json({
+        ok: true,
+        message: 'Webhook endpoint работает',
+        method: 'GET',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Endpoint для проверки всех заказов
+app.get('/debug/orders', async (req, res) => {
+    try {
+        logger.info('🔍 DEBUG: Получение всех заказов');
+        
+        // Получаем все заказы из БД
+        const orders = await OrdersDB.getAll();
+        
+        logger.info('🔍 DEBUG: Найдено заказов в БД:', orders.length);
+        
+        // Форматируем данные для отображения
+        const formattedOrders = orders.map(order => ({
+            id: order.order_id,
+            status: order.status,
+            payment_status: order.payment_status,
+            payment_id: order.payment_id,
+            total_amount: order.total_amount,
+            created_at: order.created_at,
+            user_name: order.user_name,
+            phone: order.phone
+        }));
+        
+        res.json({
+            ok: true,
+            count: orders.length,
+            orders: formattedOrders,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        logger.error('❌ DEBUG: Ошибка получения заказов:', error.message);
+        res.json({ ok: false, error: error.message });
+    }
+});
+
 // Тестовый endpoint для принудительной проверки статуса заказа
 app.get('/test-payment/:orderId', async (req, res) => {
     const { orderId } = req.params;
@@ -2187,17 +2232,6 @@ app.get('/payment/success', async (req, res) => {
 app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
     try {
         logger.info('🔔 WEBHOOK: Получено уведомление от ЮKassa');
-        logger.info('📦 WEBHOOK: Тип req.body:', typeof req.body);
-        logger.info('📦 WEBHOOK: req.body:', req.body);
-        logger.info('📦 WEBHOOK: Headers:', req.headers);
-        logger.info('📦 WEBHOOK: Content-Type:', req.headers['content-type']);
-        logger.info('📦 WEBHOOK: User-Agent:', req.headers['user-agent']);
-        
-        // Логируем полные данные webhook для диагностики
-        logger.info('🔍 WEBHOOK: Полные данные webhook:', JSON.stringify(req.body, null, 2));
-        
-        // Проверяем, что webhook доходит до этого места
-        logger.info('🔍 WEBHOOK: Начинаем обработку webhook...');
         
         let notification;
         
@@ -2214,24 +2248,9 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         }
         
         // Проверяем тип уведомления (YooKassa отправляет type: 'notification' и event: 'payment.succeeded')
-        logger.info('🔍 WEBHOOK: Проверяем уведомление:', {
-            type: notification.type,
-            event: notification.event,
-            hasObject: !!notification.object
-        });
-        
         if (notification.type === 'notification' && notification.event === 'payment.succeeded') {
             const payment = notification.object;
             logger.info('✅ WEBHOOK: Платеж успешно завершен:', payment.id);
-            logger.info('🔍 WEBHOOK: Данные платежа:', {
-                id: payment.id,
-                status: payment.status,
-                amount: payment.amount,
-                metadata: payment.metadata
-            });
-            
-            // Проверяем, что мы дошли до обработки payment.succeeded
-            logger.info('🔍 WEBHOOK: Обрабатываем payment.succeeded...');
             
             // Обновляем статус заказа в базе данных
             if (payment.metadata && payment.metadata.orderId) {
