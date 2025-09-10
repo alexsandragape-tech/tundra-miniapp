@@ -1023,8 +1023,56 @@ function updateOrderStatus(orderId, newStatus) {
     return null;
 }
 
-function getOrder(orderId) {
-    return orders.get(orderId);
+async function getOrder(orderId) {
+    // Сначала ищем в памяти
+    let order = orders.get(orderId);
+    
+    // Если не найден в памяти, ищем в базе данных
+    if (!order) {
+        try {
+            const dbOrder = await OrdersDB.getById(orderId);
+            if (dbOrder) {
+                // Конвертируем данные из БД в формат, ожидаемый клиентом
+                order = {
+                    id: dbOrder.order_id,
+                    status: dbOrder.status,
+                    paymentStatus: dbOrder.payment_status,
+                    totals: {
+                        total: parseFloat(dbOrder.total_amount || 0)
+                    },
+                    items: (() => {
+                        try {
+                            return typeof dbOrder.items === 'string' ? JSON.parse(dbOrder.items) : (dbOrder.items || []);
+                        } catch (e) {
+                            logger.warn('⚠️ Ошибка парсинга items в getOrder:', e.message);
+                            return [];
+                        }
+                    })(),
+                    address: (() => {
+                        try {
+                            return typeof dbOrder.address === 'string' ? JSON.parse(dbOrder.address) : (dbOrder.address || {});
+                        } catch (e) {
+                            logger.warn('⚠️ Ошибка парсинга address в getOrder:', e.message);
+                            return {};
+                        }
+                    })(),
+                    phone: dbOrder.phone,
+                    customerName: dbOrder.user_name,
+                    createdAt: dbOrder.created_at,
+                    payment_id: dbOrder.payment_id,
+                    telegramUserId: dbOrder.user_id // Предполагаем, что user_id это telegramUserId
+                };
+                
+                // Сохраняем в памяти для быстрого доступа
+                orders.set(orderId, order);
+                logger.info(`📦 Заказ ${orderId} загружен из БД в память`);
+            }
+        } catch (error) {
+            logger.error(`❌ Ошибка загрузки заказа ${orderId} из БД:`, error.message);
+        }
+    }
+    
+    return order;
 }
 
 function getAllOrders() {
@@ -1815,7 +1863,15 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         
         logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
         
-        // Уведомление о новом заказе убрано - будет отправляться только после оплаты
+        // Отправляем уведомление в Telegram
+        if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+            try {
+                await sendTelegramNotification(order, 'new');
+                logger.info('✅ Уведомление в Telegram отправлено');
+            } catch (error) {
+                logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+            }
+        }
         
         // Возвращаем данные заказа клиенту
         res.json({
@@ -3026,8 +3082,35 @@ app.get('/test-telegram-webhook', (req, res) => {
     });
 });
 
+// Эндпоинт для настройки webhook'а Telegram
+app.get('/setup-telegram-webhook', async (req, res) => {
+    try {
+        if (!config.TELEGRAM_BOT_TOKEN) {
+            return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN не настроен' });
+        }
+        
+        const webhookUrl = 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook';
+        
+        const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+            url: webhookUrl
+        });
+        
+        res.json({
+            ok: true,
+            message: 'Webhook настроен',
+            webhookUrl: webhookUrl,
+            telegramResponse: response.data
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Ошибка настройки webhook',
+            details: error.message
+        });
+    }
+});
+
 // Webhook для Telegram
-app.post('/api/telegram/webhook', (req, res) => {
+app.post('/api/telegram/webhook', async (req, res) => {
     try {
         logger.info('🔔 TELEGRAM WEBHOOK: Получен запрос от Telegram');
         logger.info('🔔 TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
@@ -3037,7 +3120,7 @@ app.post('/api/telegram/webhook', (req, res) => {
         if (callback_query) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
             // Обрабатываем нажатие на inline-кнопку
-            handleCallbackQuery(callback_query);
+            await handleCallbackQuery(callback_query);
         } else if (message) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
             // Обрабатываем обычные сообщения
@@ -3062,7 +3145,7 @@ async function handleCallbackQuery(callbackQuery) {
         
         logger.debug(`Обработка действия: ${action} для заказа ${orderId}`);
         
-        let order = getOrder(orderId);
+        let order = await getOrder(orderId);
         if (!order) {
             logger.error(`Заказ ${orderId} не найден`);
             return;
@@ -3163,11 +3246,14 @@ async function handleCallbackQuery(callbackQuery) {
         // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
             try {
+                const items = order.items || order.cartItems || [];
+                const address = order.address || {};
+                
                 const clientMessage = `📦 <b>Обновление заказа</b>\n\n` +
                     `Статус изменен на: ${statusEmoji} <b>${statusText}</b>\n\n` +
-                    `📋 Состав заказа:\n${order.cartItems?.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n') || '• Товары не найдены'}\n\n` +
+                    `📋 Состав заказа:\n${items.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n') || '• Товары не найдены'}\n\n` +
                     `💰 Сумма: ${order.totals?.total || 0}₽\n` +
-                    `📍 Адрес: ${order.address?.street}, ${order.address?.house}`;
+                    `📍 Адрес: ${address.street || 'Не указан'}, ${address.house || 'Не указан'}`;
                 
                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     chat_id: order.telegramUserId,
@@ -3218,17 +3304,20 @@ async function updateOrderMessage(chatId, messageId, order, newStatus) {
         };
         
         // Формируем обновленное сообщение
+        const items = order.items || order.cartItems || [];
+        const address = order.address || {};
+        
         const message = `🆕 ЗАКАЗ #${order.id} - ${statusEmojis[newStatus]} ${statusTexts[newStatus]}
 
 👤 ${order.customerName || 'Клиент'}
-📍 ${order.address.street}, ${order.address.house}${order.address.apartment ? `, кв.${order.address.apartment}` : ''} (${order.deliveryZone === 'moscow' ? 'Москва' : 'МО'})
+📍 ${address.street || 'Не указан'}, ${address.house || 'Не указан'}${address.apartment ? `, кв.${address.apartment}` : ''} (${order.deliveryZone === 'moscow' ? 'Москва' : 'МО'})
 💰 ${order.totals?.total || 0}₽
-📦 ${order.cartItems?.length || 0} товаров
+📦 ${items.length} товаров
 
 📋 Состав заказа:
-${order.cartItems.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n')}
+${items.map(item => `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join('\n')}
 
-📱 Телефон: ${order.phone}
+📱 Телефон: ${order.phone || 'Не указан'}
 💬 Комментарий: ${order.comment || 'нет'}
 
 [🟡 Принять] [🔵 Готовится] [🚚 Доставке] [✅ Доставлен]`;
