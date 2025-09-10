@@ -1402,6 +1402,118 @@ app.get('/api/orders/:orderId', async (req, res) => {
     }
 });
 
+// 🔧 API ДЛЯ СОЗДАНИЯ ЗАКАЗА - ПЕРЕД SPA FALLBACK
+// API для заказов
+app.post('/api/orders', validateOrderData, async (req, res) => {
+    logger.info('🔥 Создание нового заказа');
+    let order = null;
+    
+    // Режим продакшена - без демо-режима
+    
+    try {
+        const orderData = req.body;
+        
+        // Создаем заказ
+        order = await createOrder(orderData);
+        logger.info('✅ Заказ #' + order.id + ' создан, сумма: ' + (order.totals?.total || 0) + '₽');
+        
+        // Получаем данные клиента (приоритет: Telegram > форма > fallback)
+        const telegramUser = orderData.telegramUser;
+        
+        const customerName = telegramUser?.full_name || 
+                           telegramUser?.first_name || 
+                           orderData.customerName || 
+                           'Клиент';
+        
+        // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
+        const totalAmount = order.totals?.total || 0;
+        const description = 'Заказ #' + order.id + ' - ' + customerName;
+        
+        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
+            logger.error('❌ ЮKassa ключи не настроены');
+            throw new Error('ЮKassa ключи не настроены');
+        }
+        
+        if (!checkout) {
+            logger.error('❌ ЮKassa не инициализирована');
+            throw new Error('ЮKassa недоступна');
+        }
+        
+        const customerInfo = {
+            customerName: customerName,
+            phone: order.phone || '',
+            telegramUsername: telegramUser?.username || null
+        };
+        
+        // Добавляем данные клиента в заказ
+        order.customerName = customerInfo.customerName;
+        order.telegramUsername = customerInfo.telegramUsername;
+        order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
+        
+        // Создаем реальный платеж через ЮKassa
+        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
+        
+        // Сохраняем ID платежа в заказе
+        order.paymentId = payment.id;
+        order.paymentUrl = payment.confirmation?.confirmation_url;
+        
+        // Обновляем заказ в памяти
+        orders.set(order.id, order);
+        
+        // Сохраняем в базу данных
+        await OrdersDB.create({
+            order_id: order.id,
+            user_id: orderData.userId,
+            user_name: customerName,
+            phone: order.phone,
+            address: JSON.stringify(order.address),
+            items: JSON.stringify(order.items),
+            total_amount: totalAmount,
+            status: 'new',
+            payment_status: 'pending',
+            payment_id: payment.id,
+            created_at: new Date().toISOString()
+        });
+        
+        logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
+        
+        // Отправляем уведомление в Telegram
+        if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+            try {
+                await sendTelegramNotification(order, 'new');
+                logger.info('✅ Уведомление в Telegram отправлено');
+            } catch (error) {
+                logger.error('❌ Ошибка отправки уведомления в Telegram:', error.message);
+            }
+        }
+        
+        // Возвращаем данные заказа клиенту
+        res.json({
+            ok: true,
+            order: {
+                id: order.id,
+                status: order.status,
+                paymentUrl: order.paymentUrl,
+                totals: order.totals
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка создания заказа:', error.message);
+        
+        // Если заказ был создан, но произошла ошибка, удаляем его
+        if (order && order.id) {
+            orders.delete(order.id);
+            logger.info('🗑️ Заказ #' + order.id + ' удален из-за ошибки');
+        }
+        
+        res.status(500).json({
+            ok: false,
+            error: error.message
+        });
+    }
+});
+
 // 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ (только для /admin, НЕ для /api/admin/*)
 app.get('/admin', (req, res) => {
     console.log('🔍 Обработка запроса /admin');
@@ -1915,98 +2027,7 @@ app.get('/test-webhook', (req, res) => {
     });
 });
 
-// API для заказов
-app.post('/api/orders', validateOrderData, async (req, res) => {
-    logger.info('🔥 Создание нового заказа');
-    let order = null;
-    
-    // Режим продакшена - без демо-режима
-    
-    try {
-        const orderData = req.body;
-        
-        // Создаем заказ
-        order = await createOrder(orderData);
-        logger.info(`✅ Заказ #${order.id} создан, сумма: ${order.totals?.total || 0}₽`);
-        
-        // Получаем данные клиента (приоритет: Telegram > форма > fallback)
-        const telegramUser = orderData.telegramUser;
-        
-        const customerName = telegramUser?.full_name || 
-                           telegramUser?.first_name || 
-                           orderData.customerName || 
-                           'Клиент';
-        
-        // 💳 СОЗДАЕМ ПЛАТЕЖ В YOOKASSA
-        const totalAmount = order.totals?.total || 0;
-        const description = `Заказ #${order.id} - ${customerName}`;
-        
-        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
-            logger.error('❌ ЮKassa ключи не настроены');
-            throw new Error('ЮKassa ключи не настроены');
-        }
-        
-        if (!checkout) {
-            logger.error('❌ ЮKassa не инициализирована');
-            throw new Error('ЮKassa недоступна');
-        }
-        
-        const customerInfo = {
-            customerName: customerName,
-            phone: order.phone || '',
-            telegramUsername: telegramUser?.username || null
-        };
-        
-        // Добавляем данные клиента в заказ
-        order.customerName = customerInfo.customerName;
-        order.telegramUsername = customerInfo.telegramUsername;
-        order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
-        
-        // Создаем реальный платеж через ЮKassa
-        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
-        
-        // Сохраняем ID платежа в заказе
-        order.paymentId = payment.id;
-        order.paymentUrl = payment.confirmation.confirmation_url;
-        orders.set(order.id, order);
-        
-        // Уведомление в Telegram будет отправлено только после оплаты заказа
-        logger.info(`📝 Заказ ${order.id} создан, ожидает оплаты`);
-        
-        // Обновляем в БД
-        try {
-            const updateData = {
-                paymentId: order.paymentId,
-                paymentUrl: order.paymentUrl,
-                status: order.status
-            };
-            await OrdersDB.update(order.id, updateData);
-        } catch (dbError) {
-            logger.error(`❌ Ошибка обновления заказа в БД:`, dbError.message);
-        }
-        
-        logger.info(`✅ Заказ #${order.id} и платеж созданы успешно`);
-        
-        const response = { 
-            ok: true, 
-            orderId: order.id,
-            paymentUrl: payment.confirmation.confirmation_url,
-            paymentId: payment.id,
-            amount: totalAmount
-        };
-        
-        res.json(response);
-    } catch (error) {
-        logger.error('❌ Ошибка обработки заказа:', error.message);
-        
-        // Возвращаем ошибку клиенту
-        res.status(500).json({ 
-            ok: false, 
-            error: 'Ошибка создания заказа',
-            message: 'Не удалось создать заказ. Попробуйте еще раз.'
-        });
-    }
-});
+// API для заказов ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД SPA FALLBACK
 
 
 // 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ОПЛАЧЕННЫХ ЗАКАЗОВ С ЛОЯЛЬНОСТЬЮ
