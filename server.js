@@ -2260,13 +2260,16 @@ app.get('/payment/success', async (req, res) => {
             </div>
             <script>
                 function goBack() {
+                    // Возвращаемся в приложение с параметром order
+                    const appUrl = 'https://tundra-miniapp-production.up.railway.app/?order=${order || ''}';
+                    
                     // Проверяем, находимся ли мы в Telegram WebApp
                     if (window.Telegram && window.Telegram.WebApp) {
-                        // Закрываем WebApp и возвращаемся в Telegram
-                        window.Telegram.WebApp.close();
+                        // Открываем приложение с параметром order
+                        window.Telegram.WebApp.openLink(appUrl);
                     } else {
-                        // Обычный браузер - перенаправляем на главную
-                        window.location.href = '/';
+                        // Обычный браузер - перенаправляем в приложение
+                        window.location.href = appUrl;
                     }
                 }
                 
