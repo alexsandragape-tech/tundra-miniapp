@@ -1315,8 +1315,22 @@ app.get('/api/orders/:orderId', async (req, res) => {
                 totals: {
                     total: parseFloat(order.total_amount || 0)
                 },
-                items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
-                address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
+                items: (() => {
+                    try {
+                        return typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+                    } catch (e) {
+                        logger.warn('⚠️ Ошибка парсинга items для заказа ' + orderId + ':', e.message);
+                        return [];
+                    }
+                })(),
+                address: (() => {
+                    try {
+                        return typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
+                    } catch (e) {
+                        logger.warn('⚠️ Ошибка парсинга address для заказа ' + orderId + ':', e.message);
+                        return {};
+                    }
+                })(),
                 phone: order.phone,
                 customerName: order.user_name,
                 createdAt: order.created_at
@@ -1326,6 +1340,39 @@ app.get('/api/orders/:orderId', async (req, res) => {
             logger.info('🔍 API: Заказ ' + orderId + ' не найден в БД, ищем в памяти...');
             order = getOrder(orderId);
             logger.info('🔍 API: Заказ ' + orderId + ' в памяти:', order ? 'найден' : 'не найден');
+            
+            // Если заказ найден в памяти, но не в БД, проверяем статус платежа в ЮKassa
+            if (order && order.paymentId) {
+                logger.info('🔍 API: Проверяем статус платежа в ЮKassa для заказа ' + orderId);
+                try {
+                    const payment = await checkout.getPayment(order.paymentId);
+                    logger.info('🔍 API: Статус платежа в ЮKassa:', {
+                        id: payment.id,
+                        status: payment.status,
+                        paid: payment.paid
+                    });
+                    
+                    // Если платеж оплачен, обновляем заказ
+                    if (payment.status === 'succeeded' && payment.paid) {
+                        logger.info('✅ API: Платеж оплачен, обновляем заказ ' + orderId);
+                        await OrdersDB.update(orderId, {
+                            status: 'accepted',
+                            payment_status: 'paid',
+                            payment_id: payment.id,
+                            total_amount: parseFloat(payment.amount.value)
+                        });
+                        
+                        // Обновляем заказ в памяти
+                        order.status = 'accepted';
+                        order.paymentStatus = 'paid';
+                        orders.set(orderId, order);
+                        
+                        logger.info('✅ API: Заказ ' + orderId + ' обновлен после проверки ЮKassa');
+                    }
+                } catch (error) {
+                    logger.error('❌ API: Ошибка проверки статуса платежа в ЮKassa:', error.message);
+                }
+            }
         }
         
         if (order) {
@@ -1861,6 +1908,8 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         logger.info('📦 WEBHOOK: Тип req.body:', typeof req.body);
         logger.info('📦 WEBHOOK: req.body:', req.body);
         logger.info('📦 WEBHOOK: Headers:', req.headers);
+        logger.info('📦 WEBHOOK: Content-Type:', req.headers['content-type']);
+        logger.info('📦 WEBHOOK: User-Agent:', req.headers['user-agent']);
         
         // Логируем полные данные webhook для диагностики
         logger.info('🔍 WEBHOOK: Полные данные webhook:', JSON.stringify(req.body, null, 2));
