@@ -2105,7 +2105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log(`🤖 Telegram WebApp доступен:`, !!window.Telegram?.WebApp);
                         
                         // Проверяем, запускается ли в Telegram
-                        if (window.Telegram?.WebApp) {
+                        if (window.Telegram?.WebApp && window.Telegram.WebApp.openLink) {
                             console.log(`📱 Открываем через Telegram WebApp...`);
                             // В Telegram Web App открываем через openLink
                             window.Telegram.WebApp.openLink(result.order.paymentUrl);
@@ -2725,7 +2725,7 @@ function redirectToPayment() {
                 console.log('🔗 Payment URL:', orderData.paymentUrl);
                 
                 // Открываем страницу оплаты
-                if (window.Telegram?.WebApp) {
+                if (window.Telegram?.WebApp && window.Telegram.WebApp.openLink) {
                     window.Telegram.WebApp.openLink(orderData.paymentUrl);
                 } else {
                     window.location.href = orderData.paymentUrl;
