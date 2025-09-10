@@ -1864,13 +1864,13 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 // 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ОПЛАЧЕННЫХ ЗАКАЗОВ С ЛОЯЛЬНОСТЬЮ
 async function syncPaidOrdersToLoyalty(userId) {
     try {
-        console.log(`🔍 СИНХРОНИЗАЦИЯ: НАЧАЛО для пользователя ${userId}`);
-        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Проверяем оплаченные заказы для пользователя ${userId}`);
+        console.log('🔍 СИНХРОНИЗАЦИЯ: НАЧАЛО для пользователя ' + userId);
+        logger.info('🔄 СИНХРОНИЗАЦИЯ: Проверяем оплаченные заказы для пользователя ' + userId);
         
         // Получаем все заказы пользователя из БД
         const orders = await OrdersDB.getByUserId(userId);
-        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Найдено ${orders.length} заказов в БД`);
-        console.log(`🔍 СИНХРОНИЗАЦИЯ: Все заказы:`, orders.map(o => ({
+        logger.info('🔄 СИНХРОНИЗАЦИЯ: Найдено ' + orders.length + ' заказов в БД');
+        console.log('🔍 СИНХРОНИЗАЦИЯ: Все заказы:', orders.map(o => ({
             order_id: o.order_id,
             payment_status: o.payment_status,
             status: o.status,
@@ -1881,13 +1881,13 @@ async function syncPaidOrdersToLoyalty(userId) {
         // Получаем существующие записи в purchase_history
         const existingPurchases = await PurchaseHistoryDB.getByUserId(userId);
         const existingOrderIds = new Set(existingPurchases.map(p => p.order_id));
-        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Уже есть ${existingOrderIds.size} записей в purchase_history`);
+        logger.info('🔄 СИНХРОНИЗАЦИЯ: Уже есть ' + existingOrderIds.size + ' записей в purchase_history');
         
         let addedCount = 0;
         
         // Проверяем каждый заказ
         for (const order of orders) {
-            console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id}:`, {
+            console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ':', {
                 payment_status: order.payment_status,
                 status: order.status,
                 total_amount: order.total_amount
@@ -1895,7 +1895,7 @@ async function syncPaidOrdersToLoyalty(userId) {
             
             // Пропускаем если уже есть в purchase_history
             if (existingOrderIds.has(order.order_id)) {
-                console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} уже есть в purchase_history`);
+                console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' уже есть в purchase_history');
                 continue;
             }
             
@@ -1907,8 +1907,8 @@ async function syncPaidOrdersToLoyalty(userId) {
                           (order.payment_id && order.payment_id !== '');
             
             if (isPaid) {
-                logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ${order.order_id} в лояльность`);
-                logger.info(`🔄 СИНХРОНИЗАЦИЯ: Данные заказа:`, {
+                logger.info('🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ' + order.order_id + ' в лояльность');
+                logger.info('🔄 СИНХРОНИЗАЦИЯ: Данные заказа:', {
                     order_id: order.order_id,
                     total_amount: order.total_amount,
                     totalAmount: order.totalAmount,
@@ -1931,21 +1931,21 @@ async function syncPaidOrdersToLoyalty(userId) {
                     });
                     
                     addedCount++;
-                    logger.info(`✅ СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} добавлен в лояльность`);
+                    logger.info('✅ СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' добавлен в лояльность');
                 } catch (error) {
-                    logger.error(`❌ СИНХРОНИЗАЦИЯ: Ошибка добавления заказа ${order.order_id}:`, error.message);
+                    logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка добавления заказа ' + order.order_id + ':', error.message);
                 }
             } else {
-                console.log(`🔍 СИНХРОНИЗАЦИЯ: Заказ ${order.order_id} не подходит - payment_status: ${order.payment_status}, status: ${order.status}, payment_id: ${order.payment_id}`);
+                console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' не подходит - payment_status: ' + order.payment_status + ', status: ' + order.status + ', payment_id: ' + order.payment_id);
             }
         }
         
-        logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавлено ${addedCount} новых записей в лояльность`);
-        console.log(`🔍 СИНХРОНИЗАЦИЯ: КОНЕЦ - добавлено ${addedCount} записей`);
+        logger.info('🔄 СИНХРОНИЗАЦИЯ: Добавлено ' + addedCount + ' новых записей в лояльность');
+        console.log('🔍 СИНХРОНИЗАЦИЯ: КОНЕЦ - добавлено ' + addedCount + ' записей');
         return addedCount;
     } catch (error) {
         logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка синхронизации лояльности:', error.message);
-        console.log(`🔍 СИНХРОНИЗАЦИЯ: ОШИБКА - ${error.message}`);
+        console.log('🔍 СИНХРОНИЗАЦИЯ: ОШИБКА - ' + error.message);
         return 0;
     }
 }
@@ -2673,40 +2673,40 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
 
 // Получение заказов пользователя (все заказы кроме отмененных)
 app.get('/api/orders/user/:userId', async (req, res) => {
-    console.log(`🚀 API: ENDPOINT ВЫЗВАН! /api/orders/user/${req.params.userId}`);
+    console.log('🚀 API: ENDPOINT ВЫЗВАН! /api/orders/user/' + req.params.userId);
     try {
         const { userId } = req.params;
-        console.log(`🔍 API: Загрузка заказов для пользователя ${userId}`);
+        console.log('🔍 API: Загрузка заказов для пользователя ' + userId);
         
         // 🔄 СНАЧАЛА ПРОВЕРЯЕМ И СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ
-        console.log(`🔍 API: Вызываем syncPaidOrdersToLoyalty для ${userId}`);
+        console.log('🔍 API: Вызываем syncPaidOrdersToLoyalty для ' + userId);
         await syncPaidOrdersToLoyalty(userId);
-        console.log(`🔍 API: syncPaidOrdersToLoyalty завершена`);
+        console.log('🔍 API: syncPaidOrdersToLoyalty завершена');
         
         // Используем PurchaseHistoryDB вместо OrdersDB для консистентности с профилем
-        console.log(`🔍 API: Загружаем заказы из purchase_history для ${userId}`);
+        console.log('🔍 API: Загружаем заказы из purchase_history для ' + userId);
         const orders = await PurchaseHistoryDB.getByUserId(userId);
-        console.log(`🔍 API: Найдено ${orders.length} заказов в purchase_history`);
+        console.log('🔍 API: Найдено ' + orders.length + ' заказов в purchase_history');
         
         // Показываем все заказы (в purchase_history уже только оплаченные)
-        console.log(`🔍 API: Заказов для отображения: ${orders.length}`);
+        console.log('🔍 API: Заказов для отображения: ' + orders.length);
         
         if (orders.length > 0) {
-            console.log(`🔍 API: Первый заказ:`, {
+            console.log('🔍 API: Первый заказ:', {
                 order_id: orders[0].order_id,
                 amount: orders[0].amount,
                 purchase_date: orders[0].purchase_date
             });
         } else {
-            console.log(`🔍 API: НЕТ ЗАКАЗОВ в purchase_history для пользователя ${userId}`);
+            console.log('🔍 API: НЕТ ЗАКАЗОВ в purchase_history для пользователя ' + userId);
         }
         
-        logger.info(`📋 Загружено ${orders.length} заказов для пользователя ${userId}`);
-        console.log(`🚀 API: ОТПРАВЛЯЕМ ОТВЕТ: ${orders.length} заказов`);
+        logger.info('📋 Загружено ' + orders.length + ' заказов для пользователя ' + userId);
+        console.log('🚀 API: ОТПРАВЛЯЕМ ОТВЕТ: ' + orders.length + ' заказов');
         res.json({ ok: true, orders: orders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
-        console.log(`🚀 API: ОШИБКА: ${error.message}`);
+        console.log('🚀 API: ОШИБКА: ' + error.message);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
