@@ -80,6 +80,27 @@ class YooKassaAPI {
             throw error;
         }
     }
+    
+    async getPayment(paymentId) {
+        try {
+            logger.debug('💳 Получаем информацию о платеже:', paymentId);
+            
+            const response = await axios.get(`${this.baseURL}/payments/${paymentId}`, {
+                auth: {
+                    username: this.shopId,
+                    password: this.secretKey
+                },
+                timeout: 30000
+            });
+            
+            logger.debug('✅ Информация о платеже получена');
+            return response.data;
+            
+        } catch (error) {
+            logger.error('❌ Ошибка получения платежа ЮKassa:', error.message);
+            throw error;
+        }
+    }
 }
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
