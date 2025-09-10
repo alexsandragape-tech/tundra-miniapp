@@ -1588,6 +1588,7 @@ async function loadUserOrders() {
     try {
         const userId = getUserId();
         console.log(`🔍 CLIENT: Загружаем заказы для пользователя ${userId}`);
+        console.log(`🔍 CLIENT: URL: ${API_BASE}/api/orders/user/${userId}`);
         
         const response = await fetch(`${API_BASE}/api/orders/user/${userId}`);
         console.log(`🔍 CLIENT: Ответ сервера: ${response.status}`);
