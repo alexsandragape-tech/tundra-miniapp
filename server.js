@@ -1368,19 +1368,80 @@ app.get('/api/orders/:orderId', async (req, res) => {
                         
                         logger.info('✅ API: Заказ ' + orderId + ' обновлен после принудительной проверки');
                         
-                        // Отправляем уведомление в Telegram
+                        // Отправляем уведомление с кнопками в Telegram
                         try {
-                            const orderForNotification = {
-                                id: orderId,
-                                customerName: order.user_name,
-                                phone: order.phone,
-                                totals: { total: parseFloat(payment.amount.value) },
-                                address: order.address,
-                                items: order.items
+                            // Формируем адрес
+                            let addressText = 'Адрес не указан';
+                            try {
+                                const addressData = typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
+                                if (addressData.street && addressData.house) {
+                                    addressText = [
+                                        addressData.street,
+                                        addressData.house,
+                                        addressData.apartment && `кв. ${addressData.apartment}`,
+                                        addressData.floor && `эт. ${addressData.floor}`,
+                                        addressData.entrance && `под. ${addressData.entrance}`,
+                                        addressData.intercom && `домофон: ${addressData.intercom}`
+                                    ].filter(Boolean).join(', ');
+                                }
+                            } catch (e) {
+                                logger.warn('⚠️ Ошибка парсинга адреса в API:', e.message);
+                            }
+                            
+                            // Формируем состав заказа
+                            let orderItems = 'Состав заказа недоступен';
+                            let itemsArray = [];
+                            
+                            if (order.items) {
+                                if (typeof order.items === 'string') {
+                                    try {
+                                        itemsArray = JSON.parse(order.items);
+                                    } catch (e) {
+                                        logger.warn('⚠️ Ошибка парсинга items в API:', e.message);
+                                        itemsArray = [];
+                                    }
+                                } else if (Array.isArray(order.items)) {
+                                    itemsArray = order.items;
+                                }
+                            }
+                            
+                            if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+                                orderItems = itemsArray.map(item => 
+                                    `• ${item.name} x${item.quantity} - ${item.price * item.quantity}₽`
+                                ).join('\n');
+                            }
+                            
+                            const message = 
+                                `💰 <b>ЗАКАЗ ОПЛАЧЕН!</b>\n\n` +
+                                `📋 <b>Номер заказа:</b> #${orderId}\n` +
+                                `👤 <b>Клиент:</b> ${order.user_name || 'Не указан'}\n` +
+                                `📞 <b>Телефон:</b> ${order.phone || 'Не указан'}\n` +
+                                `💰 <b>Сумма:</b> ${parseFloat(payment.amount.value)}₽\n` +
+                                `📍 <b>Адрес:</b> ${addressText}\n\n` +
+                                `📦 <b>Состав заказа:</b>\n${orderItems}`;
+                            
+                            // Создаем кнопки для оплаченного заказа
+                            const inlineKeyboard = {
+                                inline_keyboard: [
+                                    [
+                                        { text: '🟡 Принять', callback_data: `accept_${orderId}` },
+                                        { text: '🔴 Отменить', callback_data: `cancel_${orderId}` }
+                                    ],
+                                    [
+                                        { text: '🚚 В доставке', callback_data: `delivering_${orderId}` },
+                                        { text: '✅ Завершить', callback_data: `complete_${orderId}` }
+                                    ]
+                                ]
                             };
                             
-                            await sendTelegramNotification(orderForNotification, 'paid');
-                            logger.info('✅ API: Уведомление об оплате отправлено в Telegram');
+                            await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                                chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+                                text: message,
+                                parse_mode: 'HTML',
+                                reply_markup: inlineKeyboard
+                            });
+                            
+                            logger.info('✅ API: Уведомление с кнопками об оплате отправлено в Telegram');
                         } catch (telegramError) {
                             logger.error('❌ API: Ошибка отправки уведомления в Telegram:', telegramError.message);
                         }
@@ -2297,10 +2358,23 @@ app.get('/payment/success', async (req, res) => {
     `);
 });
 
+// Тестовый эндпоинт для проверки webhook'а
+app.get('/test-webhook', (req, res) => {
+    res.json({
+        ok: true,
+        message: 'Webhook доступен',
+        url: 'https://tundra-miniapp-production.up.railway.app/webhook/yookassa',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Webhook для обработки уведомлений от ЮKassa
 app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
     try {
         logger.info('🔔 WEBHOOK: Получено уведомление от ЮKassa');
+        logger.info('🔔 WEBHOOK: IP адрес:', req.ip);
+        logger.info('🔔 WEBHOOK: User-Agent:', req.headers['user-agent']);
+        logger.info('🔔 WEBHOOK: Content-Type:', req.headers['content-type']);
         
         let notification;
         
@@ -2536,6 +2610,7 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
         }
         
         logger.info('✅ WEBHOOK: Обработка завершена успешно');
+        logger.info('✅ WEBHOOK: Отправляем ответ 200 OK');
         res.status(200).send('OK');
     } catch (error) {
         logger.error('❌ WEBHOOK: Ошибка обработки webhook:', error.message);
