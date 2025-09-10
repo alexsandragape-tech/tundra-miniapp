@@ -1931,6 +1931,120 @@ app.get('/test-webhook', (req, res) => {
     });
 });
 
+// Маршрут для возврата после успешной оплаты
+app.get('/payment/success', async (req, res) => {
+    const { order } = req.query;
+    logger.info('🎉 Возврат после успешной оплаты заказа:', order);
+    
+    // Принудительно проверяем статус заказа и обновляем его
+    if (order) {
+        try {
+            logger.info('🔍 Проверяем статус заказа после возврата:', order);
+            
+            // Получаем заказ из БД
+            const orderData = await OrdersDB.getById(order);
+            if (orderData && orderData.payment_id) {
+                logger.info('🔍 Проверяем статус платежа в ЮKassa:', orderData.payment_id);
+                
+                // Проверяем статус платежа в ЮKassa
+                const payment = await checkout.getPayment(orderData.payment_id);
+                logger.info('🔍 Статус платежа в ЮKassa:', {
+                    id: payment.id,
+                    status: payment.status,
+                    paid: payment.paid
+                });
+                
+                // Если платеж оплачен, обновляем заказ
+                if (payment.status === 'succeeded' && payment.paid) {
+                    logger.info('✅ Платеж оплачен, обновляем заказ:', order);
+                    
+                    await OrdersDB.update(order, {
+                        status: 'accepted',
+                        payment_status: 'paid',
+                        payment_id: payment.id,
+                        total_amount: parseFloat(payment.amount.value)
+                    });
+                    
+                    // Отправляем уведомление в Telegram
+                    try {
+                        const orderForNotification = {
+                            id: order,
+                            customerName: orderData.user_name,
+                            phone: orderData.phone,
+                            totals: { total: parseFloat(payment.amount.value) },
+                            address: orderData.address,
+                            items: orderData.items
+                        };
+                        
+                        await sendTelegramNotification(orderForNotification, 'paid');
+                        logger.info('✅ Уведомление об оплате отправлено в Telegram');
+                    } catch (telegramError) {
+                        logger.error('❌ Ошибка отправки уведомления в Telegram:', telegramError.message);
+                    }
+                }
+            }
+        } catch (error) {
+            logger.error('❌ Ошибка проверки статуса заказа:', error.message);
+        }
+    }
+    
+    // Отправляем HTML страницу с редиректом на главную
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Оплата успешна</title>
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    text-align: center; 
+                    padding: 50px; 
+                    background: #f5f5f5;
+                }
+                .success { 
+                    background: white; 
+                    padding: 30px; 
+                    border-radius: 10px; 
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    max-width: 400px;
+                    margin: 0 auto;
+                }
+                .icon { font-size: 48px; margin-bottom: 20px; }
+                .title { font-size: 24px; margin-bottom: 10px; color: #2e7d32; }
+                .message { color: #666; margin-bottom: 30px; }
+                .button { 
+                    background: #1976d2; 
+                    color: white; 
+                    padding: 12px 24px; 
+                    border: none; 
+                    border-radius: 5px; 
+                    cursor: pointer; 
+                    font-size: 16px;
+                    text-decoration: none;
+                    display: inline-block;
+                }
+                .button:hover { background: #1565c0; }
+            </style>
+        </head>
+        <body>
+            <div class="success">
+                <div class="icon">✅</div>
+                <div class="title">Оплата успешна!</div>
+                <div class="message">Ваш заказ #${order || 'неизвестен'} оплачен</div>
+                <a href="/" class="button">Вернуться в магазин</a>
+            </div>
+            <script>
+                // Автоматический редирект через 3 секунды
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 3000);
+            </script>
+        </body>
+        </html>
+    `);
+});
+
 // Webhook для обработки уведомлений от ЮKassa
 app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (req, res) => {
     try {
