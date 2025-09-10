@@ -1854,23 +1854,32 @@ function displayOrderDetails(order) {
     `;
 }
 
-// Функция проверки рабочих часов
+// Функция проверки рабочих часов - ВРЕМЕННО ОТКЛЮЧЕНА
 function isWorkingHours() {
-    const now = new Date();
-    const hour = now.getHours();
-    return hour >= 10 && hour < 21;
+    // ВРЕМЕННО ВСЕГДА ВОЗВРАЩАЕМ true - РЕЖИМ РАБОТЫ ОТКЛЮЧЕН
+    return true;
+    
+    // Оригинальная логика (закомментирована):
+    // const now = new Date();
+    // const hour = now.getHours();
+    // return hour >= 10 && hour < 21;
 }
 
-// Функция обновления статуса работы
+// Функция обновления статуса работы - ВРЕМЕННО ОТКЛЮЧЕНА
 function updateWorkStatus() {
     const statusEl = document.getElementById('work-status');
-    if (isWorkingHours()) {
-        statusEl.textContent = 'Работаем';
-        statusEl.style.color = '#27ae60';
-    } else {
-        statusEl.textContent = 'Закрыто';
-        statusEl.style.color = '#e74c3c';
-    }
+    // ВРЕМЕННО ВСЕГДА ПОКАЗЫВАЕМ "РАБОТАЕМ"
+    statusEl.textContent = 'Работаем';
+    statusEl.style.color = '#27ae60';
+    
+    // Оригинальная логика (закомментирована):
+    // if (isWorkingHours()) {
+    //     statusEl.textContent = 'Работаем';
+    //     statusEl.style.color = '#27ae60';
+    // } else {
+    //     statusEl.textContent = 'Закрыто';
+    //     statusEl.style.color = '#e74c3c';
+    // }
 }
 
 // Функция показа уведомлений
