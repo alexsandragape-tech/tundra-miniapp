@@ -1346,6 +1346,62 @@ app.get('/api/user-purchases/:userId', async (req, res) => {
     }
 });
 
+// 🔧 API ДЛЯ ДЕТАЛЕЙ ЗАКАЗА - ПЕРЕД SPA FALLBACK
+// API для получения конкретного заказа
+app.get('/api/orders/:orderId', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        logger.info('🔍 API: Запрос статуса заказа ' + orderId);
+        
+        // Сначала ищем в базе данных (для актуальных данных)
+        logger.info('🔍 API: Ищем заказ ' + orderId + ' в базе данных...');
+        let order = await OrdersDB.getById(orderId);
+        
+        if (order) {
+            logger.info('✅ API: Заказ ' + orderId + ' найден в БД:', {
+                status: order.status,
+                payment_status: order.payment_status,
+                total_amount: order.total_amount
+            });
+            
+            // Конвертируем данные из БД в формат, ожидаемый клиентом
+            order = {
+                id: order.id,
+                status: order.status,
+                paymentStatus: order.payment_status,
+                totals: {
+                    total: parseFloat(order.total_amount || 0)
+                },
+                items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
+                address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
+                phone: order.phone,
+                customerName: order.user_name,
+                createdAt: order.created_at
+            };
+        } else {
+            // Если не найден в БД, пробуем получить из памяти (для очень новых заказов)
+            logger.info('🔍 API: Заказ ' + orderId + ' не найден в БД, ищем в памяти...');
+            order = getOrder(orderId);
+            logger.info('🔍 API: Заказ ' + orderId + ' в памяти:', order ? 'найден' : 'не найден');
+        }
+        
+        if (order) {
+            logger.info('✅ API: Возвращаем заказ ' + orderId + ':', {
+                status: order.status,
+                paymentStatus: order.paymentStatus,
+                total: order.totals?.total
+            });
+            res.json({ ok: true, order });
+        } else {
+            logger.warn('❌ API: Заказ ' + orderId + ' не найден');
+            res.status(404).json({ ok: false, error: 'Заказ не найден' });
+        }
+    } catch (error) {
+        logger.error('❌ API: Ошибка получения заказа:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔐 АДМИН ПАНЕЛЬ - ПЕРВЫЙ МАРШРУТ (только для /admin, НЕ для /api/admin/*)
 app.get('/admin', (req, res) => {
     console.log('🔍 Обработка запроса /admin');
@@ -2315,60 +2371,7 @@ app.get('/api/orders', (req, res) => {
     }
 });
 
-// API для получения конкретного заказа
-app.get('/api/orders/:orderId', async (req, res) => {
-    try {
-        const { orderId } = req.params;
-        logger.info(`🔍 API: Запрос статуса заказа ${orderId}`);
-        
-        // Сначала ищем в базе данных (для актуальных данных)
-        logger.info(`🔍 API: Ищем заказ ${orderId} в базе данных...`);
-        let order = await OrdersDB.getById(orderId);
-        
-        if (order) {
-            logger.info(`✅ API: Заказ ${orderId} найден в БД:`, {
-                status: order.status,
-                payment_status: order.payment_status,
-                total_amount: order.total_amount
-            });
-            
-            // Конвертируем данные из БД в формат, ожидаемый клиентом
-            order = {
-                id: order.id,
-                status: order.status,
-                paymentStatus: order.payment_status,
-                totals: {
-                    total: parseFloat(order.total_amount || 0)
-                },
-                items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items,
-                address: typeof order.address === 'string' ? JSON.parse(order.address) : order.address,
-                phone: order.phone,
-                customerName: order.user_name,
-                createdAt: order.created_at
-            };
-        } else {
-            // Если не найден в БД, пробуем получить из памяти (для очень новых заказов)
-            logger.info(`🔍 API: Заказ ${orderId} не найден в БД, ищем в памяти...`);
-            order = getOrder(orderId);
-            logger.info(`🔍 API: Заказ ${orderId} в памяти:`, order ? 'найден' : 'не найден');
-        }
-        
-        if (order) {
-            logger.info(`✅ API: Возвращаем заказ ${orderId}:`, {
-                status: order.status,
-                paymentStatus: order.paymentStatus,
-                total: order.totals?.total
-            });
-            res.json({ ok: true, order });
-        } else {
-            logger.warn(`❌ API: Заказ ${orderId} не найден`);
-            res.status(404).json({ ok: false, error: 'Заказ не найден' });
-        }
-    } catch (error) {
-        logger.error('❌ API: Ошибка получения заказа:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
+// API для получения конкретного заказа ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД SPA FALLBACK
 
 // API для обновления статуса заказа
 app.put('/api/orders/:orderId/status', (req, res) => {
