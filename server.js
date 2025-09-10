@@ -1305,11 +1305,62 @@ app.get('/api/orders/:orderId', async (req, res) => {
                 status: order.status,
                 payment_status: order.payment_status,
                 total_amount: order.total_amount,
+                payment_id: order.payment_id,
                 items_type: typeof order.items,
                 address_type: typeof order.address,
                 items_value: order.items,
                 address_value: order.address
             });
+            
+            // Принудительно проверяем статус платежа даже для заказов из БД
+            if (order.payment_id && order.payment_status === 'pending') {
+                logger.info('🔍 API: Принудительная проверка статуса платежа для заказа ' + orderId);
+                try {
+                    const payment = await checkout.getPayment(order.payment_id);
+                    logger.info('🔍 API: Статус платежа в ЮKassa:', {
+                        id: payment.id,
+                        status: payment.status,
+                        paid: payment.paid
+                    });
+                    
+                    // Если платеж оплачен, обновляем заказ
+                    if (payment.status === 'succeeded' && payment.paid) {
+                        logger.info('✅ API: Платеж оплачен, обновляем заказ ' + orderId);
+                        await OrdersDB.update(orderId, {
+                            status: 'accepted',
+                            payment_status: 'paid',
+                            payment_id: payment.id,
+                            total_amount: parseFloat(payment.amount.value)
+                        });
+                        
+                        // Обновляем данные заказа
+                        order.status = 'accepted';
+                        order.payment_status = 'paid';
+                        order.total_amount = parseFloat(payment.amount.value);
+                        
+                        logger.info('✅ API: Заказ ' + orderId + ' обновлен после принудительной проверки');
+                        
+                        // Отправляем уведомление в Telegram
+                        try {
+                            const orderForNotification = {
+                                id: orderId,
+                                customerName: order.user_name,
+                                phone: order.phone,
+                                totals: { total: parseFloat(payment.amount.value) },
+                                address: order.address,
+                                items: order.items
+                            };
+                            
+                            await sendTelegramNotification(orderForNotification, 'paid');
+                            logger.info('✅ API: Уведомление об оплате отправлено в Telegram');
+                        } catch (telegramError) {
+                            logger.error('❌ API: Ошибка отправки уведомления в Telegram:', telegramError.message);
+                        }
+                    }
+                } catch (error) {
+                    logger.error('❌ API: Ошибка принудительной проверки статуса платежа:', error.message);
+                }
+            }
             
             // Конвертируем данные из БД в формат, ожидаемый клиентом
             order = {
@@ -1929,6 +1980,93 @@ app.get('/test-webhook', (req, res) => {
         webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
         timestamp: new Date().toISOString()
     });
+});
+
+// Тестовый endpoint для принудительной проверки статуса заказа
+app.get('/test-payment/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+    logger.info('🧪 ТЕСТ: Принудительная проверка статуса заказа:', orderId);
+    
+    try {
+        // Получаем заказ из БД
+        const orderData = await OrdersDB.getById(orderId);
+        if (!orderData) {
+            return res.json({ ok: false, error: 'Заказ не найден' });
+        }
+        
+        logger.info('🧪 ТЕСТ: Заказ найден в БД:', {
+            id: orderData.order_id,
+            status: orderData.status,
+            payment_status: orderData.payment_status,
+            payment_id: orderData.payment_id
+        });
+        
+        if (!orderData.payment_id) {
+            return res.json({ ok: false, error: 'У заказа нет payment_id' });
+        }
+        
+        // Проверяем статус платежа в ЮKassa
+        const payment = await checkout.getPayment(orderData.payment_id);
+        logger.info('🧪 ТЕСТ: Статус платежа в ЮKassa:', {
+            id: payment.id,
+            status: payment.status,
+            paid: payment.paid,
+            amount: payment.amount
+        });
+        
+        // Если платеж оплачен, обновляем заказ
+        if (payment.status === 'succeeded' && payment.paid) {
+            logger.info('🧪 ТЕСТ: Платеж оплачен, обновляем заказ');
+            
+            await OrdersDB.update(orderId, {
+                status: 'accepted',
+                payment_status: 'paid',
+                payment_id: payment.id,
+                total_amount: parseFloat(payment.amount.value)
+            });
+            
+            // Отправляем уведомление в Telegram
+            try {
+                const orderForNotification = {
+                    id: orderId,
+                    customerName: orderData.user_name,
+                    phone: orderData.phone,
+                    totals: { total: parseFloat(payment.amount.value) },
+                    address: orderData.address,
+                    items: orderData.items
+                };
+                
+                await sendTelegramNotification(orderForNotification, 'paid');
+                logger.info('🧪 ТЕСТ: Уведомление отправлено в Telegram');
+            } catch (telegramError) {
+                logger.error('🧪 ТЕСТ: Ошибка отправки уведомления:', telegramError.message);
+            }
+            
+            res.json({
+                ok: true,
+                message: 'Заказ обновлен и уведомление отправлено',
+                order: {
+                    id: orderId,
+                    status: 'accepted',
+                    paymentStatus: 'paid',
+                    total: parseFloat(payment.amount.value)
+                }
+            });
+        } else {
+            res.json({
+                ok: true,
+                message: 'Платеж еще не оплачен',
+                payment: {
+                    id: payment.id,
+                    status: payment.status,
+                    paid: payment.paid
+                }
+            });
+        }
+    } catch (error) {
+        logger.error('🧪 ТЕСТ: Ошибка проверки заказа:', error.message);
+        res.json({ ok: false, error: error.message });
+    }
 });
 
 // Маршрут для возврата после успешной оплаты
