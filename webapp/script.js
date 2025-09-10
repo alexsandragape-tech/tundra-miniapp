@@ -1498,7 +1498,7 @@ function showProfile() {
 async function loadPurchaseHistory() {
     try {
         const userId = getUserId();
-        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        const response = await fetch(`${API_BASE}/api/user-purchases/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
@@ -1588,9 +1588,9 @@ async function loadUserOrders() {
     try {
         const userId = getUserId();
         console.log(`🔍 CLIENT: Загружаем заказы для пользователя ${userId}`);
-        console.log(`🔍 CLIENT: URL: ${API_BASE}/api/orders/user/${userId}`);
+        console.log(`🔍 CLIENT: URL: ${API_BASE}/api/user-orders/${userId}`);
         
-        const response = await fetch(`${API_BASE}/api/orders/user/${userId}`);
+        const response = await fetch(`${API_BASE}/api/user-orders/${userId}`);
         console.log(`🔍 CLIENT: Ответ сервера: ${response.status}`);
         
         if (response.ok) {
@@ -2237,7 +2237,7 @@ async function loadLoyaltyData() {
         const userId = getUserId();
         console.log(`🔍 CLIENT: Загружаем данные лояльности для пользователя: ${userId}`);
         
-        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        const response = await fetch(`${API_BASE}/api/user-purchases/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
@@ -2441,7 +2441,7 @@ async function syncProfileWithServer() {
             return false;
         }
         
-        const response = await fetch(`${API_BASE}/api/purchases/${userId}`);
+        const response = await fetch(`${API_BASE}/api/user-purchases/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
