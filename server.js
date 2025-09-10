@@ -1864,6 +1864,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 // 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ОПЛАЧЕННЫХ ЗАКАЗОВ С ЛОЯЛЬНОСТЬЮ
 async function syncPaidOrdersToLoyalty(userId) {
     try {
+        console.log(`🔍 СИНХРОНИЗАЦИЯ: НАЧАЛО для пользователя ${userId}`);
         logger.info(`🔄 СИНХРОНИЗАЦИЯ: Проверяем оплаченные заказы для пользователя ${userId}`);
         
         // Получаем все заказы пользователя из БД
@@ -1940,9 +1941,11 @@ async function syncPaidOrdersToLoyalty(userId) {
         }
         
         logger.info(`🔄 СИНХРОНИЗАЦИЯ: Добавлено ${addedCount} новых записей в лояльность`);
+        console.log(`🔍 СИНХРОНИЗАЦИЯ: КОНЕЦ - добавлено ${addedCount} записей`);
         return addedCount;
     } catch (error) {
         logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка синхронизации лояльности:', error.message);
+        console.log(`🔍 СИНХРОНИЗАЦИЯ: ОШИБКА - ${error.message}`);
         return 0;
     }
 }
@@ -2675,9 +2678,12 @@ app.get('/api/orders/user/:userId', async (req, res) => {
         console.log(`🔍 API: Загрузка заказов для пользователя ${userId}`);
         
         // 🔄 СНАЧАЛА ПРОВЕРЯЕМ И СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ
+        console.log(`🔍 API: Вызываем syncPaidOrdersToLoyalty для ${userId}`);
         await syncPaidOrdersToLoyalty(userId);
+        console.log(`🔍 API: syncPaidOrdersToLoyalty завершена`);
         
         // Используем PurchaseHistoryDB вместо OrdersDB для консистентности с профилем
+        console.log(`🔍 API: Загружаем заказы из purchase_history для ${userId}`);
         const orders = await PurchaseHistoryDB.getByUserId(userId);
         console.log(`🔍 API: Найдено ${orders.length} заказов в purchase_history`);
         
