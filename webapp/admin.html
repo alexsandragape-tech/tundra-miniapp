@@ -2,13 +2,67 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Tundra Gourmet - Админ панель</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0b5c56">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Tundra Admin">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- Touch Icons -->
+    <meta name="apple-touch-icon" content="images/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192.png">
+    
     <link rel="stylesheet" href="admin-style.css">
 </head>
 <body>
     <div class="admin-container">
-        <header class="admin-header">
+        <!-- 📱 МОБИЛЬНЫЙ ХЕДЕР -->
+        <div class="mobile-header">
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <h1>🥩 Tundra Admin</h1>
+            <button class="mobile-save-btn" onclick="saveAllChanges()" title="Сохранить изменения">
+                💾
+            </button>
+        </div>
+
+        <!-- 📱 МОБИЛЬНОЕ МЕНЮ -->
+        <div class="mobile-menu" id="mobile-menu">
+            <div class="mobile-menu-content">
+                <div class="mobile-stats">
+                    <div class="mobile-stat">
+                        <div class="stat-value" id="mobile-total-products">0</div>
+                        <div class="stat-label">Товаров</div>
+                    </div>
+                    <div class="mobile-stat">
+                        <div class="stat-value" id="mobile-available-products">0</div>
+                        <div class="stat-label">В наличии</div>
+                    </div>
+                    <div class="mobile-stat">
+                        <div class="stat-value" id="mobile-hidden-products">0</div>
+                        <div class="stat-label">Скрыто</div>
+                    </div>
+                </div>
+                <div class="mobile-search">
+                    <input type="text" id="mobile-search-input" placeholder="🔍 Поиск товаров..." oninput="filterProducts()">
+                </div>
+                <div class="mobile-filters">
+                    <button class="mobile-filter-btn active" onclick="filterByStatus('all')">Все</button>
+                    <button class="mobile-filter-btn" onclick="filterByStatus('available')">В наличии</button>
+                    <button class="mobile-filter-btn" onclick="filterByStatus('hidden')">Скрыто</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ДЕСКТОПНЫЙ ЗАГОЛОВОК -->
+        <header class="admin-header desktop-only">
             <h1>🔧 Админ панель Tundra Gourmet</h1>
             <div class="admin-stats">
                 <div class="stat">
@@ -26,7 +80,8 @@
             </div>
         </header>
 
-        <div class="admin-toolbar">
+        <!-- ДЕСКТОПНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ -->
+        <div class="admin-toolbar desktop-only">
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="🔍 Поиск товаров..." oninput="filterProducts()">
             </div>
@@ -42,6 +97,82 @@
 
         <div class="categories-container" id="categories-container">
             <!-- Категории и товары будут загружены через JavaScript -->
+        </div>
+
+        <!-- Модальное окно добавления товара -->
+        <div id="add-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>➕ Добавить новый товар</h3>
+                    <button class="modal-close" onclick="closeAddModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-form">
+                        <div class="form-group">
+                            <label>Категория:</label>
+                            <select id="add-category" required disabled>
+                                <option value="">Выберите категорию</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>ID товара:</label>
+                            <input type="text" id="add-id" required placeholder="product-name-id">
+                            <small>Уникальный идентификатор (без пробелов, латинские буквы)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Название:</label>
+                            <input type="text" id="add-name" required placeholder="Название товара">
+                        </div>
+                        <div class="form-group">
+                            <label>Цена:</label>
+                            <input type="number" id="add-price" required min="1" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Единица измерения:</label>
+                            <input type="text" id="add-unit" required placeholder="/100 гр.">
+                        </div>
+                        <div class="form-group">
+                            <label>Максимальное количество:</label>
+                            <input type="number" id="add-maxQty" required min="1" value="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Эмодзи:</label>
+                            <input type="text" id="add-image" maxlength="2" placeholder="🍖">
+                        </div>
+                        <div class="form-group">
+                            <label>Путь к изображению:</label>
+                            <input type="text" id="add-imageUrl" placeholder="images/products/category/product.jpg">
+                        </div>
+                        <div class="form-group">
+                            <label>Состав:</label>
+                            <textarea id="add-composition" rows="3" placeholder="Состав продукта..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Пищевая ценность:</label>
+                            <textarea id="add-nutrition" rows="2" placeholder="Белки, жиры, углеводы..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Калорийность:</label>
+                            <input type="text" id="add-calories" placeholder="250 ккал/1046 кДж">
+                        </div>
+                        <div class="form-group">
+                            <label>Условия хранения:</label>
+                            <input type="text" id="add-storage" placeholder="180 суток">
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="add-available" checked>
+                                <span class="checkmark"></span>
+                                Товар в наличии
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn secondary" onclick="closeAddModal()">Отмена</button>
+                    <button class="btn primary" onclick="addNewProduct()">Добавить товар</button>
+                </div>
+            </div>
         </div>
 
         <!-- Модальное окно редактирования товара -->
