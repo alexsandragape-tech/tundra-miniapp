@@ -8,6 +8,23 @@ console.log('🔍 admin-script.js загружен');
 // Глобальные переменные
 let products = {};
 let originalProducts = {};
+
+// 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
+const categories = {
+    'kolbasy': 'Колбасы',
+    'pashtet': 'Паштеты', 
+    'delikatesy': 'Деликатесы',
+    'gotovye': 'Готовые деликатесы',
+    'zamorozhennye': 'Замороженные',
+    'polufabrikaty': 'Полуфабрикаты',
+    'pirogi-sytnye': 'Пироги сытные',
+    'pirogi-sladkie': 'Пироги сладкие',
+    // 🆕 НОВЫЕ КАТЕГОРИИ
+    'sousy-marinad': 'Соусы и маринады',
+    'napitki': 'Напитки',
+    'deserty': 'Десерты',
+    'konditerka': 'Кондитерские изделия'
+};
 let hasUnsavedChanges = false;
 let currentEditingProduct = null;
 let adminPassword = null;
@@ -25,6 +42,9 @@ function getAdminPassword() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🔍 DOM загружен, инициализируем админ-панель');
     loadProducts();
+    
+    // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
+    initMobileInterface();
     
     // Обработчик закрытия модального окна при клике вне его
     window.onclick = function(event) {
@@ -809,10 +829,16 @@ async function loadProductsFromClient() {
                 storage: '6 месяцев',
                 available: true
             }
-        ]
+        ],
+        
+        // 🆕 НОВЫЕ КАТЕГОРИИ (ПУСТЫЕ МАССИВЫ)
+        'sousy-marinad': [],
+        'napitki': [],
+        'deserty': [],
+        'konditerka': []
     };
     
-    // 🎯 ВСЕ 60 ТОВАРОВ ДОБАВЛЕНЫ! (49+11)
+    // 🎯 ВСЕ 60 ТОВАРОВ ДОБАВЛЕНЫ! (49+11) + 4 НОВЫЕ КАТЕГОРИИ
     // Создаем копию для отслеживания изменений
     originalProducts = JSON.parse(JSON.stringify(products));
 }
@@ -822,32 +848,30 @@ function renderProducts() {
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
     
-    const categories = {
-        'kolbasy': 'Колбасы',
-        'pashtet': 'Паштеты', 
-        'delikatesy': 'Деликатесы',
-        'gotovye': 'Готовые деликатесы',
-        'zamorozhennye': 'Замороженные',
-        'polufabrikaty': 'Полуфабрикаты',
-        'pirogi-sytnye': 'Пироги сытные',
-        'pirogi-sladkie': 'Пироги сладкие'
-    };
-    
+    // Показываем все категории (включая пустые новые)
     Object.keys(categories).forEach(categoryId => {
-        if (!products[categoryId] || products[categoryId].length === 0) return;
-        
-        const categoryProducts = products[categoryId];
+        const categoryProducts = products[categoryId] || [];
         const availableCount = categoryProducts.filter(p => p.available !== false).length;
         const hiddenCount = categoryProducts.filter(p => p.available === false).length;
         
         const categoryHtml = `
             <div class="category-section" data-category="${categoryId}">
                 <div class="category-header">
-                    <div class="category-title">${categories[categoryId]}</div>
-                    <div class="category-stats">
-                        Всего: ${categoryProducts.length} | 
-                        В наличии: ${availableCount} | 
-                        Скрыто: ${hiddenCount}
+                    <div class="category-info">
+                        <div class="category-title" id="category-title-${categoryId}">${categories[categoryId]}</div>
+                        <div class="category-stats">
+                            Всего: ${categoryProducts.length} | 
+                            В наличии: ${availableCount} | 
+                            Скрыто: ${hiddenCount}
+                        </div>
+                    </div>
+                    <div class="category-actions">
+                        <button class="edit-category-btn" onclick="editCategoryName('${categoryId}')" title="Редактировать название категории">
+                            ✏️ Изменить название
+                        </button>
+                        <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
+                            ➕ Добавить товар
+                        </button>
                     </div>
                 </div>
                 <div class="products-grid">
@@ -885,7 +909,9 @@ function renderProductCard(categoryId, product) {
     return `
         <div class="product-card ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}" 
              data-category="${categoryId}" 
-             data-product="${product.id}">
+             data-product="${product.id}"
+             data-category-id="${categoryId}"
+             data-product-id="${product.id}">
             
             <div class="product-status ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
                 ${isHidden ? 'Скрыто' : isModified ? 'Изменено' : 'В наличии'}
@@ -1130,16 +1156,43 @@ async function saveProductsToServer() {
         throw new Error('Пароль не найден');
     }
     
+    // Проверяем, есть ли изменения в категориях
+    const hasOriginalCategories = typeof originalProducts === 'object' && originalProducts.categories;
+    let useNewCategoriesEndpoint = false;
+    
+    // Если изменились названия категорий - используем новый endpoint
+    if (hasOriginalCategories) {
+        const categoriesChanged = JSON.stringify(categories) !== JSON.stringify(originalProducts.categories);
+        if (categoriesChanged) {
+            useNewCategoriesEndpoint = true;
+        }
+    }
+    
     // API запрос к серверу
     try {
-        const response = await fetch(`${API_BASE}/api/admin/products`, {
-            method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-Admin-Password': password
-            },
-            body: JSON.stringify({ products })
-        });
+        let response;
+        
+        if (useNewCategoriesEndpoint) {
+            // Сохраняем товары и категории через новый endpoint
+            response = await fetch(`${API_BASE}/api/admin/categories`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Admin-Password': password
+                },
+                body: JSON.stringify({ products, categories })
+            });
+        } else {
+            // Сохраняем только товары через старый endpoint
+            response = await fetch(`${API_BASE}/api/admin/products`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Admin-Password': password
+                },
+                body: JSON.stringify({ products })
+            });
+        }
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -1155,14 +1208,524 @@ async function saveProductsToServer() {
         
         // Сохраняем в localStorage как backup
         localStorage.setItem('admin_products', JSON.stringify(products));
+        localStorage.setItem('admin_categories', JSON.stringify(categories));
+        
+        // Обновляем исходную копию для отслеживания изменений
+        originalProducts = JSON.parse(JSON.stringify(products));
+        originalProducts.categories = JSON.parse(JSON.stringify(categories));
+        
+        console.log('✅ Товары и категории сохранены:', useNewCategoriesEndpoint ? 'с категориями' : 'только товары');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения на сервер:', error);
         // Fallback - сохраняем локально
         localStorage.setItem('admin_products', JSON.stringify(products));
+        localStorage.setItem('admin_categories', JSON.stringify(categories));
         throw error;
     }
 }
+
+// 🆕 ФУНКЦИЯ ПОКАЗА МОДАЛЬНОГО ОКНА ДОБАВЛЕНИЯ ТОВАРА
+function showAddProductModal(categoryId) {
+    const modal = document.getElementById('add-modal');
+    const categorySelect = document.getElementById('add-category');
+    
+    // Заполняем select категории
+    categorySelect.innerHTML = '';
+    for (const [id, name] of Object.entries(categories)) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = name;
+        option.selected = id === categoryId;
+        categorySelect.appendChild(option);
+    }
+    
+    // Очищаем форму
+    clearAddForm();
+    
+    // Показываем модальное окно
+    modal.style.display = 'block';
+}
+
+// 🆕 ФУНКЦИЯ ЗАКРЫТИЯ МОДАЛЬНОГО ОКНА ДОБАВЛЕНИЯ
+function closeAddModal() {
+    const modal = document.getElementById('add-modal');
+    modal.style.display = 'none';
+    clearAddForm();
+}
+
+// 🆕 ФУНКЦИЯ ОЧИСТКИ ФОРМЫ ДОБАВЛЕНИЯ
+function clearAddForm() {
+    document.getElementById('add-id').value = '';
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-price').value = '';
+    document.getElementById('add-unit').value = '';
+    document.getElementById('add-maxQty').value = '10';
+    document.getElementById('add-image').value = '';
+    document.getElementById('add-imageUrl').value = '';
+    document.getElementById('add-composition').value = '';
+    document.getElementById('add-nutrition').value = '';
+    document.getElementById('add-calories').value = '';
+    document.getElementById('add-storage').value = '';
+    document.getElementById('add-available').checked = true;
+}
+
+// 🆕 ФУНКЦИЯ ДОБАВЛЕНИЯ НОВОГО ТОВАРА
+function addNewProduct() {
+    try {
+        // Получаем данные формы
+        const categoryId = document.getElementById('add-category').value;
+        const productId = document.getElementById('add-id').value.trim();
+        const name = document.getElementById('add-name').value.trim();
+        const price = parseFloat(document.getElementById('add-price').value);
+        const unit = document.getElementById('add-unit').value.trim();
+        const maxQty = parseInt(document.getElementById('add-maxQty').value);
+        const image = document.getElementById('add-image').value.trim();
+        const imageUrl = document.getElementById('add-imageUrl').value.trim();
+        const composition = document.getElementById('add-composition').value.trim();
+        const nutrition = document.getElementById('add-nutrition').value.trim();
+        const calories = document.getElementById('add-calories').value.trim();
+        const storage = document.getElementById('add-storage').value.trim();
+        const available = document.getElementById('add-available').checked;
+        
+        // Валидация
+        if (!categoryId || !productId || !name || !price || !unit || !maxQty) {
+            throw new Error('Заполните все обязательные поля');
+        }
+        
+        // Проверяем уникальность ID в категории
+        if (products[categoryId] && products[categoryId].find(p => p.id === productId)) {
+            throw new Error('Товар с таким ID уже существует в этой категории');
+        }
+        
+        // Создаем новый товар
+        const newProduct = {
+            id: productId,
+            name: name,
+            price: price,
+            unit: unit,
+            maxQty: maxQty,
+            image: image || '🛍️',
+            imageUrl: imageUrl || `images/products/${categoryId}/${productId}.jpg`,
+            composition: composition,
+            nutrition: nutrition,
+            calories: calories,
+            storage: storage,
+            available: available
+        };
+        
+        // Добавляем товар в категорию
+        if (!products[categoryId]) {
+            products[categoryId] = [];
+        }
+        
+        products[categoryId].push(newProduct);
+        
+        // Отмечаем изменения
+        markUnsavedChanges();
+        
+        // Перерендериваем товары
+        renderProducts();
+        updateStats();
+        
+        // Закрываем модальное окно
+        closeAddModal();
+        
+        showNotification(`Товар "${name}" добавлен в категорию "${categories[categoryId]}"`, 'success');
+        
+    } catch (error) {
+        console.error('Ошибка добавления товара:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+// 🆕 ФУНКЦИЯ АВТОЗАПОЛНЕНИЯ ID НА ОСНОВЕ НАЗВАНИЯ
+function generateProductId(name) {
+    return name.toLowerCase()
+        .replace(/[а-я]/g, function(match) {
+            const cyrillicToLatin = {
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+                'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+                'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+                'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+            return cyrillicToLatin[match] || match;
+        })
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+// 🆕 ФУНКЦИЯ РЕДАКТИРОВАНИЯ НАЗВАНИЯ КАТЕГОРИИ
+function editCategoryName(categoryId) {
+    const currentName = categories[categoryId];
+    const titleElement = document.getElementById(`category-title-${categoryId}`);
+    
+    // Создаем инлайн-редактор
+    const inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.value = currentName;
+    inputElement.className = 'category-name-editor';
+    inputElement.style.cssText = `
+        font-size: 20px;
+        font-weight: 700;
+        color: #0b5c56;
+        background: white;
+        border: 2px solid #0b5c56;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin: 0;
+        width: 100%;
+        max-width: 300px;
+    `;
+    
+    // Заменяем заголовок на поле ввода
+    titleElement.innerHTML = '';
+    titleElement.appendChild(inputElement);
+    
+    // Создаем кнопки сохранения и отмены
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'category-edit-actions';
+    actionsDiv.style.cssText = 'margin-top: 8px; display: flex; gap: 8px;';
+    
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '✅ Сохранить';
+    saveBtn.className = 'btn-save-category';
+    saveBtn.style.cssText = `
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '❌ Отмена';
+    cancelBtn.className = 'btn-cancel-category';
+    cancelBtn.style.cssText = `
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+    
+    actionsDiv.appendChild(saveBtn);
+    actionsDiv.appendChild(cancelBtn);
+    titleElement.appendChild(actionsDiv);
+    
+    // Фокусируемся на поле ввода и выделяем текст
+    inputElement.focus();
+    inputElement.select();
+    
+    // Обработчик сохранения
+    const saveCategory = () => {
+        const newName = inputElement.value.trim();
+        
+        if (!newName) {
+            showNotification('Название категории не может быть пустым', 'error');
+            inputElement.focus();
+            return;
+        }
+        
+        if (newName === currentName) {
+            // Имя не изменилось - просто отменяем редактирование
+            cancelEdit();
+            return;
+        }
+        
+        // Обновляем название в объекте категорий
+        categories[categoryId] = newName;
+        
+        // Отмечаем как несохраненные изменения
+        markUnsavedChanges();
+        
+        // Восстанавливаем заголовок
+        titleElement.innerHTML = `<div class="category-title" id="category-title-${categoryId}">${newName}</div>`;
+        
+        showNotification(`Название категории изменено на "${newName}"`, 'success');
+        
+        console.log('✅ Категория переименована:', categoryId, '->', newName);
+    };
+    
+    // Обработчик отмены
+    const cancelEdit = () => {
+        titleElement.innerHTML = `<div class="category-title" id="category-title-${categoryId}">${currentName}</div>`;
+    };
+    
+    // События для кнопок
+    saveBtn.addEventListener('click', saveCategory);
+    cancelBtn.addEventListener('click', cancelEdit);
+    
+    // События для клавиш
+    inputElement.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveCategory();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+    
+    // Отмена при клике вне поля (опционально)
+    inputElement.addEventListener('blur', (e) => {
+        // Проверяем, что фокус не перешел на кнопки
+        if (!e.relatedTarget || (!e.relatedTarget.classList.contains('btn-save-category') && !e.relatedTarget.classList.contains('btn-cancel-category'))) {
+            setTimeout(cancelEdit, 100); // Небольшая задержка для срабатывания кнопок
+        }
+    });
+}
+
+// 📱 МОБИЛЬНОЕ МЕНЮ
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.querySelector('.mobile-menu-btn');
+    
+    menu.classList.toggle('active');
+    btn.classList.toggle('active');
+    
+    // Синхронизируем поиск между мобильным и десктопным
+    const mobileSearch = document.getElementById('mobile-search-input');
+    const desktopSearch = document.getElementById('search-input');
+    
+    if (mobileSearch && desktopSearch) {
+        mobileSearch.value = desktopSearch.value;
+    }
+}
+
+// Закрытие мобильного меню при клике вне его
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.querySelector('.mobile-menu-btn');
+    
+    if (menu && menu.classList.contains('active')) {
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.remove('active');
+            btn.classList.remove('active');
+        }
+    }
+});
+
+// 📱 СИНХРОНИЗАЦИЯ МОБИЛЬНОЙ СТАТИСТИКИ
+function updateMobileStats() {
+    // Синхронизируем статистику между десктопной и мобильной версией
+    const totalProducts = document.getElementById('total-products');
+    const availableProducts = document.getElementById('available-products');
+    const hiddenProducts = document.getElementById('hidden-products');
+    
+    const mobileTotalProducts = document.getElementById('mobile-total-products');
+    const mobileAvailableProducts = document.getElementById('mobile-available-products');
+    const mobileHiddenProducts = document.getElementById('mobile-hidden-products');
+    
+    if (totalProducts && mobileTotalProducts) {
+        mobileTotalProducts.textContent = totalProducts.textContent;
+    }
+    if (availableProducts && mobileAvailableProducts) {
+        mobileAvailableProducts.textContent = availableProducts.textContent;
+    }
+    if (hiddenProducts && mobileHiddenProducts) {
+        mobileHiddenProducts.textContent = hiddenProducts.textContent;
+    }
+}
+
+// 📱 СИНХРОНИЗАЦИЯ ПОИСКА И ФИЛЬТРОВ
+function syncMobileSearch() {
+    const mobileSearch = document.getElementById('mobile-search-input');
+    const desktopSearch = document.getElementById('search-input');
+    
+    if (mobileSearch && desktopSearch) {
+        // Синхронизируем поиск в обе стороны
+        mobileSearch.addEventListener('input', function() {
+            desktopSearch.value = mobileSearch.value;
+            filterProducts();
+        });
+        
+        desktopSearch.addEventListener('input', function() {
+            mobileSearch.value = desktopSearch.value;
+        });
+    }
+}
+
+// 📱 СИНХРОНИЗАЦИЯ ФИЛЬТРОВ
+function syncMobileFilters() {
+    const mobileFilterBtns = document.querySelectorAll('.mobile-filter-btn');
+    const desktopFilterBtns = document.querySelectorAll('.filter-btn');
+    
+    // Добавляем обработчики для мобильных фильтров
+    mobileFilterBtns.forEach((btn, index) => {
+        btn.addEventListener('click', function() {
+            // Убираем активный класс у всех мобильных кнопок
+            mobileFilterBtns.forEach(b => b.classList.remove('active'));
+            // Добавляем активный класс к нажатой кнопке
+            btn.classList.add('active');
+            
+            // Синхронизируем с десктопными фильтрами
+            if (desktopFilterBtns[index]) {
+                desktopFilterBtns.forEach(b => b.classList.remove('active'));
+                desktopFilterBtns[index].classList.add('active');
+            }
+            
+            // Закрываем мобильное меню после выбора фильтра
+            setTimeout(() => {
+                toggleMobileMenu();
+            }, 300);
+        });
+    });
+}
+
+// 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
+function initMobileInterface() {
+    syncMobileSearch();
+    syncMobileFilters();
+    
+    // Обновляем статистику при загрузке
+    setTimeout(updateMobileStats, 100);
+    
+    // Переопределяем функцию обновления статистики
+    const originalUpdateStats = updateStats;
+    if (typeof originalUpdateStats === 'function') {
+        window.updateStats = function() {
+            originalUpdateStats();
+            updateMobileStats();
+        };
+    }
+    
+    // Добавляем touch-события для свайпов
+    initTouchGestures();
+    
+    console.log('📱 Мобильный интерфейс инициализирован');
+}
+
+// 📱 TOUCH-ЖЕСТЫ И СВАЙПЫ
+function initTouchGestures() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchendX = 0;
+    let touchendY = 0;
+    
+    // Добавляем обработчики к карточкам товаров
+    document.addEventListener('touchstart', function(e) {
+        if (e.target.closest('.product-card')) {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }
+    }, { passive: true });
+    
+    document.addEventListener('touchend', function(e) {
+        const productCard = e.target.closest('.product-card');
+        if (productCard) {
+            touchendX = e.changedTouches[0].screenX;
+            touchendY = e.changedTouches[0].screenY;
+            handleSwipe(productCard);
+        }
+    }, { passive: true });
+    
+    function handleSwipe(productCard) {
+        const swipeDistance = touchendX - touchStartX;
+        const swipeThreshold = 50; // Минимальное расстояние для свайпа
+        const verticalDistance = Math.abs(touchendY - touchStartY);
+        
+        // Проверяем что это горизонтальный свайп
+        if (verticalDistance < 30 && Math.abs(swipeDistance) > swipeThreshold) {
+            const productId = productCard.dataset.productId;
+            const categoryId = productCard.dataset.categoryId;
+            
+            if (productId && categoryId) {
+                // Свайп вправо - включить товар
+                if (swipeDistance > 0) {
+                    toggleProductAvailability(categoryId, productId, true);
+                    showMobileNotification('✅ Товар включен', 'success');
+                }
+                // Свайп влево - выключить товар
+                else {
+                    toggleProductAvailability(categoryId, productId, false);
+                    showMobileNotification('❌ Товар выключен', 'warning');
+                }
+                
+                // Визуальная обратная связь
+                productCard.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    productCard.style.transform = '';
+                }, 200);
+            }
+        }
+    }
+}
+
+// 📱 МОБИЛЬНЫЕ УВЕДОМЛЕНИЯ
+function showMobileNotification(message, type = 'info') {
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `mobile-notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${type === 'success' ? '#27ae60' : type === 'warning' ? '#f39c12' : '#3498db'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 25px;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 10000;
+        opacity: 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Анимация появления
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateX(-50%) translateY(10px)';
+    }, 10);
+    
+    // Удаление через 2 секунды
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(-50%) translateY(-10px)';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 2000);
+}
+
+// 📱 ФУНКЦИЯ TOGGLE ДЛЯ МОБИЛЬНЫХ СВАЙПОВ
+function toggleProductAvailability(categoryId, productId, isAvailable) {
+    if (!products[categoryId]) return;
+    
+    const product = products[categoryId].find(p => p.id === productId);
+    if (product) {
+        product.available = isAvailable;
+        markUnsavedChanges();
+        renderProducts();
+        updateStats();
+        updateMobileStats();
+    }
+}
+
+// Автозаполнение ID при вводе названия
+document.addEventListener('DOMContentLoaded', function() {
+    const nameInput = document.getElementById('add-name');
+    const idInput = document.getElementById('add-id');
+    
+    if (nameInput && idInput) {
+        nameInput.addEventListener('input', function() {
+            if (!idInput.value) { // Только если ID еще не заполнен
+                idInput.value = generateProductId(this.value);
+            }
+        });
+    }
+});
 
 // Обновление статистики
 function updateStats() {
