@@ -1550,16 +1550,11 @@ function updateUserInfo() {
         const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
         
         if (telegramUser) {
-            // Обновляем данные из Telegram
+            // Обновляем только имя пользователя
             document.getElementById('user-name').textContent = 
                 telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '');
             
-            document.getElementById('user-username').textContent = 
-                telegramUser.username ? '@' + telegramUser.username : 'Пользователь Telegram';
-            
-            document.getElementById('user-id').textContent = 'ID: ' + telegramUser.id;
-            
-            // Обновляем аватар (если есть фото)
+            // Обновляем аватар с инициалами
             const avatarEl = document.getElementById('user-avatar');
             if (telegramUser.first_name) {
                 const initials = (telegramUser.first_name[0] + (telegramUser.last_name?.[0] || '')).toUpperCase();
@@ -1568,8 +1563,7 @@ function updateUserInfo() {
         } else {
             // Fallback для тестирования вне Telegram
             document.getElementById('user-name').textContent = 'Тестовый пользователь';
-            document.getElementById('user-username').textContent = '@test_user';
-            document.getElementById('user-id').textContent = 'ID: test_123';
+            document.getElementById('user-avatar').textContent = 'ТП';
         }
         
         // Обновляем статус синхронизации
@@ -1697,7 +1691,7 @@ function showAbout() {
 🏢 Разработано: Tundra Team
 📞 Поддержка: @tundrasupport
 
-🔥 Особенности:
+🔥 О нас:
 • Свежие продукты премиум-класса
 • Доставка по Москве и МО
 • Система лояльности
@@ -2611,51 +2605,105 @@ async function updateLoyaltyCard() {
          stats.currentDiscount === 3 ? 5 : 
          stats.currentDiscount === 5 ? 10 : 'максимальная') : 'максимальная';
 
+    // Проверяем достижение максимальной скидки
+    const isMaxDiscount = stats.currentDiscount >= 10;
+    
     // Отображаем карту лояльности
-    loyaltyCard.innerHTML = `
-        <div class="loyalty-header">
-            <div class="loyalty-icon">🔥</div>
-            <div class="loyalty-title">Программа лояльности</div>
-        </div>
-        <div class="loyalty-stats">
-            <div class="loyalty-stat">
-                <div class="stat-value">${stats.totalSpent.toLocaleString()}₽</div>
-                <div class="stat-label">Потрачено всего</div>
+    if (isMaxDiscount) {
+        // Специальное отображение для максимального уровня
+        loyaltyCard.innerHTML = `
+            <div class="loyalty-header">
+                <div class="loyalty-icon">🔥</div>
+                <div class="loyalty-title">Программа лояльности</div>
             </div>
-            <div class="loyalty-stat">
-                <div class="stat-value">${stats.totalPurchases}</div>
-                <div class="stat-label">Заказов сделано</div>
+            <div class="loyalty-stats">
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.totalSpent.toLocaleString()}₽</div>
+                    <div class="stat-label">Потрачено всего</div>
+                </div>
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.totalPurchases}</div>
+                    <div class="stat-label">Заказов сделано</div>
+                </div>
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.currentDiscount}%</div>
+                    <div class="stat-label">Текущая скидка</div>
+                </div>
             </div>
-            <div class="loyalty-stat">
-                <div class="stat-value">${stats.currentDiscount}%</div>
-                <div class="stat-label">Текущая скидка</div>
+            <div class="loyalty-max-message">
+                <div class="max-achievement-icon">👑</div>
+                <div class="max-achievement-text">
+                    <h3>Поздравляем!</h3>
+                    <p>Вы достигли максимума нашей карты лояльности</p>
+                    <p class="max-achievement-subtitle">Вы получаете постоянную скидку 10% на все товары</p>
+                </div>
             </div>
-        </div>
-        <div class="loyalty-progress">
-            <div class="progress-text">До скидки ${nextDiscount} осталось: ${stats.nextLevelTarget ? (stats.nextLevelTarget - stats.totalSpent).toLocaleString() : '0'}₽</div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${stats.nextLevelProgress}%"></div>
+            <div class="loyalty-tiers">
+                <div class="tier-item">
+                    <div class="tier-icon">💜</div>
+                    <div class="tier-info">0₽ - 9,999₽ → 0%</div>
+                </div>
+                <div class="tier-item">
+                    <div class="tier-icon">⭐</div>
+                    <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
+                </div>
+                <div class="tier-item">
+                    <div class="tier-icon">⭐</div>
+                    <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
+                </div>
+                <div class="tier-item current">
+                    <div class="tier-icon">👑</div>
+                    <div class="tier-info">50,000₽+ → 10%</div>
+                </div>
             </div>
-        </div>
-        <div class="loyalty-tiers">
-            <div class="tier-item ${stats.currentDiscount === 0 ? 'current' : ''}">
-                <div class="tier-icon">💜</div>
-                <div class="tier-info">0₽ - 9,999₽ → 0%</div>
+        `;
+    } else {
+        // Обычное отображение с прогресс-баром
+        loyaltyCard.innerHTML = `
+            <div class="loyalty-header">
+                <div class="loyalty-icon">🔥</div>
+                <div class="loyalty-title">Программа лояльности</div>
             </div>
-            <div class="tier-item ${stats.currentDiscount === 3 ? 'current' : ''}">
-                <div class="tier-icon">⭐</div>
-                <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
+            <div class="loyalty-stats">
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.totalSpent.toLocaleString()}₽</div>
+                    <div class="stat-label">Потрачено всего</div>
+                </div>
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.totalPurchases}</div>
+                    <div class="stat-label">Заказов сделано</div>
+                </div>
+                <div class="loyalty-stat">
+                    <div class="stat-value">${stats.currentDiscount}%</div>
+                    <div class="stat-label">Текущая скидка</div>
+                </div>
             </div>
-            <div class="tier-item ${stats.currentDiscount === 5 ? 'current' : ''}">
-                <div class="tier-icon">⭐</div>
-                <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
+            <div class="loyalty-progress">
+                <div class="progress-text">До скидки ${nextDiscount} осталось: ${stats.nextLevelTarget ? (stats.nextLevelTarget - stats.totalSpent).toLocaleString() : '0'}₽</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${stats.nextLevelProgress}%"></div>
+                </div>
             </div>
-            <div class="tier-item ${stats.currentDiscount === 10 ? 'current' : ''}">
-                <div class="tier-icon">⭐</div>
-                <div class="tier-info">50,000₽+ → 10%</div>
+            <div class="loyalty-tiers">
+                <div class="tier-item ${stats.currentDiscount === 0 ? 'current' : ''}">
+                    <div class="tier-icon">💜</div>
+                    <div class="tier-info">0₽ - 9,999₽ → 0%</div>
+                </div>
+                <div class="tier-item ${stats.currentDiscount === 3 ? 'current' : ''}">
+                    <div class="tier-icon">⭐</div>
+                    <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
+                </div>
+                <div class="tier-item ${stats.currentDiscount === 5 ? 'current' : ''}">
+                    <div class="tier-icon">⭐</div>
+                    <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
+                </div>
+                <div class="tier-item ${stats.currentDiscount === 10 ? 'current' : ''}">
+                    <div class="tier-icon">👑</div>
+                    <div class="tier-info">50,000₽+ → 10%</div>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 // Функция получения следующей скидки
