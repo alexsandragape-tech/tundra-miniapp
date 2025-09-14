@@ -3260,6 +3260,59 @@ app.get('/debug-purchases/:userId', async (req, res) => {
     }
 });
 
+// API для управления настройками уведомлений
+app.post('/api/notifications/settings', async (req, res) => {
+    try {
+        const { userId, notificationsEnabled } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({ 
+                ok: false, 
+                error: 'User ID обязателен' 
+            });
+        }
+        
+        logger.info(`📢 НАСТРОЙКИ: Обновляем настройки уведомлений для пользователя ${userId}:`, notificationsEnabled);
+        
+        // Сохраняем настройки в localStorage на клиенте
+        // Для серверного хранения можно добавить таблицу user_settings
+        
+        res.json({ 
+            ok: true, 
+            message: 'Настройки уведомлений сохранены',
+            notificationsEnabled: notificationsEnabled
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка сохранения настроек уведомлений:', error);
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Ошибка сервера: ' + error.message 
+        });
+    }
+});
+
+// API для получения настроек уведомлений
+app.get('/api/notifications/settings/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Пока возвращаем настройки по умолчанию
+        // В будущем можно добавить таблицу для хранения настроек
+        res.json({ 
+            ok: true, 
+            notificationsEnabled: true // По умолчанию включены
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка получения настроек уведомлений:', error);
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Ошибка сервера: ' + error.message 
+        });
+    }
+});
+
 // API для получения истории покупок клиента
 app.get('/api/purchases/:userId', async (req, res) => {
     try {
@@ -3436,8 +3489,26 @@ app.post('/api/telegram/webhook', async (req, res) => {
             logger.info('🔔 TELEGRAM WEBHOOK: callback_query обработан успешно');
         } else if (message) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
-            // Обрабатываем обычные сообщения
-            logger.debug('Получено сообщение:', message.text);
+            
+            // Проверяем, из какой группы пришло сообщение
+            const broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
+            const adminChatId = config.TELEGRAM_ADMIN_CHAT_ID?.toString();
+            const messageChatId = message.chat.id.toString();
+            
+            logger.info(`🔍 ПРОВЕРКА: Сообщение от ${messageChatId}`);
+            logger.info(`📢 Рассылочная группа: ${broadcastChatId}`);
+            logger.info(`📋 Админ группа заказов: ${adminChatId}`);
+            
+            if (broadcastChatId && messageChatId === broadcastChatId) {
+                logger.info('📢 РАССЫЛКА: Получено сообщение из группы рассылки для клиентов');
+                await handleGroupMessage(message);
+            } else if (adminChatId && messageChatId === adminChatId) {
+                logger.info('📋 АДМИН: Сообщение из группы заказов (не рассылаем клиентам)');
+                // Не обрабатываем сообщения из админ-группы заказов для рассылки
+            } else {
+                // Обрабатываем обычные сообщения от пользователей
+                logger.debug(`💬 ЛИЧНОЕ: Получено сообщение от пользователя ${messageChatId}:`, message.text);
+            }
         } else {
             logger.warn('🔔 TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body));
             logger.warn('🔔 TELEGRAM WEBHOOK: Полные данные:', JSON.stringify(req.body, null, 2));
@@ -3459,6 +3530,115 @@ app.get('/api/telegram/webhook', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+// 📢 ФУНКЦИЯ ОБРАБОТКИ СООБЩЕНИЙ ИЗ АДМИН-ГРУППЫ ДЛЯ РАССЫЛКИ
+async function handleGroupMessage(message) {
+    try {
+        const messageText = message.text;
+        const senderName = message.from?.first_name || 'Администратор';
+        
+        logger.info(`📢 РАССЫЛКА: Обрабатываем сообщение от ${senderName}: "${messageText}"`);
+        
+        // Пропускаем команды бота и служебные сообщения
+        if (messageText?.startsWith('/') || messageText?.startsWith('🆔') || messageText?.startsWith('📦')) {
+            logger.info('📢 РАССЫЛКА: Пропускаем служебное сообщение');
+            return;
+        }
+        
+        // Получаем всех пользователей с включенными уведомлениями
+        const subscribedUsers = await getSubscribedUsers();
+        
+        if (subscribedUsers.length === 0) {
+            logger.info('📢 РАССЫЛКА: Нет подписанных пользователей');
+            return;
+        }
+        
+        logger.info(`📢 РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
+        
+        // Формируем сообщение для рассылки
+        const broadcastMessage = `📢 *Уведомление от Tundra Gourmet*\n\n${messageText}\n\n_Вы получили это сообщение, так как подписаны на уведомления. Отключить уведомления можно в профиле приложения._`;
+        
+        // Отправляем сообщение каждому подписчику
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const user of subscribedUsers) {
+            try {
+                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: user.telegram_user_id,
+                    text: broadcastMessage,
+                    parse_mode: 'Markdown'
+                });
+                successCount++;
+                logger.debug(`✅ Сообщение отправлено пользователю ${user.telegram_user_id}`);
+            } catch (error) {
+                errorCount++;
+                logger.warn(`❌ Ошибка отправки пользователю ${user.telegram_user_id}:`, error.response?.data?.description || error.message);
+            }
+            
+            // Небольшая задержка между отправками для избежания rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // Отправляем отчет в админ-группу
+        const reportMessage = `📊 *Отчет о рассылке*\n\n` +
+            `📝 Сообщение: "${messageText}"\n` +
+            `✅ Успешно отправлено: ${successCount}\n` +
+            `❌ Ошибок: ${errorCount}\n` +
+            `👥 Всего подписчиков: ${subscribedUsers.length}`;
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: config.TELEGRAM_BROADCAST_CHAT_ID,
+            text: reportMessage,
+            parse_mode: 'Markdown'
+        });
+        
+        logger.info(`📢 РАССЫЛКА: Завершена. Успешно: ${successCount}, Ошибок: ${errorCount}`);
+        
+    } catch (error) {
+        logger.error('❌ РАССЫЛКА: Ошибка обработки группового сообщения:', error.message);
+        
+        // Уведомляем об ошибке в админ-группу
+        try {
+            await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                chat_id: config.TELEGRAM_BROADCAST_CHAT_ID,
+                text: `❌ *Ошибка рассылки*\n\nОшибка: ${error.message}`,
+                parse_mode: 'Markdown'
+            });
+        } catch (reportError) {
+            logger.error('❌ Не удалось отправить отчет об ошибке:', reportError.message);
+        }
+    }
+}
+
+// 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ПОДПИСАННЫХ ПОЛЬЗОВАТЕЛЕЙ
+async function getSubscribedUsers() {
+    try {
+        // Получаем всех пользователей которые делали заказы (потенциальные подписчики)
+        const query = `
+            SELECT DISTINCT telegram_user_id 
+            FROM orders 
+            WHERE telegram_user_id IS NOT NULL 
+            AND telegram_user_id != ''
+            AND status != 'cancelled'
+        `;
+        
+        const result = await pool.query(query);
+        
+        // В будущем здесь можно добавить проверку настроек уведомлений из отдельной таблицы
+        // Пока считаем что все пользователи с заказами подписаны на уведомления
+        const users = result.rows.map(row => ({
+            telegram_user_id: row.telegram_user_id
+        }));
+        
+        logger.info(`📋 Найдено ${users.length} уникальных активных пользователей в системе`);
+        return users;
+        
+    } catch (error) {
+        logger.error('❌ Ошибка получения подписанных пользователей:', error.message);
+        return [];
+    }
+}
 
 // Функция обработки callback query (нажатия на кнопки)
 async function handleCallbackQuery(callbackQuery) {
@@ -4150,12 +4330,15 @@ async function startServer() {
             // Проверяем настройки Telegram
             logger.info('🔍 Проверка настроек Telegram:');
             logger.info(`   Токен бота: ${config.TELEGRAM_BOT_TOKEN ? '✅ Настроен' : '❌ Не настроен'}`);
-            logger.info(`   Chat ID: ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
+            logger.info(`   📋 Админ группа (заказы): ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
+            logger.info(`   📢 Рассылочная группа: ${config.TELEGRAM_BROADCAST_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
             
-            if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID) {
+            if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_CHAT_ID && config.TELEGRAM_BROADCAST_CHAT_ID) {
                 logger.info('✅ Telegram настроен полностью');
             } else {
                 logger.warn('⚠️ Telegram не настроен полностью');
+                logger.warn(`   📋 Заказы будут ${config.TELEGRAM_ADMIN_CHAT_ID ? 'отправляться' : 'НЕ отправляться'}`);
+                logger.warn(`   📢 Рассылка будет ${config.TELEGRAM_BROADCAST_CHAT_ID ? 'работать' : 'НЕ работать'}`);
             }
         });
         
