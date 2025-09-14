@@ -1275,6 +1275,69 @@ body {
     margin-bottom: 20px;
 }
 
+/* 🏆 СООБЩЕНИЕ О ДОСТИЖЕНИИ МАКСИМУМА */
+.loyalty-max-message {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    animation: celebration 0.5s ease-in-out;
+}
+
+.max-achievement-icon {
+    font-size: 40px;
+    animation: pulse 1.5s infinite;
+}
+
+.max-achievement-text h3 {
+    margin: 0 0 8px 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.max-achievement-text p {
+    margin: 4px 0;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.max-achievement-subtitle {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    font-style: italic;
+}
+
+@keyframes celebration {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
 .progress-text {
     font-size: 14px;
     margin-bottom: 12px;
