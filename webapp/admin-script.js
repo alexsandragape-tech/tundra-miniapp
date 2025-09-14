@@ -41,6 +41,23 @@ function getAdminPassword() {
 // Инициализация админ панели
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🔍 DOM загружен, инициализируем админ-панель');
+    
+    // ⚡ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ ONCLICK
+    window.toggleProductAvailability = toggleProductAvailability;
+    window.editProduct = editProduct;
+    window.editCategoryName = editCategoryName;
+    window.showAddProductModal = showAddProductModal;
+    window.filterByStatus = filterByStatus;
+    window.filterProducts = filterProducts;
+    window.saveAllChanges = saveAllChanges;
+    window.toggleMobileMenu = toggleMobileMenu;
+    
+    console.log('✅ Глобальные функции экспортированы:', {
+        toggleProductAvailability: typeof window.toggleProductAvailability,
+        editProduct: typeof window.editProduct,
+        filterByStatus: typeof window.filterByStatus
+    });
+    
     loadProducts();
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
@@ -968,18 +985,37 @@ function hasProductChanged(categoryId, product) {
 
 // Переключение доступности товара
 async function toggleProductAvailability(categoryId, productId) {
+    console.log('🔍 toggleProductAvailability вызвана:', { categoryId, productId });
+    
     // Проверяем, что функция вызывается
     if (typeof window !== 'undefined') {
         window.toggleProductAvailability = toggleProductAvailability;
     }
     
-    const product = products[categoryId].find(p => p.id === productId);
-    if (!product) {
-        console.error('❌ Товар не найден:', categoryId, productId);
+    // Проверяем существование категории
+    if (!products[categoryId]) {
+        console.error('❌ Категория не найдена:', categoryId);
+        console.log('📋 Доступные категории:', Object.keys(products));
         return;
     }
     
+    const product = products[categoryId].find(p => p.id === productId);
+    if (!product) {
+        console.error('❌ Товар не найден:', categoryId, productId);
+        console.log('📋 Товары в категории:', products[categoryId].map(p => p.id));
+        return;
+    }
+    
+    const oldStatus = product.available;
     product.available = !product.available;
+    const newStatus = product.available;
+    
+    console.log('🔄 Изменение статуса товара:', {
+        name: product.name,
+        oldStatus,
+        newStatus,
+        available: product.available
+    });
     
     markAsChanged();
     renderProducts();
@@ -996,7 +1032,12 @@ async function toggleProductAvailability(categoryId, productId) {
         // Обновляем оригинальную копию
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
-        document.getElementById('save-btn').disabled = true;
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
+        
+        console.log('✅ Товар успешно сохранен на сервере');
         
     } catch (error) {
         console.error('❌ Ошибка сохранения:', error);
@@ -1322,7 +1363,7 @@ function addNewProduct() {
         products[categoryId].push(newProduct);
         
         // Отмечаем изменения
-        markUnsavedChanges();
+        markAsChanged();
         
         // Перерендериваем товары
         renderProducts();
@@ -1443,7 +1484,7 @@ function editCategoryName(categoryId) {
         categories[categoryId] = newName;
         
         // Отмечаем как несохраненные изменения
-        markUnsavedChanges();
+        markAsChanged();
         
         // Восстанавливаем заголовок
         titleElement.innerHTML = `<div class="category-title" id="category-title-${categoryId}">${newName}</div>`;
@@ -1706,7 +1747,7 @@ function toggleProductAvailability(categoryId, productId, isAvailable) {
     const product = products[categoryId].find(p => p.id === productId);
     if (product) {
         product.available = isAvailable;
-        markUnsavedChanges();
+        markAsChanged();
         renderProducts();
         updateStats();
         updateMobileStats();
