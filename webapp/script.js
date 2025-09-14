@@ -2395,13 +2395,8 @@ async function initApp() {
 
     // Инициализируем Telegram Web App
     if (window.Telegram?.WebApp) {
-        const user = window.Telegram.WebApp.initDataUnsafe?.user;
-        if (user) {
-            const profileName = document.querySelector('.profile-name');
-            if (profileName) {
-                profileName.textContent = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
-            }
-        }
+        // Убрана отображение пользовательской информации по требованию
+        console.log('✅ Telegram WebApp инициализирован (отображение имени пользователя отключено)');
     }
 }
 
