@@ -2973,14 +2973,62 @@ function redirectToPayment() {
 }
 
 // Функция переключения уведомлений
-function toggleNotifications() {
+async function toggleNotifications() {
+    const previousState = userProfile.notificationsEnabled;
+    
+    // Переключаем состояние
     userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
-    localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
-
-    // Обновляем UI
+    
+    // Обновляем UI немедленно для лучшего UX
     const toggle = document.querySelector('.notification-toggle');
     if (toggle) {
         toggle.classList.toggle('active', userProfile.notificationsEnabled);
+    }
+    
+    try {
+        // Сохраняем в локальном хранилище
+        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+        
+        // Отправляем настройки на сервер
+        const userId = getUserId();
+        const response = await fetch(`${API_BASE}/api/notifications/settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: userId,
+                notificationsEnabled: userProfile.notificationsEnabled
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (userProfile.notificationsEnabled) {
+                showNotification('🔔 Уведомления включены! Вы будете получать новости о товарах и акциях', 'success');
+                console.log('✅ Пользователь подписан на уведомления из группы');
+            } else {
+                showNotification('🔕 Уведомления отключены', 'info');
+                console.log('❌ Пользователь отписан от уведомлений');
+            }
+        } else {
+            throw new Error('Ошибка сохранения настроек на сервере');
+        }
+        
+    } catch (error) {
+        console.error('❌ Ошибка при изменении настроек уведомлений:', error);
+        
+        // Откатываем изменения в случае ошибки
+        userProfile.notificationsEnabled = previousState;
+        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+        
+        // Возвращаем UI в предыдущее состояние
+        if (toggle) {
+            toggle.classList.toggle('active', userProfile.notificationsEnabled);
+        }
+        
+        showNotification('❌ Ошибка изменения настроек уведомлений', 'error');
     }
 }
 
