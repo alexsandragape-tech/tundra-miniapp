@@ -206,54 +206,17 @@
             <div class="page-title">Профиль</div>
         </div>
 
-        <!-- 👤 ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ -->
-        <div class="user-info-card">
-            <div class="user-avatar">
-                <div class="avatar-circle" id="user-avatar">👤</div>
-        </div>
-            <div class="user-details">
-                <div class="user-name" id="user-name">Пользователь</div>
-            </div>
-            <div class="sync-status" id="sync-status" title="Статус синхронизации">
-                🔄
-                </div>
-                </div>
 
         <!-- 🔥 КАРТА ЛОЯЛЬНОСТИ -->
         <div class="loyalty-card">
             <!-- Карта лояльности будет заполнена динамически через JavaScript -->
-            </div>
-
-        <!-- 📊 БЫСТРАЯ СТАТИСТИКА -->
-        <div class="quick-stats">
-            <div class="quick-stat-item">
-                <div class="quick-stat-icon">🛒</div>
-                <div class="quick-stat-details">
-                    <div class="quick-stat-value" id="total-orders-stat">0</div>
-                    <div class="quick-stat-label">Заказов</div>
-                </div>
-                </div>
-            <div class="quick-stat-item">
-                <div class="quick-stat-icon">💰</div>
-                <div class="quick-stat-details">
-                    <div class="quick-stat-value" id="avg-order-stat">0₽</div>
-                    <div class="quick-stat-label">Средний чек</div>
-            </div>
-                </div>
-            <div class="quick-stat-item">
-                <div class="quick-stat-icon">📅</div>
-                <div class="quick-stat-details">
-                    <div class="quick-stat-value" id="last-order-stat">—</div>
-                    <div class="quick-stat-label">Последний заказ</div>
-                </div>
-            </div>
         </div>
+
 
         <!-- 📋 МЕНЮ ПРОФИЛЯ -->
         <div class="menu-list">
             <div class="menu-item" onclick="showMyOrders()">
                 <div class="menu-item-left">
-                    <div class="menu-item-icon">📋</div>
                     <div class="menu-item-text">Мои заказы</div>
                 </div>
                 <div class="menu-item-arrow">→</div>
@@ -261,7 +224,6 @@
 
             <div class="menu-item" onclick="showFavorites()">
                 <div class="menu-item-left">
-                    <div class="menu-item-icon">❤️</div>
                     <div class="menu-item-text">Избранное</div>
                 </div>
                 <div class="menu-item-badge" id="favorites-count">0</div>
@@ -270,7 +232,6 @@
 
             <div class="menu-item">
                 <div class="menu-item-left">
-                    <div class="menu-item-icon">🔔</div>
                     <div class="menu-item-text">Уведомления</div>
                 </div>
                 <div class="notification-toggle active" onclick="toggleNotifications()"></div>
@@ -278,7 +239,6 @@
 
             <div class="menu-item" onclick="openSupport()">
                 <div class="menu-item-left">
-                    <div class="menu-item-icon">💬</div>
                     <div class="menu-item-text">Поддержка</div>
                 </div>
                 <div class="menu-item-arrow">→</div>
@@ -290,7 +250,6 @@
             
             <div class="menu-item" onclick="showAbout()">
                 <div class="menu-item-left">
-                    <div class="menu-item-icon">ℹ️</div>
                     <div class="menu-item-text">О Нас</div>
                 </div>
                 <div class="menu-item-arrow">→</div>
