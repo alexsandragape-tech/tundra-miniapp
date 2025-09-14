@@ -3272,15 +3272,47 @@ app.post('/api/notifications/settings', async (req, res) => {
             });
         }
         
-        logger.info(`📢 НАСТРОЙКИ: Обновляем настройки уведомлений для пользователя ${userId}:`, notificationsEnabled);
+        logger.info(`📢 НАСТРОЙКИ: Обновляем настройки уведомлений для пользователя ${userId}: ${notificationsEnabled ? 'ВКЛЮЧЕНО' : 'ОТКЛЮЧЕНО'}`);
         
-        // Сохраняем настройки в localStorage на клиенте
-        // Для серверного хранения можно добавить таблицу user_settings
+        try {
+            // Проверяем, есть ли уже запись о настройках этого пользователя
+            const checkQuery = 'SELECT * FROM user_notification_settings WHERE user_id = $1';
+            const existingSettings = await pool.query(checkQuery, [userId]);
+            
+            if (existingSettings.rows.length > 0) {
+                // Обновляем существующую запись
+                const updateQuery = `
+                    UPDATE user_notification_settings 
+                    SET notifications_enabled = $1, updated_at = NOW() 
+                    WHERE user_id = $2
+                `;
+                await pool.query(updateQuery, [notificationsEnabled, userId]);
+                logger.info(`✅ Обновлены настройки уведомлений для пользователя ${userId}`);
+            } else {
+                // Создаем новую запись
+                const insertQuery = `
+                    INSERT INTO user_notification_settings (user_id, notifications_enabled, created_at, updated_at) 
+                    VALUES ($1, $2, NOW(), NOW())
+                `;
+                await pool.query(insertQuery, [userId, notificationsEnabled]);
+                logger.info(`✅ Созданы новые настройки уведомлений для пользователя ${userId}`);
+            }
+            
+            // Логируем статистику подписок
+            const statsQuery = 'SELECT COUNT(*) as total_subscribed FROM user_notification_settings WHERE notifications_enabled = true';
+            const stats = await pool.query(statsQuery);
+            logger.info(`📊 Всего подписанных пользователей: ${stats.rows[0]?.total_subscribed || 0}`);
+            
+        } catch (dbError) {
+            logger.warn('⚠️ Ошибка БД при сохранении настроек уведомлений:', dbError.message);
+            logger.warn('📝 Продолжаем работу без серверного хранения настроек');
+        }
         
         res.json({ 
             ok: true, 
-            message: 'Настройки уведомлений сохранены',
-            notificationsEnabled: notificationsEnabled
+            message: `Уведомления ${notificationsEnabled ? 'включены' : 'отключены'}`,
+            notificationsEnabled: notificationsEnabled,
+            status: notificationsEnabled ? 'subscribed' : 'unsubscribed'
         });
         
     } catch (error) {
@@ -3614,29 +3646,59 @@ async function handleGroupMessage(message) {
 // 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ПОДПИСАННЫХ ПОЛЬЗОВАТЕЛЕЙ
 async function getSubscribedUsers() {
     try {
-        // Получаем всех пользователей которые делали заказы (потенциальные подписчики)
+        // Получаем пользователей которые явно подписались на уведомления
         const query = `
-            SELECT DISTINCT telegram_user_id 
-            FROM orders 
-            WHERE telegram_user_id IS NOT NULL 
-            AND telegram_user_id != ''
-            AND status != 'cancelled'
+            SELECT DISTINCT o.telegram_user_id 
+            FROM orders o
+            LEFT JOIN user_notification_settings uns ON o.telegram_user_id = uns.user_id
+            WHERE o.telegram_user_id IS NOT NULL 
+            AND o.telegram_user_id != ''
+            AND o.status != 'cancelled'
+            AND (uns.notifications_enabled = true OR uns.notifications_enabled IS NULL)
         `;
         
         const result = await pool.query(query);
         
-        // В будущем здесь можно добавить проверку настроек уведомлений из отдельной таблицы
-        // Пока считаем что все пользователи с заказами подписаны на уведомления
         const users = result.rows.map(row => ({
             telegram_user_id: row.telegram_user_id
         }));
         
-        logger.info(`📋 Найдено ${users.length} уникальных активных пользователей в системе`);
+        logger.info(`📋 Найдено ${users.length} подписанных пользователей для рассылки`);
+        
+        // Дополнительная статистика для логов
+        try {
+            const statsQuery = 'SELECT COUNT(*) as explicit_subscribers FROM user_notification_settings WHERE notifications_enabled = true';
+            const stats = await pool.query(statsQuery);
+            logger.info(`📊 Из них явно подписанных: ${stats.rows[0]?.explicit_subscribers || 0}`);
+        } catch (statsError) {
+            logger.debug('Таблица настроек уведомлений еще не создана');
+        }
+        
         return users;
         
     } catch (error) {
         logger.error('❌ Ошибка получения подписанных пользователей:', error.message);
-        return [];
+        
+        // Fallback: получаем всех активных пользователей
+        try {
+            const fallbackQuery = `
+                SELECT DISTINCT telegram_user_id 
+                FROM orders 
+                WHERE telegram_user_id IS NOT NULL 
+                AND telegram_user_id != ''
+                AND status != 'cancelled'
+            `;
+            const fallbackResult = await pool.query(fallbackQuery);
+            const fallbackUsers = fallbackResult.rows.map(row => ({
+                telegram_user_id: row.telegram_user_id
+            }));
+            
+            logger.warn(`⚠️ Использован fallback: ${fallbackUsers.length} пользователей`);
+            return fallbackUsers;
+        } catch (fallbackError) {
+            logger.error('❌ Критическая ошибка получения пользователей:', fallbackError.message);
+            return [];
+        }
     }
 }
 
