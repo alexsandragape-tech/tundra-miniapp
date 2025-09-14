@@ -161,6 +161,17 @@ async function initializeDatabase() {
             CREATE INDEX IF NOT EXISTS idx_admin_products_category ON admin_products(category_id);
         `);
         
+        // Создаем таблицу настроек уведомлений
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_notification_settings (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(100) NOT NULL UNIQUE,
+                notifications_enabled BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
         console.log('✅ База данных инициализирована успешно');
         
     } catch (error) {
