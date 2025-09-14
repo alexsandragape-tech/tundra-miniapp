@@ -886,8 +886,14 @@ async function loadFullProductCatalog() {
                 storage: '6 месяцев',
                 available: true
             }
-        ]
-        // ✅ ГОТОВО! ВСЕ 8 КАТЕГОРИЙ, 49 ТОВАРОВ!
+        ],
+        
+        // 🆕 НОВЫЕ КАТЕГОРИИ (ПУСТЫЕ МАССИВЫ)
+        'sousy-marinad': [],
+        'napitki': [],
+        'deserty': [],
+        'konditerka': []
+        // ✅ ГОТОВО! ВСЕ 12 КАТЕГОРИЙ, 49 ТОВАРОВ!
     };
 }
 
@@ -1221,6 +1227,44 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     } catch (error) {
         logger.error('Ошибка получения товаров:', error.message);
         res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔧 API для сохранения категорий (админ)
+app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
+    try {
+        console.log('🔍 API PUT /api/admin/categories: ENDPOINT ВЫЗВАН!');
+        const { products, categories } = req.body;
+        
+        if (!products || !categories) {
+            return res.status(400).json({ 
+                ok: false, 
+                error: 'Отсутствуют данные товаров или категорий' 
+            });
+        }
+        
+        // Сохраняем товары через существующую функцию
+        await AdminProductsDB.saveAll(products);
+        
+        // Сохраняем категории в памяти сервера (можно добавить в БД позже)
+        global.categoryNames = categories;
+        
+        logger.info('✅ Товары и категории сохранены через API');
+        logger.info('📝 Обновленные категории:', categories);
+        
+        res.json({ 
+            ok: true, 
+            message: 'Товары и категории сохранены успешно',
+            categoriesCount: Object.keys(categories).length,
+            productsCount: Object.values(products).reduce((sum, cat) => sum + cat.length, 0)
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка сохранения категорий:', error);
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Ошибка сервера при сохранении категорий: ' + error.message 
+        });
     }
 });
 
@@ -1666,7 +1710,249 @@ async function createOrder(orderData) {
     return order;
 }
 
-// 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ В TELEGRAM
+// 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ КЛИЕНТАМ
+async function sendClientNotification(order, status, statusText, statusEmoji) {
+    if (!config.TELEGRAM_BOT_TOKEN || !order.telegramUserId) {
+        logger.warn('⚠️ Не удалось отправить уведомление клиенту: нет токена или telegramUserId');
+        return;
+    }
+    
+    try {
+        // Безопасно парсим данные заказа
+        const items = (() => {
+            try {
+                return typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || order.cartItems || []);
+            } catch (e) {
+                logger.warn('⚠️ Ошибка парсинга items в sendClientNotification:', e.message);
+                return [];
+            }
+        })();
+        
+        const address = (() => {
+            try {
+                return typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
+            } catch (e) {
+                logger.warn('⚠️ Ошибка парсинга address в sendClientNotification:', e.message);
+                return {};
+            }
+        })();
+        
+        // Форматируем время обновления по московскому времени
+        const updateTime = new Date().toLocaleString('ru-RU', { 
+            timeZone: 'Europe/Moscow',
+            hour: '2-digit', 
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit'
+        });
+        
+        // Создаем сообщение в зависимости от статуса
+        let clientMessage = '';
+        let hasButtons = false;
+        let inlineKeyboard = null;
+        
+        switch (status) {
+            case 'accepted':
+                clientMessage = `🟡 *Ваш заказ принят в работу!*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `👨‍🍳 Наши повара уже готовят ваш заказ\n` +
+                    `⏱️ Примерное время приготовления: 30-45 минут\n\n` +
+                    `📋 *Состав заказа:*\n${items.map(item => `• ${item.name} x${item.quantity} - ${(item.price * item.quantity)}₽`).join('\n')}\n\n` +
+                    `💰 *Общая сумма:* ${order.totals?.total || 0}₽\n` +
+                    `📍 *Адрес доставки:* ${address.street || ''} ${address.house || ''}\n\n` +
+                    `⏰ Обновлено: ${updateTime}\n\n` +
+                    `Спасибо за ваш заказ! 🙏`;
+                break;
+                
+            case 'preparing':
+                clientMessage = `🔵 *Ваш заказ готовится!*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `👨‍🍳 Наши повара готовят ваши блюда\n` +
+                    `🔥 Все готовится свежим и горячим!\n\n` +
+                    `📋 *Что готовим:*\n${items.map(item => `• ${item.name} x${item.quantity}`).join('\n')}\n\n` +
+                    `⏱️ *Осталось:* ~15-25 минут\n` +
+                    `📍 *Адрес доставки:* ${address.street || ''} ${address.house || ''}\n\n` +
+                    `⏰ Обновлено: ${updateTime}\n\n` +
+                    `Скоро все будет готово! 😋`;
+                break;
+                
+            case 'delivering':
+                clientMessage = `🚚 *Ваш заказ в пути!*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `🛵 Курьер выехал к вам с заказом\n` +
+                    `📱 Курьер свяжется с вами за 5-10 минут до прибытия\n\n` +
+                    `📋 *К вам везут:*\n${items.map(item => `• ${item.name} x${item.quantity}`).join('\n')}\n\n` +
+                    `💰 *К оплате:* ОПЛАЧЕНО ✅\n` +
+                    `📍 *Адрес доставки:* ${address.street || ''} ${address.house || ''}\n` +
+                    `${address.apartment ? `🏠 Квартира: ${address.apartment}\n` : ''}` +
+                    `${address.entrance ? `🚪 Подъезд: ${address.entrance}\n` : ''}` +
+                    `${address.floor ? `🏢 Этаж: ${address.floor}\n` : ''}` +
+                    `${address.intercom ? `🔔 Домофон: ${address.intercom}\n` : ''}\n` +
+                    `⏰ Обновлено: ${updateTime}\n\n` +
+                    `Ожидайте звонка курьера! 📞`;
+                
+                // Добавляем кнопку для отслеживания (если есть API)
+                hasButtons = true;
+                inlineKeyboard = {
+                    inline_keyboard: [
+                        [{ text: '📱 Открыть приложение', url: `${config.FRONTEND_URL}?order=${order.id}` }]
+                    ]
+                };
+                break;
+                
+            case 'completed':
+                // 🔥 ВАЖНО: При завершении заказа ОБНОВЛЯЕМ ЛОЯЛЬНОСТЬ
+                await updateClientLoyalty(order);
+                
+                clientMessage = `✅ *Заказ доставлен!*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `🎉 Ваш заказ успешно доставлен!\n\n` +
+                    `📋 *Доставлено:*\n${items.map(item => `• ${item.name} x${item.quantity}`).join('\n')}\n\n` +
+                    `💰 *Сумма заказа:* ${order.totals?.total || 0}₽\n` +
+                    `🔥 *Баллы лояльности начислены!*\n` +
+                    `⏰ Доставлено: ${updateTime}\n\n` +
+                    `🙏 *Спасибо за покупку!*\n` +
+                    `⭐ Будем рады, если вы оцените наш сервис\n\n` +
+                    `🛒 Ждем вас снова в Tundra Gourmet!`;
+                
+                // Добавляем кнопки для оценки и нового заказа
+                hasButtons = true;
+                inlineKeyboard = {
+                    inline_keyboard: [
+                        [
+                            { text: '⭐ Оценить заказ', callback_data: `rate_${order.id}` },
+                            { text: '🛒 Новый заказ', url: config.FRONTEND_URL }
+                        ]
+                    ]
+                };
+                break;
+                
+            case 'cancelled':
+                clientMessage = `❌ *Заказ отменен*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `😔 К сожалению, ваш заказ был отменен\n\n` +
+                    `💰 *Сумма к возврату:* ${order.totals?.total || 0}₽\n` +
+                    `💳 Средства будут возвращены на карту в течение 3-5 рабочих дней\n\n` +
+                    `⏰ Отменен: ${updateTime}\n\n` +
+                    `🙏 Приносим извинения за неудобства\n` +
+                    `📞 Если у вас есть вопросы, свяжитесь с поддержкой`;
+                
+                // Добавляем кнопки для поддержки и нового заказа
+                hasButtons = true;
+                inlineKeyboard = {
+                    inline_keyboard: [
+                        [
+                            { text: '💬 Поддержка', url: 'https://t.me/tundrasupport' },
+                            { text: '🛒 Новый заказ', url: config.FRONTEND_URL }
+                        ]
+                    ]
+                };
+                break;
+                
+            default:
+                clientMessage = `🔔 *Статус заказа изменился*\n\n` +
+                    `📦 Заказ №${order.id}\n` +
+                    `📍 *Новый статус:* ${statusEmoji} ${statusText}\n\n` +
+                    `⏰ Обновлено: ${updateTime}`;
+        }
+        
+        // Отправляем сообщение клиенту
+        const messageData = {
+            chat_id: order.telegramUserId,
+            text: clientMessage,
+            parse_mode: 'Markdown'
+        };
+        
+        if (hasButtons && inlineKeyboard) {
+            messageData.reply_markup = inlineKeyboard;
+        }
+        
+        logger.info(`📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ: chat_id=${order.telegramUserId}, status=${status}`);
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, messageData);
+        
+        logger.info(`✅ Уведомление клиенту отправлено для заказа ${order.id} со статусом ${status}`);
+        
+    } catch (error) {
+        logger.error(`❌ Ошибка отправки уведомления клиенту:`, error.message);
+        if (error.response) {
+            logger.error(`❌ Детали ошибки Telegram:`, error.response.data);
+        }
+        throw error; // Пробрасываем ошибку для обработки в handleCallbackQuery
+    }
+}
+
+// 🔥 ФУНКЦИЯ ОБНОВЛЕНИЯ ЛОЯЛЬНОСТИ КЛИЕНТА ПРИ ЗАВЕРШЕНИИ ЗАКАЗА
+async function updateClientLoyalty(order) {
+    try {
+        if (!order.telegramUserId || !order.totals?.total) {
+            logger.warn('⚠️ Не удалось обновить лояльность: нет telegramUserId или суммы заказа');
+            return;
+        }
+        
+        const userId = order.telegramUserId;
+        const orderAmount = order.totals.total;
+        
+        logger.info(`🔥 ЛОЯЛЬНОСТЬ: Обновляем лояльность для пользователя ${userId}, сумма заказа: ${orderAmount}₽`);
+        
+        // Проверяем, не был ли уже учтен этот заказ в системе лояльности
+        const existingPurchase = await PurchaseHistoryDB.getByOrderId(order.id);
+        if (existingPurchase) {
+            logger.warn(`⚠️ ЛОЯЛЬНОСТЬ: Заказ ${order.id} уже учтен в системе лояльности`);
+            return;
+        }
+        
+        // Добавляем заказ в purchase_history для подсчета лояльности
+        await PurchaseHistoryDB.add({
+            orderId: order.id,
+            userId: userId,
+            amount: orderAmount,
+            purchaseDate: new Date()
+        });
+        
+        logger.info(`✅ ЛОЯЛЬНОСТЬ: Заказ ${order.id} добавлен в систему лояльности`);
+        
+        // Получаем обновленную статистику пользователя
+        const userStats = await PurchaseHistoryDB.getUserStats(userId);
+        
+        if (userStats) {
+            logger.info(`📊 ЛОЯЛЬНОСТЬ: Обновленная статистика пользователя ${userId}:`, {
+                totalSpent: userStats.totalSpent,
+                totalPurchases: userStats.totalPurchases,
+                currentDiscount: userStats.currentDiscount
+            });
+            
+            // Отправляем команду клиенту для обновления локального профиля
+            const loyaltyUpdateData = {
+                action: 'update_loyalty',
+                totalSpent: userStats.totalSpent,
+                completedOrders: userStats.totalPurchases,
+                currentDiscount: userStats.currentDiscount,
+                orderAmount: orderAmount
+            };
+            
+            // Отправляем специальное сообщение с командой обновления лояльности
+            await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                chat_id: userId,
+                text: `🔥 *Баллы лояльности начислены!*\n\n` +
+                    `💰 За заказ №${order.id}: +${orderAmount}₽\n` +
+                    `📊 Всего потрачено: ${userStats.totalSpent.toLocaleString()}₽\n` +
+                    `🛒 Заказов выполнено: ${userStats.totalPurchases}\n` +
+                    `🔥 Текущая скидка: ${userStats.currentDiscount}%\n\n` +
+                    `_Данные лояльности автоматически обновлены в приложении_`,
+                parse_mode: 'Markdown'
+            });
+            
+            logger.info(`✅ ЛОЯЛЬНОСТЬ: Уведомление о начислении баллов отправлено пользователю ${userId}`);
+        }
+        
+    } catch (error) {
+        logger.error('❌ ЛОЯЛЬНОСТЬ: Ошибка обновления лояльности:', error.message);
+        // Не пробрасываем ошибку, чтобы не нарушить основной процесс доставки
+    }
+}
+
+// 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ В TELEGRAM АДМИНАМ
 async function sendTelegramNotification(order, type) {
     if (!config.TELEGRAM_BOT_TOKEN || !config.TELEGRAM_ADMIN_CHAT_ID) {
         logger.warn('⚠️ Telegram не настроен - уведомление не отправлено');
@@ -3157,7 +3443,7 @@ app.post('/api/telegram/webhook', async (req, res) => {
             logger.warn('🔔 TELEGRAM WEBHOOK: Полные данные:', JSON.stringify(req.body, null, 2));
         }
         
-        res.json({ ok: true });
+        res.status(200).json({ ok: true });
     } catch (error) {
         logger.error('❌ TELEGRAM WEBHOOK: Ошибка обработки:', error.message);
         logger.error('❌ TELEGRAM WEBHOOK: Стек ошибки:', error.stack);
@@ -3165,11 +3451,31 @@ app.post('/api/telegram/webhook', async (req, res) => {
     }
 });
 
+// Дополнительный webhook для тестирования
+app.get('/api/telegram/webhook', (req, res) => {
+    res.json({ 
+        ok: true, 
+        message: 'Telegram webhook доступен',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Функция обработки callback query (нажатия на кнопки)
 async function handleCallbackQuery(callbackQuery) {
     try {
         const { data, message, from } = callbackQuery;
-        const [action, orderId] = data.split('_');
+        const parts = data.split('_');
+        const action = parts[0];
+        const orderId = parts[1];
+        
+        // Обработка специальных действий с дополнительными параметрами
+        if (action === 'rating') {
+            await handleRatingSubmission(callbackQuery, orderId, parts[2]);
+            return;
+        } else if (action === 'cancel' && parts[1] === 'rating') {
+            await handleRatingCancel(callbackQuery, parts[2]);
+            return;
+        }
         
         logger.debug(`Обработка действия: ${action} для заказа ${orderId}`);
         
@@ -3208,6 +3514,10 @@ async function handleCallbackQuery(callbackQuery) {
                 statusText = 'Доставлен';
                 statusEmoji = '✅';
                 break;
+            case 'rate':
+                // Обработка оценки заказа клиентом
+                await handleOrderRating(callbackQuery, orderId);
+                return;
             default:
                 logger.error(`Неизвестное действие: ${action}`);
                 return;
@@ -3276,31 +3586,8 @@ async function handleCallbackQuery(callbackQuery) {
         
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
             try {
-                const items = order.items || order.cartItems || [];
-                const address = order.address || {};
-                
-                // Форматируем время обновления
-                const updateTime = new Date().toLocaleTimeString('ru-RU', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-                
-                const clientMessage = `🔔 Статус вашего заказа #${orderId} изменился\n\n` +
-                    `📋 Заказ: ${items.map(item => `${item.name} x${item.quantity} - ${item.price * item.quantity}₽`).join(', ') || 'Товары не найдены'}\n` +
-                    `💰 Сумма: ${order.totals?.total || 0}₽\n\n` +
-                    `📍 Статус: ${statusEmoji} ${statusText}\n` +
-                    `⏰ Время обновления: ${updateTime}\n\n` +
-                    `Спасибо за ваш заказ! 🙏`;
-                
-                logger.info(`📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ: chat_id=${order.telegramUserId}`);
-                
-                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: order.telegramUserId,
-                    text: clientMessage,
-                    parse_mode: 'HTML'
-                });
-                
-                logger.info(`📱 Уведомление клиенту отправлено для заказа ${orderId}`);
+                await sendClientNotification(order, newStatus, statusText, statusEmoji);
+                logger.info(`✅ Уведомление клиенту отправлено для заказа ${orderId}`);
             } catch (error) {
                 logger.error(`❌ Ошибка отправки уведомления клиенту:`, error.message);
                 if (error.response) {
@@ -3321,6 +3608,189 @@ async function handleCallbackQuery(callbackQuery) {
         
     } catch (error) {
         logger.error('Ошибка обработки callback query:', error.message);
+    }
+}
+
+// 🌟 ФУНКЦИЯ ОБРАБОТКИ ОЦЕНКИ ЗАКАЗА КЛИЕНТОМ
+async function handleOrderRating(callbackQuery, orderId) {
+    try {
+        const { from } = callbackQuery;
+        
+        logger.info(`⭐ Клиент ${from.id} хочет оценить заказ ${orderId}`);
+        
+        // Создаем инлайн-клавиатуру с оценками
+        const ratingKeyboard = {
+            inline_keyboard: [
+                [
+                    { text: '⭐', callback_data: `rating_${orderId}_1` },
+                    { text: '⭐⭐', callback_data: `rating_${orderId}_2` },
+                    { text: '⭐⭐⭐', callback_data: `rating_${orderId}_3` }
+                ],
+                [
+                    { text: '⭐⭐⭐⭐', callback_data: `rating_${orderId}_4` },
+                    { text: '⭐⭐⭐⭐⭐', callback_data: `rating_${orderId}_5` }
+                ],
+                [
+                    { text: '❌ Отмена', callback_data: `cancel_rating_${orderId}` }
+                ]
+            ]
+        };
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: from.id,
+            text: `⭐ *Оцените заказ №${orderId}*\n\nКак вам понравилась доставка?\nВыберите количество звезд:`,
+            parse_mode: 'Markdown',
+            reply_markup: ratingKeyboard
+        });
+        
+        // Отправляем подтверждение на исходную кнопку
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: 'Пожалуйста, оцените заказ ⭐'
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка обработки запроса на оценку:', error.message);
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: 'Ошибка при отправке формы оценки'
+        });
+    }
+}
+
+// 🌟 ФУНКЦИЯ ОБРАБОТКИ ОТПРАВКИ ОЦЕНКИ
+async function handleRatingSubmission(callbackQuery, orderId, rating) {
+    try {
+        const { from } = callbackQuery;
+        const ratingValue = parseInt(rating);
+        
+        if (isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+            throw new Error('Неверное значение оценки');
+        }
+        
+        logger.info(`⭐ Получена оценка ${ratingValue} для заказа ${orderId} от клиента ${from.id}`);
+        
+        // Сохраняем оценку в БД (если есть таблица ratings)
+        try {
+            // Это можно добавить позже, когда будет таблица для оценок
+            logger.info(`💾 Оценка ${ratingValue} для заказа ${orderId} сохранена`);
+        } catch (dbError) {
+            logger.error('❌ Ошибка сохранения оценки в БД:', dbError.message);
+        }
+        
+        // Формируем ответное сообщение в зависимости от оценки
+        let responseMessage = '';
+        let responseEmoji = '';
+        
+        if (ratingValue >= 4) {
+            responseEmoji = '🎉';
+            responseMessage = `${responseEmoji} *Спасибо за отличную оценку!*\n\n` +
+                `⭐ Вы поставили ${rating} звезд${ratingValue === 1 ? 'у' : ratingValue > 4 ? '' : 'ы'} заказу №${orderId}\n\n` +
+                `🙏 Мы очень рады, что вам понравилось!\n` +
+                `🛒 Будем ждать вас снова в Tundra Gourmet`;
+        } else if (ratingValue === 3) {
+            responseEmoji = '😊';
+            responseMessage = `${responseEmoji} *Спасибо за оценку!*\n\n` +
+                `⭐ Вы поставили ${rating} звезды заказу №${orderId}\n\n` +
+                `🔧 Мы работаем над улучшением сервиса\n` +
+                `🛒 Надеемся, в следующий раз все будет еще лучше!`;
+        } else {
+            responseEmoji = '😔';
+            responseMessage = `${responseEmoji} *Спасибо за честную оценку*\n\n` +
+                `⭐ Вы поставили ${rating} звезд${ratingValue === 1 ? 'у' : 'ы'} заказу №${orderId}\n\n` +
+                `🙏 Нам очень жаль, что что-то пошло не так\n` +
+                `📞 Если хотите рассказать подробнее - свяжитесь с поддержкой\n` +
+                `🔧 Мы обязательно исправим недочеты`;
+        }
+        
+        // Добавляем кнопки в зависимости от оценки
+        let inlineKeyboard = null;
+        if (ratingValue <= 2) {
+            // Для низких оценок - кнопка поддержки
+            inlineKeyboard = {
+                inline_keyboard: [
+                    [{ text: '💬 Связаться с поддержкой', url: 'https://t.me/tundrasupport' }],
+                    [{ text: '🛒 Новый заказ', url: config.FRONTEND_URL }]
+                ]
+            };
+        } else {
+            // Для хороших оценок - кнопка нового заказа
+            inlineKeyboard = {
+                inline_keyboard: [
+                    [{ text: '🛒 Сделать новый заказ', url: config.FRONTEND_URL }]
+                ]
+            };
+        }
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: from.id,
+            text: responseMessage,
+            parse_mode: 'Markdown',
+            reply_markup: inlineKeyboard
+        });
+        
+        // Отправляем уведомление в админ-группу о получении оценки
+        if (config.TELEGRAM_ADMIN_CHAT_ID) {
+            const adminMessage = `📊 *Новая оценка заказа*\n\n` +
+                `📦 Заказ №${orderId}\n` +
+                `⭐ Оценка: ${rating} из 5\n` +
+                `👤 Клиент: ${from.first_name || 'Неизвестно'} ${from.last_name || ''}\n` +
+                `🆔 ID: ${from.id}\n` +
+                `⏰ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
+            
+            try {
+                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: config.TELEGRAM_ADMIN_CHAT_ID,
+                    text: adminMessage,
+                    parse_mode: 'Markdown'
+                });
+            } catch (adminError) {
+                logger.error('❌ Ошибка отправки уведомления об оценке в админ-группу:', adminError.message);
+            }
+        }
+        
+        // Отправляем подтверждение
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: `Спасибо за оценку: ${rating} ⭐`
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка обработки оценки:', error.message);
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: 'Ошибка при сохранении оценки'
+        });
+    }
+}
+
+// 🌟 ФУНКЦИЯ ОТМЕНЫ ОЦЕНКИ
+async function handleRatingCancel(callbackQuery, orderId) {
+    try {
+        const { from } = callbackQuery;
+        
+        logger.info(`❌ Клиент ${from.id} отменил оценку заказа ${orderId}`);
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: from.id,
+            text: `❌ Оценка заказа №${orderId} отменена\n\nВы можете оценить заказ позже в любое время 😊`,
+            parse_mode: 'Markdown'
+        });
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: 'Оценка отменена'
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка отмены оценки:', error.message);
+        
+        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            callback_query_id: callbackQuery.id,
+            text: 'Ошибка при отмене'
+        });
     }
 }
 
