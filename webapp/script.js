@@ -1528,14 +1528,8 @@ function proceedToOrder() {
 function showProfile() {
     showScreen('profile-screen');
     
-    // Обновляем информацию о пользователе
-    updateUserInfo();
-    
     // Обновляем карту лояльности
     updateLoyaltyCard();
-    
-    // Обновляем быструю статистику
-    updateQuickStats();
     
     // Обновляем состояние переключателя уведомлений
     const toggle = document.querySelector('.notification-toggle');
@@ -1544,100 +1538,8 @@ function showProfile() {
     }
 }
 
-// 👤 ФУНКЦИЯ ОБНОВЛЕНИЯ ИНФОРМАЦИИ О ПОЛЬЗОВАТЕЛЕ
-function updateUserInfo() {
-    try {
-        const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-        
-        if (telegramUser) {
-            // Обновляем только имя пользователя
-            document.getElementById('user-name').textContent = 
-                telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '');
-            
-            // Обновляем аватар с инициалами
-            const avatarEl = document.getElementById('user-avatar');
-            if (telegramUser.first_name) {
-                const initials = (telegramUser.first_name[0] + (telegramUser.last_name?.[0] || '')).toUpperCase();
-                avatarEl.textContent = initials;
-            }
-        } else {
-            // Fallback для тестирования вне Telegram
-            document.getElementById('user-name').textContent = 'Тестовый пользователь';
-            document.getElementById('user-avatar').textContent = 'ТП';
-        }
-        
-        // Обновляем статус синхронизации
-        updateSyncStatus();
-        
-    } catch (error) {
-        console.error('❌ Ошибка обновления информации о пользователе:', error);
-    }
-}
 
-// 📊 ФУНКЦИЯ ОБНОВЛЕНИЯ БЫСТРОЙ СТАТИСТИКИ
-function updateQuickStats() {
-    try {
-        const totalOrders = userProfile.completedOrders || 0;
-        const totalSpent = userProfile.totalSpent || 0;
-        
-        // Общее количество заказов
-        document.getElementById('total-orders-stat').textContent = totalOrders;
-        
-        // Средний чек
-        const avgOrder = totalOrders > 0 ? Math.round(totalSpent / totalOrders) : 0;
-        document.getElementById('avg-order-stat').textContent = avgOrder.toLocaleString() + '₽';
-        
-        // Последний заказ (попробуем найти в localStorage или показать заглушку)
-        const lastOrderDate = localStorage.getItem('last_order_date');
-        if (lastOrderDate) {
-            const date = new Date(lastOrderDate);
-            const today = new Date();
-            const diffTime = Math.abs(today - date);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 0) {
-                document.getElementById('last-order-stat').textContent = 'Сегодня';
-            } else if (diffDays === 1) {
-                document.getElementById('last-order-stat').textContent = 'Вчера';
-            } else if (diffDays < 7) {
-                document.getElementById('last-order-stat').textContent = diffDays + ' дн. назад';
-            } else {
-                document.getElementById('last-order-stat').textContent = date.toLocaleDateString('ru-RU');
-            }
-        } else {
-            document.getElementById('last-order-stat').textContent = totalOrders > 0 ? 'Давно' : '—';
-        }
-        
-    } catch (error) {
-        console.error('❌ Ошибка обновления статистики:', error);
-    }
-}
 
-// 🔄 ФУНКЦИЯ ОБНОВЛЕНИЯ СТАТУСА СИНХРОНИЗАЦИИ
-function updateSyncStatus() {
-    const syncStatus = document.getElementById('sync-status');
-    const lastSync = localStorage.getItem('last_sync_time');
-    
-    if (lastSync) {
-        const date = new Date(lastSync);
-        const now = new Date();
-        const diffMinutes = Math.floor((now - date) / (1000 * 60));
-        
-        if (diffMinutes < 1) {
-            syncStatus.textContent = '✅';
-            syncStatus.title = 'Синхронизировано только что';
-        } else if (diffMinutes < 60) {
-            syncStatus.textContent = '🔄';
-            syncStatus.title = `Синхронизировано ${diffMinutes} мин. назад`;
-        } else {
-            syncStatus.textContent = '⚠️';
-            syncStatus.title = 'Давно не синхронизировано';
-        }
-    } else {
-        syncStatus.textContent = '❓';
-        syncStatus.title = 'Не синхронизировано';
-    }
-}
 
 // 🆕 ФУНКЦИИ ДЛЯ НОВЫХ ПУНКТОВ МЕНЮ
 function showFavorites() {
@@ -2613,7 +2515,6 @@ async function updateLoyaltyCard() {
         // Специальное отображение для максимального уровня
         loyaltyCard.innerHTML = `
             <div class="loyalty-header">
-                <div class="loyalty-icon">🔥</div>
                 <div class="loyalty-title">Программа лояльности</div>
             </div>
             <div class="loyalty-stats">
@@ -2631,7 +2532,6 @@ async function updateLoyaltyCard() {
                 </div>
             </div>
             <div class="loyalty-max-message">
-                <div class="max-achievement-icon">👑</div>
                 <div class="max-achievement-text">
                     <h3>Поздравляем!</h3>
                     <p>Вы достигли максимума нашей карты лояльности</p>
@@ -2640,19 +2540,15 @@ async function updateLoyaltyCard() {
             </div>
             <div class="loyalty-tiers">
                 <div class="tier-item">
-                    <div class="tier-icon">💜</div>
                     <div class="tier-info">0₽ - 9,999₽ → 0%</div>
                 </div>
                 <div class="tier-item">
-                    <div class="tier-icon">⭐</div>
                     <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
                 </div>
                 <div class="tier-item">
-                    <div class="tier-icon">⭐</div>
                     <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
                 </div>
                 <div class="tier-item current">
-                    <div class="tier-icon">👑</div>
                     <div class="tier-info">50,000₽+ → 10%</div>
                 </div>
             </div>
@@ -2661,7 +2557,6 @@ async function updateLoyaltyCard() {
         // Обычное отображение с прогресс-баром
         loyaltyCard.innerHTML = `
             <div class="loyalty-header">
-                <div class="loyalty-icon">🔥</div>
                 <div class="loyalty-title">Программа лояльности</div>
             </div>
             <div class="loyalty-stats">
@@ -2686,19 +2581,15 @@ async function updateLoyaltyCard() {
             </div>
             <div class="loyalty-tiers">
                 <div class="tier-item ${stats.currentDiscount === 0 ? 'current' : ''}">
-                    <div class="tier-icon">💜</div>
                     <div class="tier-info">0₽ - 9,999₽ → 0%</div>
                 </div>
                 <div class="tier-item ${stats.currentDiscount === 3 ? 'current' : ''}">
-                    <div class="tier-icon">⭐</div>
                     <div class="tier-info">10,000₽ - 24,999₽ → 3%</div>
                 </div>
                 <div class="tier-item ${stats.currentDiscount === 5 ? 'current' : ''}">
-                    <div class="tier-icon">⭐</div>
                     <div class="tier-info">25,000₽ - 49,999₽ → 5%</div>
                 </div>
                 <div class="tier-item ${stats.currentDiscount === 10 ? 'current' : ''}">
-                    <div class="tier-icon">👑</div>
                     <div class="tier-info">50,000₽+ → 10%</div>
                 </div>
             </div>
