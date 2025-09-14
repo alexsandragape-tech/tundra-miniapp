@@ -282,6 +282,40 @@ const categories = [
         icon: '🧁',
         imageUrl: 'images/categories/Пирог с грибами_1_small.jpg',
         count: 8
+    },
+    
+    // 🆕 НОВЫЕ КАТЕГОРИИ (ПУСТЫЕ)
+    {
+        id: 'sousy-marinad',
+        name: 'Соусы и маринады',
+        desc: 'Авторские соусы и маринады',
+        icon: '🍯',
+        imageUrl: 'images/categories/sousy-placeholder.jpg',
+        count: 0
+    },
+    {
+        id: 'napitki',
+        name: 'Напитки',
+        desc: 'Натуральные соки и компоты',
+        icon: '🧃',
+        imageUrl: 'images/categories/napitki-placeholder.jpg',
+        count: 0
+    },
+    {
+        id: 'deserty',
+        name: 'Десерты',
+        desc: 'Сладкие деликатесы',
+        icon: '🍰',
+        imageUrl: 'images/categories/deserty-placeholder.jpg',
+        count: 0
+    },
+    {
+        id: 'konditerka',
+        name: 'Кондитерские изделия',
+        desc: 'Торты, пирожные, печенье',
+        icon: '🎂',
+        imageUrl: 'images/categories/konditerka-placeholder.jpg',
+        count: 0
     }
 ];
 
@@ -952,7 +986,13 @@ let products = {
             calories: '258.4 ккал/1184.3 кДж',
             storage: '6 месяцев'
         }
-    ]
+    ],
+    
+    // 🆕 НОВЫЕ КАТЕГОРИИ (ПУСТЫЕ МАССИВЫ)
+    'sousy-marinad': [],
+    'napitki': [],
+    'deserty': [],
+    'konditerka': []
 };
 
 // 🔄 ЗАГРУЗКА ТОВАРОВ С СЕРВЕРА
@@ -1488,14 +1528,185 @@ function proceedToOrder() {
 function showProfile() {
     showScreen('profile-screen');
     
+    // Обновляем информацию о пользователе
+    updateUserInfo();
+    
     // Обновляем карту лояльности
     updateLoyaltyCard();
+    
+    // Обновляем быструю статистику
+    updateQuickStats();
     
     // Обновляем состояние переключателя уведомлений
     const toggle = document.querySelector('.notification-toggle');
     if (toggle) {
         toggle.classList.toggle('active', userProfile.notificationsEnabled);
     }
+}
+
+// 👤 ФУНКЦИЯ ОБНОВЛЕНИЯ ИНФОРМАЦИИ О ПОЛЬЗОВАТЕЛЕ
+function updateUserInfo() {
+    try {
+        const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        
+        if (telegramUser) {
+            // Обновляем данные из Telegram
+            document.getElementById('user-name').textContent = 
+                telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '');
+            
+            document.getElementById('user-username').textContent = 
+                telegramUser.username ? '@' + telegramUser.username : 'Пользователь Telegram';
+            
+            document.getElementById('user-id').textContent = 'ID: ' + telegramUser.id;
+            
+            // Обновляем аватар (если есть фото)
+            const avatarEl = document.getElementById('user-avatar');
+            if (telegramUser.first_name) {
+                const initials = (telegramUser.first_name[0] + (telegramUser.last_name?.[0] || '')).toUpperCase();
+                avatarEl.textContent = initials;
+            }
+        } else {
+            // Fallback для тестирования вне Telegram
+            document.getElementById('user-name').textContent = 'Тестовый пользователь';
+            document.getElementById('user-username').textContent = '@test_user';
+            document.getElementById('user-id').textContent = 'ID: test_123';
+        }
+        
+        // Обновляем статус синхронизации
+        updateSyncStatus();
+        
+    } catch (error) {
+        console.error('❌ Ошибка обновления информации о пользователе:', error);
+    }
+}
+
+// 📊 ФУНКЦИЯ ОБНОВЛЕНИЯ БЫСТРОЙ СТАТИСТИКИ
+function updateQuickStats() {
+    try {
+        const totalOrders = userProfile.completedOrders || 0;
+        const totalSpent = userProfile.totalSpent || 0;
+        
+        // Общее количество заказов
+        document.getElementById('total-orders-stat').textContent = totalOrders;
+        
+        // Средний чек
+        const avgOrder = totalOrders > 0 ? Math.round(totalSpent / totalOrders) : 0;
+        document.getElementById('avg-order-stat').textContent = avgOrder.toLocaleString() + '₽';
+        
+        // Последний заказ (попробуем найти в localStorage или показать заглушку)
+        const lastOrderDate = localStorage.getItem('last_order_date');
+        if (lastOrderDate) {
+            const date = new Date(lastOrderDate);
+            const today = new Date();
+            const diffTime = Math.abs(today - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) {
+                document.getElementById('last-order-stat').textContent = 'Сегодня';
+            } else if (diffDays === 1) {
+                document.getElementById('last-order-stat').textContent = 'Вчера';
+            } else if (diffDays < 7) {
+                document.getElementById('last-order-stat').textContent = diffDays + ' дн. назад';
+            } else {
+                document.getElementById('last-order-stat').textContent = date.toLocaleDateString('ru-RU');
+            }
+        } else {
+            document.getElementById('last-order-stat').textContent = totalOrders > 0 ? 'Давно' : '—';
+        }
+        
+    } catch (error) {
+        console.error('❌ Ошибка обновления статистики:', error);
+    }
+}
+
+// 🔄 ФУНКЦИЯ ОБНОВЛЕНИЯ СТАТУСА СИНХРОНИЗАЦИИ
+function updateSyncStatus() {
+    const syncStatus = document.getElementById('sync-status');
+    const lastSync = localStorage.getItem('last_sync_time');
+    
+    if (lastSync) {
+        const date = new Date(lastSync);
+        const now = new Date();
+        const diffMinutes = Math.floor((now - date) / (1000 * 60));
+        
+        if (diffMinutes < 1) {
+            syncStatus.textContent = '✅';
+            syncStatus.title = 'Синхронизировано только что';
+        } else if (diffMinutes < 60) {
+            syncStatus.textContent = '🔄';
+            syncStatus.title = `Синхронизировано ${diffMinutes} мин. назад`;
+        } else {
+            syncStatus.textContent = '⚠️';
+            syncStatus.title = 'Давно не синхронизировано';
+        }
+    } else {
+        syncStatus.textContent = '❓';
+        syncStatus.title = 'Не синхронизировано';
+    }
+}
+
+// 🆕 ФУНКЦИИ ДЛЯ НОВЫХ ПУНКТОВ МЕНЮ
+function showFavorites() {
+    showNotification('Функция "Избранное" в разработке', 'info');
+    // TODO: Реализовать систему избранных товаров
+}
+
+function showAddresses() {
+    showNotification('Функция "Адреса доставки" в разработке', 'info');
+    // TODO: Реализовать сохраненные адреса
+}
+
+function syncUserData() {
+    const syncBtn = event.target.closest('.menu-item');
+    const originalText = syncBtn.querySelector('.menu-item-text').textContent;
+    
+    // Показываем процесс синхронизации
+    syncBtn.querySelector('.menu-item-text').textContent = 'Синхронизация...';
+    syncBtn.style.opacity = '0.6';
+    
+    Promise.all([
+        syncProfileWithServer(),
+        syncLoyaltyWithServer()
+    ]).then(() => {
+        // Обновляем все данные профиля
+        updateUserInfo();
+        updateLoyaltyCard();
+        updateQuickStats();
+        
+        // Сохраняем время синхронизации
+        localStorage.setItem('last_sync_time', new Date().toISOString());
+        
+        showNotification('✅ Данные обновлены', 'success');
+    }).catch((error) => {
+        console.error('❌ Ошибка синхронизации:', error);
+        showNotification('❌ Ошибка обновления данных', 'error');
+    }).finally(() => {
+        // Восстанавливаем кнопку
+        syncBtn.querySelector('.menu-item-text').textContent = originalText;
+        syncBtn.style.opacity = '1';
+        updateSyncStatus();
+    });
+}
+
+function showAbout() {
+    const aboutMessage = `🍖 Tundra Gourmet
+
+Премиальные деликатесы из оленины и северных продуктов.
+
+📱 Версия приложения: 2.0.0
+🏢 Разработано: Tundra Team
+📞 Поддержка: @tundrasupport
+
+🔥 Особенности:
+• Свежие продукты премиум-класса
+• Доставка по Москве и МО
+• Система лояльности
+• Уведомления о заказах
+
+Спасибо, что выбираете нас! 🙏`;
+
+    // Можно показать в модальном окне или как уведомление
+    alert(aboutMessage);
 }
 
 // 📋 ФУНКЦИЯ ЗАГРУЗКИ ИСТОРИИ ПОКУПОК
@@ -1546,13 +1757,9 @@ async function checkOrderStatusAndShowSuccess(orderId) {
                 document.getElementById('success-amount').textContent = order.totals?.total || 0;
                 showScreen('payment-success-screen');
                 
-                // Обновляем профиль пользователя
-                if (order.totals?.total) {
-                    userProfile.totalSpent += order.totals.total;
-                    userProfile.completedOrders += 1;
-                    localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
-                    console.log('✅ Профиль пользователя обновлен после оплаты');
-                }
+                // ❌ ОБНОВЛЕНИЕ ПРОФИЛЯ УБРАНО - будет при завершении заказа админом
+                // Профиль обновляется только когда админ нажмет "✅ Доставлен"
+                console.log('💭 Профиль НЕ обновлен - ждем завершения заказа админом');
                 
                 // Удаляем данные ожидающего заказа
                 localStorage.removeItem('pending_order');
@@ -1587,13 +1794,9 @@ function showSuccessFromLocalStorage(orderId) {
             document.getElementById('success-amount').textContent = orderData.amount || 0;
             showScreen('payment-success-screen');
             
-            // Обновляем профиль пользователя
-            if (orderData.cartTotal) {
-                userProfile.totalSpent += orderData.cartTotal.total || 0;
-                userProfile.completedOrders += 1;
-                localStorage.setItem('tundra_user_profile', JSON.stringify(userProfile));
-                console.log('✅ Профиль пользователя обновлен после оплаты');
-            }
+            // ❌ ОБНОВЛЕНИЕ ПРОФИЛЯ УБРАНО - будет при завершении заказа админом
+            // Профиль обновляется только когда админ нажмет "✅ Доставлен"
+            console.log('💭 Профиль НЕ обновлен - ждем завершения заказа админом');
             
             // Удаляем данные ожидающего заказа
             localStorage.removeItem('pending_order');
@@ -2288,6 +2491,11 @@ async function initApp() {
         console.error('❌ Ошибка синхронизации профиля:', error);
         // Продолжаем работу с локальными данными
     });
+    
+    // 🔥 НОВОЕ: Синхронизируем лояльность с сервером
+    syncLoyaltyWithServer().catch(error => {
+        console.error('❌ Ошибка синхронизации лояльности:', error);
+    });
 
     // Инициализируем Telegram Web App
     if (window.Telegram?.WebApp) {
@@ -2526,6 +2734,50 @@ function resetUserProfile() {
     console.log('🔄 Профиль пользователя сброшен:', userProfile);
 }
 
+// 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ЛОЯЛЬНОСТИ С СЕРВЕРОМ  
+async function syncLoyaltyWithServer() {
+    try {
+        if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+            console.log('⚠️ ЛОЯЛЬНОСТЬ: Нет Telegram ID для синхронизации');
+            return;
+        }
+        
+        const userId = window.Telegram.WebApp.initDataUnsafe.user.id;
+        console.log(`🔄 ЛОЯЛЬНОСТЬ: Синхронизируем данные лояльности для пользователя ${userId}`);
+        
+        const response = await fetch(`/api/loyalty/${userId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const serverStats = await response.json();
+        if (serverStats && serverStats.ok) {
+            // Обновляем локальный профиль данными с сервера
+            userProfile.totalSpent = serverStats.data.totalSpent || 0;
+            userProfile.completedOrders = serverStats.data.totalPurchases || 0;
+            
+            // Сохраняем обновленный профиль
+            localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
+            
+            console.log('✅ ЛОЯЛЬНОСТЬ: Профиль синхронизирован с сервером:', {
+                totalSpent: userProfile.totalSpent,
+                completedOrders: userProfile.completedOrders,
+                currentDiscount: serverStats.data.currentDiscount
+            });
+            
+            // Обновляем отображение карты лояльности
+            await updateLoyaltyCard();
+            
+            return serverStats.data;
+        }
+        
+    } catch (error) {
+        console.error('❌ ЛОЯЛЬНОСТЬ: Ошибка синхронизации с сервером:', error);
+        // Продолжаем работу с локальными данными
+        return null;
+    }
+}
+
 // 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ПРОФИЛЯ С СЕРВЕРОМ
 async function syncProfileWithServer() {
     try {
@@ -2664,23 +2916,10 @@ function handleSuccessfulPayment(order) {
     console.log('🛑 CLIENT: Останавливаем таймер оплаты');
     cancelPaymentTimer();
     
-    // 🔥 ОБНОВЛЯЕМ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ДЛЯ СИСТЕМЫ ЛОЯЛЬНОСТИ
-    const pendingOrder = JSON.parse(localStorage.getItem('pending_order') || '{}');
-    const orderAmount = order.totals?.total || pendingOrder.cartTotal?.subtotal || 0;
-    
-    if (orderAmount > 0) {
-        userProfile.totalSpent += orderAmount;
-        userProfile.completedOrders += 1;
-        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
-        console.log('✅ Профиль обновлен после оплаты:', {
-            orderAmount: orderAmount,
-            totalSpent: userProfile.totalSpent,
-            completedOrders: userProfile.completedOrders
-        });
-        
-        // Обновляем отображение лояльности
-        updateLoyaltyDisplay();
-    }
+    // ❌ ОБНОВЛЕНИЕ ПРОФИЛЯ УБРАНО - будет при завершении заказа админом
+    // Профиль обновляется только когда админ нажмет "✅ Доставлен"
+    console.log('💭 Профиль НЕ обновлен - ждем завершения заказа админом');
+    console.log('💰 Сумма заказа для будущего начисления:', order.totals?.total || 0);
     
     // Очищаем pending order
     localStorage.removeItem('pending_order');
