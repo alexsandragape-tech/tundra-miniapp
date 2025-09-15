@@ -3287,9 +3287,9 @@ app.post('/api/notifications/settings', async (req, res) => {
         logger.info(`   🤖 process.env.TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
         
         // Попытка использовать напрямую process.env если config пустой
-        const broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID || process.env.TELEGRAM_BROADCAST_CHAT_ID;
-        const adminChatId = config.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID;
-        const botToken = config.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+        const broadcastChatId = (config.TELEGRAM_BROADCAST_CHAT_ID && config.TELEGRAM_BROADCAST_CHAT_ID.trim()) || process.env.TELEGRAM_BROADCAST_CHAT_ID;
+        const adminChatId = (config.TELEGRAM_ADMIN_CHAT_ID && config.TELEGRAM_ADMIN_CHAT_ID.trim()) || process.env.TELEGRAM_ADMIN_CHAT_ID;
+        const botToken = (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_BOT_TOKEN.trim()) || process.env.TELEGRAM_BOT_TOKEN;
         
         logger.info('🔍 ФИНАЛЬНЫЕ ЗНАЧЕНИЯ:');
         logger.info(`   📋 adminChatId: ${adminChatId || 'НЕ УСТАНОВЛЕН'}`);
