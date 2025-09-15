@@ -963,3 +963,162 @@ input[type="checkbox"]:checked + .checkmark::after {
     }
 }
 
+/* Стили для вкладок управления */
+.admin-tabs {
+    display: flex;
+    gap: 8px;
+    margin-left: 20px;
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.tab-btn:hover {
+    border-color: #0066cc;
+    background: #f0f8ff;
+}
+
+.tab-btn.active {
+    background: #0066cc;
+    color: white;
+    border-color: #0066cc;
+}
+
+/* Стили для управления категориями */
+.categories-management {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.management-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.management-header h2 {
+    color: #1a1f2e;
+    margin-bottom: 8px;
+    font-size: 24px;
+}
+
+.management-header p {
+    color: #666;
+    font-size: 16px;
+}
+
+.categories-list {
+    display: grid;
+    gap: 16px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.category-item {
+    background: white;
+    border: 2px solid #e1e8ed;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+}
+
+.category-item:hover {
+    border-color: #0066cc;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.1);
+}
+
+.category-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.category-icon {
+    font-size: 32px;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
+
+.category-details h3 {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    color: #1a1f2e;
+}
+
+.category-stats {
+    font-size: 14px;
+    color: #666;
+}
+
+.category-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.visibility-toggle {
+    position: relative;
+    width: 60px;
+    height: 32px;
+    background: #ccc;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.visibility-toggle.visible {
+    background: #4caf50;
+}
+
+.visibility-toggle::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.visibility-toggle.visible::before {
+    transform: translateX(28px);
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.visible {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.status-badge.hidden {
+    background: #ffebee;
+    color: #c62828;
+}
+
