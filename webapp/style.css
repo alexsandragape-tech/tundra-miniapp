@@ -261,8 +261,8 @@ body {
     font-size: 18px; /* Возвращен к исходному размеру */
     font-weight: 600;
     color: #1A1F2E;
-    margin-bottom: 8px;
-    margin-top: 6px; /* Смещаем текст немного вниз от изображения */
+    margin-bottom: 4px; /* Уменьшен отступ снизу */
+    margin-top: 3px; /* Уменьшен отступ сверху от изображения */
 }
 
 .category-desc {
