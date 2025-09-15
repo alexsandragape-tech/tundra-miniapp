@@ -258,7 +258,7 @@ body {
 }
 
 .category-name {
-    font-size: 31px; /* Увеличен на 75% (18px × 1.75 ≈ 31px) */
+    font-size: 18px; /* Возвращен к исходному размеру */
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 8px;
@@ -927,7 +927,7 @@ body {
         min-height: 250px;
     }
     .category-name {
-        font-size: 28px; /* Увеличен на 75% (16px × 1.75 = 28px) */
+        font-size: 16px; /* Возвращен к исходному размеру */
     }
     .products-list {
         gap: 12px;
@@ -961,7 +961,7 @@ body {
         min-height: 220px;
     }
     .category-name {
-        font-size: 24px; /* Увеличен на 75% (14px × 1.75 ≈ 24px) */
+        font-size: 14px; /* Возвращен к исходному размеру */
     }
     .products-list {
         gap: 10px;
@@ -1027,7 +1027,7 @@ body {
         min-height: 200px;
     }
     .category-name {
-        font-size: 21px; /* Увеличен на 75% (12px × 1.75 = 21px) */
+        font-size: 12px; /* Возвращен к исходному размеру */
     }
     .products-list {
         gap: 8px;
