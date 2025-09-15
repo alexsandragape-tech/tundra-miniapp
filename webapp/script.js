@@ -3099,7 +3099,9 @@ async function toggleNotifications() {
                 console.log('❌ Пользователь отписан от уведомлений');
             }
         } else {
-            throw new Error('Ошибка сохранения настроек на сервере');
+            const errorData = await response.json().catch(() => ({ error: 'Неизвестная ошибка сервера' }));
+            console.error('❌ TOGGLE: Ошибка ответа сервера:', response.status, errorData);
+            throw new Error(`Ошибка сервера (${response.status}): ${errorData.error || 'Неизвестная ошибка'}`);
         }
         
     } catch (error) {
