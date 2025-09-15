@@ -1539,6 +1539,10 @@ function showProfile() {
         } else {
             toggle.classList.remove('active');
         }
+        
+        // Добавляем обработчик события на случай если onclick не работает
+        toggle.removeEventListener('click', handleNotificationToggle); // Убираем старый если есть
+        toggle.addEventListener('click', handleNotificationToggle);
     }
 }
 
@@ -2402,6 +2406,29 @@ async function initApp() {
         // Убрана отображение пользовательской информации по требованию
         console.log('✅ Telegram WebApp инициализирован (отображение имени пользователя отключено)');
     }
+    
+    // Инициализируем переключатель уведомлений при загрузке страницы
+    setTimeout(() => {
+        const toggle = document.querySelector('.notification-toggle');
+        if (toggle) {
+            console.log('🔔 INIT: Инициализируем переключатель уведомлений');
+            
+            // Устанавливаем правильное состояние
+            if (userProfile.notificationsEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+            
+            // Добавляем обработчик события
+            toggle.removeEventListener('click', handleNotificationToggle);
+            toggle.addEventListener('click', handleNotificationToggle);
+            
+            console.log('🔔 INIT: Переключатель инициализирован, состояние:', userProfile.notificationsEnabled);
+        } else {
+            console.warn('⚠️ INIT: Переключатель уведомлений не найден!');
+        }
+    }, 500);
 }
 
 // Запуск приложения
@@ -2746,11 +2773,35 @@ async function syncProfileWithServer() {
     }
 }
 
+// Функция-обертка для переключения уведомлений (для onclick)
+function handleNotificationToggle() {
+    console.log('🔔 WRAPPER: handleNotificationToggle вызвана');
+    alert('🔔 Функция handleNotificationToggle работает!'); // Временно для проверки
+    
+    try {
+        if (typeof toggleNotifications === 'function') {
+            console.log('🔔 WRAPPER: toggleNotifications найдена, вызываем...');
+            toggleNotifications().catch(error => {
+                console.error('❌ Ошибка в handleNotificationToggle:', error);
+                showNotification('❌ Ошибка переключения уведомлений', 'error');
+            });
+        } else {
+            console.error('❌ toggleNotifications не является функцией!');
+            showNotification('❌ Функция toggleNotifications не найдена', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Критическая ошибка в handleNotificationToggle:', error);
+        showNotification('❌ Критическая ошибка переключения уведомлений', 'error');
+    }
+}
+
 // Добавляем тестовые функции в window для вызова из консоли
 if (typeof window !== 'undefined') {
     window.testLoyaltySystem = testLoyaltySystem;
     window.resetUserProfile = resetUserProfile;
     window.syncProfileWithServer = syncProfileWithServer;
+    window.handleNotificationToggle = handleNotificationToggle;
+    window.toggleNotifications = toggleNotifications;
 }
 
 // 🔥 ФУНКЦИИ ДЛЯ ТАЙМЕРА ОПЛАТЫ
