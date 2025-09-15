@@ -103,7 +103,7 @@ class YooKassaAPI {
     }
 }
 const config = require('./config');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB } = require('./database');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB } = require('./database');
 
 const app = express();
 const PORT = config.PORT;
@@ -3351,6 +3351,46 @@ app.get('/api/orders', (req, res) => {
         res.json({ ok: true, orders: allOrders });
     } catch (error) {
         logger.error('Ошибка получения заказов:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// API для управления категориями
+app.get('/api/admin/categories', requireAdminAuth, async (req, res) => {
+    try {
+        const categories = await CategoriesDB.getStats();
+        res.json({ ok: true, categories });
+    } catch (error) {
+        logger.error('❌ Ошибка получения категорий:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// API для переключения видимости категории
+app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const isVisible = await CategoriesDB.toggleVisibility(categoryId);
+        
+        if (isVisible !== null) {
+            logger.info(`📂 Категория ${categoryId} ${isVisible ? 'показана' : 'скрыта'}`);
+            res.json({ ok: true, isVisible, message: `Категория ${isVisible ? 'показана' : 'скрыта'}` });
+        } else {
+            res.status(404).json({ ok: false, error: 'Категория не найдена' });
+        }
+    } catch (error) {
+        logger.error('❌ Ошибка переключения видимости категории:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// API для получения видимых категорий (для основного приложения)
+app.get('/api/categories/visible', async (req, res) => {
+    try {
+        const categories = await CategoriesDB.getVisible();
+        res.json({ ok: true, categories });
+    } catch (error) {
+        logger.error('❌ Ошибка получения видимых категорий:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
