@@ -1540,9 +1540,9 @@ function showProfile() {
             toggle.classList.remove('active');
         }
         
-        // Добавляем обработчик события на случай если onclick не работает
-        toggle.removeEventListener('click', handleNotificationToggle); // Убираем старый если есть
-        toggle.addEventListener('click', handleNotificationToggle);
+        // Убираем дублирующиеся обработчики - теперь используем только один способ привязки
+        // toggle.removeEventListener('click', handleNotificationToggle);
+        // toggle.addEventListener('click', handleNotificationToggle);
     }
 }
 
@@ -2420,9 +2420,9 @@ async function initApp() {
                 toggle.classList.remove('active');
             }
             
-            // Добавляем обработчик события
-            toggle.removeEventListener('click', handleNotificationToggle);
-            toggle.addEventListener('click', handleNotificationToggle);
+            // Убираем дублирующиеся обработчики - используем только один способ привязки в HTML
+            // toggle.removeEventListener('click', handleNotificationToggle);
+            // toggle.addEventListener('click', handleNotificationToggle);
             
             console.log('🔔 INIT: Переключатель инициализирован, состояние:', userProfile.notificationsEnabled);
         } else {
@@ -2773,8 +2773,18 @@ async function syncProfileWithServer() {
     }
 }
 
-// Функция-обертка для переключения уведомлений (для onclick)
+// Переменная для предотвращения множественных вызовов
+let isToggling = false;
+
+// Функция-обертка для переключения уведомлений
 function handleNotificationToggle() {
+    // Защита от множественных вызовов
+    if (isToggling) {
+        console.log('🔔 WRAPPER: Уже обрабатывается, пропускаем...');
+        return;
+    }
+    
+    isToggling = true;
     console.log('🔔 WRAPPER: handleNotificationToggle вызвана');
     console.log('🔔 WRAPPER: Текущее состояние перед переключением:', userProfile.notificationsEnabled);
     
@@ -2782,10 +2792,11 @@ function handleNotificationToggle() {
         if (typeof toggleNotifications === 'function') {
             console.log('🔔 WRAPPER: toggleNotifications найдена, вызываем...');
             
-            // Немедленно обновляем UI для лучшего UX
+            // Немедленно обновляем UI и состояние для лучшего UX
             const toggle = document.querySelector('.notification-toggle');
-            const newState = !userProfile.notificationsEnabled;
-            console.log('🔔 WRAPPER: Новое состояние будет:', newState);
+            userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
+            const newState = userProfile.notificationsEnabled;
+            console.log('🔔 WRAPPER: Новое состояние:', newState);
             
             if (toggle) {
                 if (newState) {
@@ -2809,14 +2820,22 @@ function handleNotificationToggle() {
                         toggle.classList.remove('active');
                     }
                 }
+            }).finally(() => {
+                // Сбрасываем флаг после завершения
+                setTimeout(() => {
+                    isToggling = false;
+                    console.log('🔔 WRAPPER: Флаг isToggling сброшен');
+                }, 300); // Небольшая задержка для предотвращения случайных двойных кликов
             });
         } else {
             console.error('❌ toggleNotifications не является функцией!');
             showNotification('❌ Функция toggleNotifications не найдена', 'error');
+            isToggling = false;
         }
     } catch (error) {
         console.error('❌ Критическая ошибка в handleNotificationToggle:', error);
         showNotification('❌ Критическая ошибка переключения уведомлений', 'error');
+        isToggling = false;
     }
 }
 
@@ -3059,9 +3078,9 @@ async function toggleNotifications() {
     
     const previousState = userProfile.notificationsEnabled;
     
-    // Переключаем состояние
-    userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
-    console.log('🔔 TOGGLE: Новое состояние:', userProfile.notificationsEnabled);
+    // НЕ переключаем состояние здесь - оно уже переключено в handleNotificationToggle!
+    // userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
+    console.log('🔔 TOGGLE: Состояние уже переключено в wrapper:', userProfile.notificationsEnabled);
     
     // UI уже обновлен в handleNotificationToggle, не дублируем
     
