@@ -190,16 +190,16 @@ body {
 
 /* Сетка категорий */
 .categories-grid {
-    padding: 20px;
+    padding: 15px 20px;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+    gap: 8px; /* Уменьшен отступ между блоками */
 }
 
 .category-card {
     background: white;
     border-radius: 16px;
-    padding: 20px; /* Уменьшаем для лучшей адаптивности */
+    padding: 15px; /* Уменьшен отступ для больше места под изображение */
     text-align: center;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
@@ -221,8 +221,8 @@ body {
     position: relative;
     width: 100%; /* Адаптивная ширина */
     height: 0;
-    padding-bottom: 100%; /* Квадратное соотношение сторон */
-    margin: 0 auto 15px;
+    padding-bottom: 110%; /* Увеличен размер изображения (было 100%) */
+    margin: 0 auto 8px; /* Уменьшен отступ от названия (было 15px) */
     border-radius: 16px; /* Квадратные углы с закруглением */
     overflow: hidden;
     background: #f8f9fa;
@@ -916,10 +916,10 @@ body {
 @media (max-width: 768px) {
     .categories-grid { 
         grid-template-columns: repeat(2, 1fr); 
-        gap: 12px; 
+        gap: 6px; /* Еще меньше на планшетах */
     }
     .category-card { 
-        padding: 15px; 
+        padding: 12px; /* Еще меньше на планшетах */
         min-height: 250px;
     }
     .category-name {
@@ -949,10 +949,10 @@ body {
 @media (max-width: 480px) {
     .categories-grid { 
         grid-template-columns: repeat(2, 1fr); 
-        gap: 10px; 
+        gap: 4px; /* Минимальный отступ на мобильных */
     }
     .category-card { 
-        padding: 12px; 
+        padding: 10px; /* Минимальный отступ на мобильных */
         min-height: 220px;
     }
     .category-name {
@@ -1014,10 +1014,10 @@ body {
 
 @media (max-width: 360px) {
     .categories-grid { 
-        gap: 8px; 
+        gap: 3px; /* Минимальный отступ на очень маленьких экранах */
     }
     .category-card { 
-        padding: 10px; 
+        padding: 8px; /* Минимальный отступ на очень маленьких экранах */
         min-height: 200px;
     }
     .category-name {
