@@ -90,6 +90,10 @@
                 <button class="filter-btn" onclick="filterByStatus('available')">В наличии</button>
                 <button class="filter-btn" onclick="filterByStatus('hidden')">Скрыто</button>
             </div>
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="showTab('products')">📦 Товары</button>
+                <button class="tab-btn" onclick="showTab('categories')">📂 Категории</button>
+            </div>
             <button class="save-btn" onclick="saveAllChanges()" id="save-btn" disabled>
                 💾 Сохранить изменения
             </button>
@@ -97,6 +101,17 @@
 
         <div class="categories-container" id="categories-container">
             <!-- Категории и товары будут загружены через JavaScript -->
+        </div>
+
+        <!-- Контейнер управления категориями -->
+        <div class="categories-management" id="categories-management" style="display: none;">
+            <div class="management-header">
+                <h2>📂 Управление категориями</h2>
+                <p>Скрывайте пустые или временно недоступные категории</p>
+            </div>
+            <div class="categories-list" id="categories-list">
+                <!-- Список категорий будет загружен через JavaScript -->
+            </div>
         </div>
 
         <!-- Модальное окно добавления товара -->
