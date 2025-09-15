@@ -1,12 +1,28 @@
 // Конфигурация для Tundra Gourmet
 
+// Функция для получения переменной окружения с очисткой от пустых строк
+function getEnvVar(name, defaultValue = '') {
+    const value = process.env[name];
+    if (!value || value.trim() === '') {
+        return defaultValue;
+    }
+    return value.trim();
+}
+
+// Логирование для отладки
+console.log('🔍 CONFIG: Инициализация конфигурации...');
+console.log(`🔍 CONFIG: process.env.TELEGRAM_BOT_TOKEN = ${process.env.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+console.log(`🔍 CONFIG: process.env.TELEGRAM_ADMIN_CHAT_ID = ${process.env.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+console.log(`🔍 CONFIG: process.env.TELEGRAM_BROADCAST_CHAT_ID = ${process.env.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+
 module.exports = {
     // 🔑 ПАРОЛЬ АДМИН ПАНЕЛИ
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'TundraAdmin2024!',
+    ADMIN_PASSWORD: getEnvVar('ADMIN_PASSWORD', 'TundraAdmin2024!'),
     
     // 🤖 TELEGRAM BOT
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-    TELEGRAM_ADMIN_CHAT_ID: process.env.TELEGRAM_ADMIN_CHAT_ID || '',
+    TELEGRAM_BOT_TOKEN: getEnvVar('TELEGRAM_BOT_TOKEN'),
+    TELEGRAM_ADMIN_CHAT_ID: getEnvVar('TELEGRAM_ADMIN_CHAT_ID'), // Для заказов админам
+    TELEGRAM_BROADCAST_CHAT_ID: getEnvVar('TELEGRAM_BROADCAST_CHAT_ID'), // Для рассылки клиентам
     
     // 💳 YOOKASSA
     YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID || '',
