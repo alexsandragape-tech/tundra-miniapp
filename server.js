@@ -3276,13 +3276,30 @@ app.post('/api/notifications/settings', async (req, res) => {
         
         // Диагностика настроек Telegram
         logger.info('🔍 ДИАГНОСТИКА: Проверка настроек Telegram для уведомлений:');
-        logger.info(`   📋 TELEGRAM_ADMIN_CHAT_ID: ${config.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   📢 TELEGRAM_BROADCAST_CHAT_ID: ${config.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   🤖 TELEGRAM_BOT_TOKEN: ${config.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   📋 TELEGRAM_ADMIN_CHAT_ID (config): ${config.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   📢 TELEGRAM_BROADCAST_CHAT_ID (config): ${config.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   🤖 TELEGRAM_BOT_TOKEN (config): ${config.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
         
-        if (!config.TELEGRAM_BROADCAST_CHAT_ID) {
+        // ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА process.env
+        logger.info('🔍 ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА process.env:');
+        logger.info(`   📋 process.env.TELEGRAM_ADMIN_CHAT_ID: ${process.env.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   📢 process.env.TELEGRAM_BROADCAST_CHAT_ID: ${process.env.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   🤖 process.env.TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+        
+        // Попытка использовать напрямую process.env если config пустой
+        const broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID || process.env.TELEGRAM_BROADCAST_CHAT_ID;
+        const adminChatId = config.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID;
+        const botToken = config.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+        
+        logger.info('🔍 ФИНАЛЬНЫЕ ЗНАЧЕНИЯ:');
+        logger.info(`   📋 adminChatId: ${adminChatId || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   📢 broadcastChatId: ${broadcastChatId || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   🤖 botToken: ${botToken ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+        
+        if (!broadcastChatId) {
             logger.warn('⚠️ ВНИМАНИЕ: TELEGRAM_BROADCAST_CHAT_ID не установлен! Рассылка уведомлений работать НЕ БУДЕТ!');
             logger.warn('⚠️ Установите переменную окружения: TELEGRAM_BROADCAST_CHAT_ID=-1002711692896');
+            logger.warn('⚠️ И ПЕРЕЗАПУСТИТЕ СЕРВЕР на Railway!');
         }
         
         try {
@@ -3319,8 +3336,8 @@ app.post('/api/notifications/settings', async (req, res) => {
             logger.warn('📝 Продолжаем работу без серверного хранения настроек');
         }
         
-        // Проверяем готовность системы уведомлений
-        const telegramConfigured = !!(config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_BROADCAST_CHAT_ID);
+        // Проверяем готовность системы уведомлений с реальными значениями
+        const telegramConfigured = !!(botToken && broadcastChatId);
         
         res.json({ 
             ok: true, 
@@ -4407,6 +4424,19 @@ async function startServer() {
             
             // Проверяем настройки Telegram
             logger.info('🔍 Проверка настроек Telegram:');
+            
+            // ДЕТАЛЬНАЯ ДИАГНОСТИКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ
+            logger.info('🔍 ДИАГНОСТИКА: Проверка переменных окружения:');
+            logger.info(`   RAW process.env.TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+            logger.info(`   RAW process.env.TELEGRAM_ADMIN_CHAT_ID: ${process.env.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+            logger.info(`   RAW process.env.TELEGRAM_BROADCAST_CHAT_ID: ${process.env.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+            
+            logger.info('🔍 Проверка config объекта:');
+            logger.info(`   config.TELEGRAM_BOT_TOKEN: ${config.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+            logger.info(`   config.TELEGRAM_ADMIN_CHAT_ID: ${config.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+            logger.info(`   config.TELEGRAM_BROADCAST_CHAT_ID: ${config.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+            
+            logger.info('🔍 Итоговая проверка:');
             logger.info(`   Токен бота: ${config.TELEGRAM_BOT_TOKEN ? '✅ Настроен' : '❌ Не настроен'}`);
             logger.info(`   📋 Админ группа (заказы): ${config.TELEGRAM_ADMIN_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
             logger.info(`   📢 Рассылочная группа: ${config.TELEGRAM_BROADCAST_CHAT_ID ? '✅ Настроен' : '❌ Не настроен'}`);
