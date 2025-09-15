@@ -190,16 +190,16 @@ body {
 
 /* Сетка категорий */
 .categories-grid {
-    padding: 15px 20px;
+    padding: 5px; /* Минимальный отступ от краев экрана */
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px; /* Уменьшен отступ между блоками */
+    gap: 2px; /* Минимальный зазор между картинками */
 }
 
 .category-card {
     background: white;
     border-radius: 16px;
-    padding: 15px; /* Уменьшен отступ для больше места под изображение */
+    padding: 8px 8px 12px 8px; /* Минимальные отступы: верх лево-право, чуть больше снизу для текста */
     text-align: center;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
@@ -221,8 +221,8 @@ body {
     position: relative;
     width: 100%; /* Адаптивная ширина */
     height: 0;
-    padding-bottom: 110%; /* Увеличен размер изображения (было 100%) */
-    margin: 0 auto 8px; /* Уменьшен отступ от названия (было 15px) */
+    padding-bottom: 120%; /* Еще больше увеличен размер изображения для borderless эффекта */
+    margin: 0 0 6px 0; /* Минимальный отступ только снизу от названия */
     border-radius: 16px; /* Квадратные углы с закруглением */
     overflow: hidden;
     background: #f8f9fa;
@@ -916,10 +916,11 @@ body {
 @media (max-width: 768px) {
     .categories-grid { 
         grid-template-columns: repeat(2, 1fr); 
-        gap: 6px; /* Еще меньше на планшетах */
+        gap: 2px; /* Минимальный зазор */
+        padding: 3px; /* Меньше отступ от краев */
     }
     .category-card { 
-        padding: 12px; /* Еще меньше на планшетах */
+        padding: 6px 6px 10px 6px; /* Минимальные отступы на планшетах */
         min-height: 250px;
     }
     .category-name {
@@ -949,10 +950,11 @@ body {
 @media (max-width: 480px) {
     .categories-grid { 
         grid-template-columns: repeat(2, 1fr); 
-        gap: 4px; /* Минимальный отступ на мобильных */
+        gap: 1px; /* Практически без зазора на мобильных */
+        padding: 2px; /* Минимальный отступ от краев */
     }
     .category-card { 
-        padding: 10px; /* Минимальный отступ на мобильных */
+        padding: 5px 5px 8px 5px; /* Минимальные отступы на мобильных */
         min-height: 220px;
     }
     .category-name {
@@ -1014,10 +1016,11 @@ body {
 
 @media (max-width: 360px) {
     .categories-grid { 
-        gap: 3px; /* Минимальный отступ на очень маленьких экранах */
+        gap: 1px; /* Практически без зазора */
+        padding: 1px; /* Минимальный отступ от краев */
     }
     .category-card { 
-        padding: 8px; /* Минимальный отступ на очень маленьких экранах */
+        padding: 4px 4px 6px 4px; /* Минимальные отступы на очень маленьких экранах */
         min-height: 200px;
     }
     .category-name {
