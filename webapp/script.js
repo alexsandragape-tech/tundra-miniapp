@@ -1534,7 +1534,11 @@ function showProfile() {
     // Обновляем состояние переключателя уведомлений
     const toggle = document.querySelector('.notification-toggle');
     if (toggle) {
-        toggle.classList.toggle('active', userProfile.notificationsEnabled);
+        if (userProfile.notificationsEnabled) {
+            toggle.classList.add('active');
+        } else {
+            toggle.classList.remove('active');
+        }
     }
 }
 
@@ -2974,15 +2978,23 @@ function redirectToPayment() {
 
 // Функция переключения уведомлений
 async function toggleNotifications() {
+    console.log('🔔 TOGGLE: Функция toggleNotifications вызвана');
+    console.log('🔔 TOGGLE: Текущее состояние:', userProfile.notificationsEnabled);
+    
     const previousState = userProfile.notificationsEnabled;
     
     // Переключаем состояние
     userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
+    console.log('🔔 TOGGLE: Новое состояние:', userProfile.notificationsEnabled);
     
     // Обновляем UI немедленно для лучшего UX
     const toggle = document.querySelector('.notification-toggle');
     if (toggle) {
-        toggle.classList.toggle('active', userProfile.notificationsEnabled);
+        if (userProfile.notificationsEnabled) {
+            toggle.classList.add('active');
+        } else {
+            toggle.classList.remove('active');
+        }
     }
     
     try {
@@ -3024,8 +3036,13 @@ async function toggleNotifications() {
         localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
         
         // Возвращаем UI в предыдущее состояние
+        const toggle = document.querySelector('.notification-toggle');
         if (toggle) {
-            toggle.classList.toggle('active', userProfile.notificationsEnabled);
+            if (userProfile.notificationsEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
         }
         
         showNotification('❌ Ошибка изменения настроек уведомлений', 'error');
