@@ -3274,6 +3274,17 @@ app.post('/api/notifications/settings', async (req, res) => {
         
         logger.info(`📢 НАСТРОЙКИ: Обновляем настройки уведомлений для пользователя ${userId}: ${notificationsEnabled ? 'ВКЛЮЧЕНО' : 'ОТКЛЮЧЕНО'}`);
         
+        // Диагностика настроек Telegram
+        logger.info('🔍 ДИАГНОСТИКА: Проверка настроек Telegram для уведомлений:');
+        logger.info(`   📋 TELEGRAM_ADMIN_CHAT_ID: ${config.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   📢 TELEGRAM_BROADCAST_CHAT_ID: ${config.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
+        logger.info(`   🤖 TELEGRAM_BOT_TOKEN: ${config.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
+        
+        if (!config.TELEGRAM_BROADCAST_CHAT_ID) {
+            logger.warn('⚠️ ВНИМАНИЕ: TELEGRAM_BROADCAST_CHAT_ID не установлен! Рассылка уведомлений работать НЕ БУДЕТ!');
+            logger.warn('⚠️ Установите переменную окружения: TELEGRAM_BROADCAST_CHAT_ID=-1002711692896');
+        }
+        
         try {
             // Проверяем, есть ли уже запись о настройках этого пользователя
             const checkQuery = 'SELECT * FROM user_notification_settings WHERE user_id = $1';
@@ -3308,11 +3319,16 @@ app.post('/api/notifications/settings', async (req, res) => {
             logger.warn('📝 Продолжаем работу без серверного хранения настроек');
         }
         
+        // Проверяем готовность системы уведомлений
+        const telegramConfigured = !!(config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_BROADCAST_CHAT_ID);
+        
         res.json({ 
             ok: true, 
             message: `Уведомления ${notificationsEnabled ? 'включены' : 'отключены'}`,
             notificationsEnabled: notificationsEnabled,
-            status: notificationsEnabled ? 'subscribed' : 'unsubscribed'
+            status: notificationsEnabled ? 'subscribed' : 'unsubscribed',
+            telegramConfigured: telegramConfigured,
+            warning: !telegramConfigured ? 'Система уведомлений не настроена на сервере' : null
         });
         
     } catch (error) {
