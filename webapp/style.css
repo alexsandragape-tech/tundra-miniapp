@@ -222,7 +222,7 @@ body {
     width: 100%; /* Адаптивная ширина */
     height: 0;
     padding-bottom: 120%; /* Еще больше увеличен размер изображения для borderless эффекта */
-    margin: 0 0 12px 0; /* Увеличенный отступ снизу для лучшего разделения с названием */
+    margin: 0 0 6px 0; /* Возвращаем минимальный отступ только снизу */
     border-radius: 16px; /* Квадратные углы с закруглением */
     overflow: hidden;
     background: #f8f9fa;
@@ -259,7 +259,7 @@ body {
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 8px;
-    margin-top: -10px; /* Смещаем ближе к иконке */
+    margin-top: 6px; /* Смещаем текст немного вниз от изображения */
 }
 
 .category-desc {
