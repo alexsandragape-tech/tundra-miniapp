@@ -3260,156 +3260,6 @@ app.get('/debug-purchases/:userId', async (req, res) => {
     }
 });
 
-// API для управления настройками уведомлений
-app.post('/api/notifications/settings', async (req, res) => {
-    try {
-        const { userId, notificationsEnabled } = req.body;
-        
-        if (!userId) {
-            return res.status(400).json({ 
-                ok: false, 
-                error: 'User ID обязателен' 
-            });
-        }
-        
-        logger.info(`📢 НАСТРОЙКИ: Обновляем настройки уведомлений для пользователя ${userId}: ${notificationsEnabled ? 'ВКЛЮЧЕНО' : 'ОТКЛЮЧЕНО'}`);
-        
-        // Диагностика настроек Telegram
-        logger.info('🔍 ДИАГНОСТИКА: Проверка настроек Telegram для уведомлений:');
-        logger.info(`   📋 TELEGRAM_ADMIN_CHAT_ID (config): ${config.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   📢 TELEGRAM_BROADCAST_CHAT_ID (config): ${config.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   🤖 TELEGRAM_BOT_TOKEN (config): ${config.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
-        
-        // ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА process.env
-        logger.info('🔍 ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА process.env:');
-        logger.info(`   📋 process.env.TELEGRAM_ADMIN_CHAT_ID: ${process.env.TELEGRAM_ADMIN_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   📢 process.env.TELEGRAM_BROADCAST_CHAT_ID: ${process.env.TELEGRAM_BROADCAST_CHAT_ID || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   🤖 process.env.TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
-        
-        // Попытка использовать напрямую process.env если config пустой
-        const broadcastChatId = (config.TELEGRAM_BROADCAST_CHAT_ID && config.TELEGRAM_BROADCAST_CHAT_ID.trim()) || process.env.TELEGRAM_BROADCAST_CHAT_ID;
-        const adminChatId = (config.TELEGRAM_ADMIN_CHAT_ID && config.TELEGRAM_ADMIN_CHAT_ID.trim()) || process.env.TELEGRAM_ADMIN_CHAT_ID;
-        const botToken = (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_BOT_TOKEN.trim()) || process.env.TELEGRAM_BOT_TOKEN;
-        
-        logger.info('🔍 ФИНАЛЬНЫЕ ЗНАЧЕНИЯ:');
-        logger.info(`   📋 adminChatId: ${adminChatId || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   📢 broadcastChatId: ${broadcastChatId || 'НЕ УСТАНОВЛЕН'}`);
-        logger.info(`   🤖 botToken: ${botToken ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН'}`);
-        
-        if (!broadcastChatId) {
-            logger.warn('⚠️ ВНИМАНИЕ: TELEGRAM_BROADCAST_CHAT_ID не установлен! Рассылка уведомлений работать НЕ БУДЕТ!');
-            logger.warn('⚠️ Установите переменную окружения: TELEGRAM_BROADCAST_CHAT_ID=-1002711692896');
-            logger.warn('⚠️ И ПЕРЕЗАПУСТИТЕ СЕРВЕР на Railway!');
-        }
-        
-        try {
-            // Проверяем, есть ли уже запись о настройках этого пользователя
-            const checkQuery = 'SELECT * FROM user_notification_settings WHERE user_id = $1';
-            const existingSettings = await pool.query(checkQuery, [userId]);
-            
-            if (existingSettings.rows.length > 0) {
-                // Обновляем существующую запись
-                const updateQuery = `
-                    UPDATE user_notification_settings 
-                    SET notifications_enabled = $1, updated_at = NOW() 
-                    WHERE user_id = $2
-                `;
-                await pool.query(updateQuery, [notificationsEnabled, userId]);
-                logger.info(`✅ Обновлены настройки уведомлений для пользователя ${userId}`);
-            } else {
-                // Создаем новую запись
-                const insertQuery = `
-                    INSERT INTO user_notification_settings (user_id, notifications_enabled, created_at, updated_at) 
-                    VALUES ($1, $2, NOW(), NOW())
-                `;
-                await pool.query(insertQuery, [userId, notificationsEnabled]);
-                logger.info(`✅ Созданы новые настройки уведомлений для пользователя ${userId}`);
-            }
-            
-            // Логируем статистику подписок
-            const statsQuery = 'SELECT COUNT(*) as total_subscribed FROM user_notification_settings WHERE notifications_enabled = true';
-            const stats = await pool.query(statsQuery);
-            logger.info(`📊 Всего подписанных пользователей: ${stats.rows[0]?.total_subscribed || 0}`);
-            
-        } catch (dbError) {
-            logger.error('❌ ДЕТАЛЬНАЯ ОШИБКА БД при сохранении настроек уведомлений:');
-            logger.error(`   Сообщение: ${dbError.message}`);
-            logger.error(`   Код: ${dbError.code}`);
-            logger.error(`   Детали: ${dbError.detail || 'Нет'}`);
-            logger.error(`   SQL State: ${dbError.sqlState || 'Нет'}`);
-            logger.warn('📝 Продолжаем работу без серверного хранения настроек');
-            
-            // Попытка создать таблицу если она не существует
-            if (dbError.code === '42P01') { // Table does not exist
-                logger.info('🔧 Попытка создать таблицу user_notification_settings...');
-                try {
-                    await pool.query(`
-                        CREATE TABLE IF NOT EXISTS user_notification_settings (
-                            id SERIAL PRIMARY KEY,
-                            user_id VARCHAR(100) NOT NULL UNIQUE,
-                            notifications_enabled BOOLEAN DEFAULT true,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    `);
-                    logger.info('✅ Таблица user_notification_settings создана');
-                    
-                    // Повторная попытка сохранения
-                    const insertQuery = `
-                        INSERT INTO user_notification_settings (user_id, notifications_enabled, created_at, updated_at) 
-                        VALUES ($1, $2, NOW(), NOW())
-                        ON CONFLICT (user_id) DO UPDATE SET 
-                        notifications_enabled = $2, updated_at = NOW()
-                    `;
-                    await pool.query(insertQuery, [userId, notificationsEnabled]);
-                    logger.info(`✅ Настройки уведомлений сохранены после создания таблицы для пользователя ${userId}`);
-                } catch (createError) {
-                    logger.error('❌ Ошибка создания таблицы:', createError.message);
-                }
-            }
-        }
-        
-        // Проверяем готовность системы уведомлений с реальными значениями
-        const telegramConfigured = !!(botToken && broadcastChatId);
-        
-        res.json({ 
-            ok: true, 
-            message: `Уведомления ${notificationsEnabled ? 'включены' : 'отключены'}`,
-            notificationsEnabled: notificationsEnabled,
-            status: notificationsEnabled ? 'subscribed' : 'unsubscribed',
-            telegramConfigured: telegramConfigured,
-            warning: !telegramConfigured ? 'Система уведомлений не настроена на сервере' : null
-        });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка сохранения настроек уведомлений:', error);
-        res.status(500).json({ 
-            ok: false, 
-            error: 'Ошибка сервера: ' + error.message 
-        });
-    }
-});
-
-// API для получения настроек уведомлений
-app.get('/api/notifications/settings/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        
-        // Пока возвращаем настройки по умолчанию
-        // В будущем можно добавить таблицу для хранения настроек
-        res.json({ 
-            ok: true, 
-            notificationsEnabled: true // По умолчанию включены
-        });
-        
-    } catch (error) {
-        logger.error('❌ Ошибка получения настроек уведомлений:', error);
-        res.status(500).json({ 
-            ok: false, 
-            error: 'Ошибка сервера: ' + error.message 
-        });
-    }
-});
 
 // API для получения истории покупок клиента
 app.get('/api/purchases/:userId', async (req, res) => {
@@ -3654,7 +3504,7 @@ async function handleGroupMessage(message) {
         logger.info(`📢 РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
         
         // Формируем сообщение для рассылки
-        const broadcastMessage = `📢 *Уведомление от Tundra Gourmet*\n\n${messageText}\n\n_Вы получили это сообщение, так как подписаны на уведомления. Отключить уведомления можно в профиле приложения._`;
+        const broadcastMessage = `📢 *Уведомление от Tundra Gourmet*\n\n${messageText}`;
         
         // Отправляем сообщение каждому подписчику
         let successCount = 0;
@@ -3709,18 +3559,16 @@ async function handleGroupMessage(message) {
     }
 }
 
-// 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ПОДПИСАННЫХ ПОЛЬЗОВАТЕЛЕЙ
+// 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ РАССЫЛКИ
 async function getSubscribedUsers() {
     try {
-        // Получаем пользователей которые явно подписались на уведомления
+        // Получаем ВСЕХ пользователей которые когда-либо делали заказы
         const query = `
             SELECT DISTINCT o.telegram_user_id 
             FROM orders o
-            LEFT JOIN user_notification_settings uns ON o.telegram_user_id = uns.user_id
             WHERE o.telegram_user_id IS NOT NULL 
             AND o.telegram_user_id != ''
             AND o.status != 'cancelled'
-            AND (uns.notifications_enabled = true OR uns.notifications_enabled IS NULL)
         `;
         
         const result = await pool.query(query);
@@ -3729,16 +3577,7 @@ async function getSubscribedUsers() {
             telegram_user_id: row.telegram_user_id
         }));
         
-        logger.info(`📋 Найдено ${users.length} подписанных пользователей для рассылки`);
-        
-        // Дополнительная статистика для логов
-        try {
-            const statsQuery = 'SELECT COUNT(*) as explicit_subscribers FROM user_notification_settings WHERE notifications_enabled = true';
-            const stats = await pool.query(statsQuery);
-            logger.info(`📊 Из них явно подписанных: ${stats.rows[0]?.explicit_subscribers || 0}`);
-        } catch (statsError) {
-            logger.debug('Таблица настроек уведомлений еще не создана');
-        }
+        logger.info(`📋 Найдено ${users.length} пользователей для обязательной рассылки (все клиенты)`);
         
         return users;
         
