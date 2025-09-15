@@ -132,7 +132,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 let currentCategory = null;
 let currentProduct = null;
 let cart = JSON.parse(localStorage.getItem('tundra_cart') || '{}');
-let userProfile = JSON.parse(localStorage.getItem('tundra_profile') || '{"totalSpent": 0, "completedOrders": 0, "notificationsEnabled": true}');
+let userProfile = JSON.parse(localStorage.getItem('tundra_profile') || '{"totalSpent": 0, "completedOrders": 0}');
 let orderCounter = parseInt(localStorage.getItem('tundra_order_counter') || '0');
 
 // 🔥 ПЕРЕМЕННЫЕ ДЛЯ ТАЙМЕРА ОПЛАТЫ
@@ -1531,19 +1531,6 @@ function showProfile() {
     // Обновляем карту лояльности
     updateLoyaltyCard();
     
-    // Обновляем состояние переключателя уведомлений
-    const toggle = document.querySelector('.notification-toggle');
-    if (toggle) {
-        if (userProfile.notificationsEnabled) {
-            toggle.classList.add('active');
-        } else {
-            toggle.classList.remove('active');
-        }
-        
-        // Убираем дублирующиеся обработчики - теперь используем только один способ привязки
-        // toggle.removeEventListener('click', handleNotificationToggle);
-        // toggle.addEventListener('click', handleNotificationToggle);
-    }
 }
 
 
@@ -2407,28 +2394,6 @@ async function initApp() {
         console.log('✅ Telegram WebApp инициализирован (отображение имени пользователя отключено)');
     }
     
-    // Инициализируем переключатель уведомлений при загрузке страницы
-    setTimeout(() => {
-        const toggle = document.querySelector('.notification-toggle');
-        if (toggle) {
-            console.log('🔔 INIT: Инициализируем переключатель уведомлений');
-            
-            // Устанавливаем правильное состояние
-            if (userProfile.notificationsEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-            
-            // Убираем дублирующиеся обработчики - используем только один способ привязки в HTML
-            // toggle.removeEventListener('click', handleNotificationToggle);
-            // toggle.addEventListener('click', handleNotificationToggle);
-            
-            console.log('🔔 INIT: Переключатель инициализирован, состояние:', userProfile.notificationsEnabled);
-        } else {
-            console.warn('⚠️ INIT: Переключатель уведомлений не найден!');
-        }
-    }, 500);
 }
 
 // Запуск приложения
@@ -2682,8 +2647,7 @@ function resetUserProfile() {
     
     userProfile = {
         totalSpent: 0,
-        completedOrders: 0,
-        notificationsEnabled: true
+        completedOrders: 0
     };
     
     localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
@@ -2773,79 +2737,12 @@ async function syncProfileWithServer() {
     }
 }
 
-// Переменная для предотвращения множественных вызовов
-let isToggling = false;
-
-// Функция-обертка для переключения уведомлений
-function handleNotificationToggle() {
-    // Защита от множественных вызовов
-    if (isToggling) {
-        console.log('🔔 WRAPPER: Уже обрабатывается, пропускаем...');
-        return;
-    }
-    
-    isToggling = true;
-    console.log('🔔 WRAPPER: handleNotificationToggle вызвана');
-    console.log('🔔 WRAPPER: Текущее состояние перед переключением:', userProfile.notificationsEnabled);
-    
-    try {
-        if (typeof toggleNotifications === 'function') {
-            console.log('🔔 WRAPPER: toggleNotifications найдена, вызываем...');
-            
-            // Немедленно обновляем UI и состояние для лучшего UX
-            const toggle = document.querySelector('.notification-toggle');
-            userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
-            const newState = userProfile.notificationsEnabled;
-            console.log('🔔 WRAPPER: Новое состояние:', newState);
-            
-            if (toggle) {
-                if (newState) {
-                    toggle.classList.add('active');
-                } else {
-                    toggle.classList.remove('active');
-                }
-                console.log('🔔 WRAPPER: UI обновлен, классы:', toggle.classList.toString());
-            }
-            
-            // Вызываем основную функцию
-            toggleNotifications().catch(error => {
-                console.error('❌ Ошибка в handleNotificationToggle:', error);
-                showNotification('❌ Ошибка переключения уведомлений', 'error');
-                
-                // Откатываем UI при ошибке
-                if (toggle) {
-                    if (userProfile.notificationsEnabled) {
-                        toggle.classList.add('active');
-                    } else {
-                        toggle.classList.remove('active');
-                    }
-                }
-            }).finally(() => {
-                // Сбрасываем флаг после завершения
-                setTimeout(() => {
-                    isToggling = false;
-                    console.log('🔔 WRAPPER: Флаг isToggling сброшен');
-                }, 300); // Небольшая задержка для предотвращения случайных двойных кликов
-            });
-        } else {
-            console.error('❌ toggleNotifications не является функцией!');
-            showNotification('❌ Функция toggleNotifications не найдена', 'error');
-            isToggling = false;
-        }
-    } catch (error) {
-        console.error('❌ Критическая ошибка в handleNotificationToggle:', error);
-        showNotification('❌ Критическая ошибка переключения уведомлений', 'error');
-        isToggling = false;
-    }
-}
 
 // Добавляем тестовые функции в window для вызова из консоли
 if (typeof window !== 'undefined') {
     window.testLoyaltySystem = testLoyaltySystem;
     window.resetUserProfile = resetUserProfile;
     window.syncProfileWithServer = syncProfileWithServer;
-    window.handleNotificationToggle = handleNotificationToggle;
-    window.toggleNotifications = toggleNotifications;
 }
 
 // 🔥 ФУНКЦИИ ДЛЯ ТАЙМЕРА ОПЛАТЫ
@@ -3071,70 +2968,6 @@ function redirectToPayment() {
     showNotification('❌ Ошибка: URL оплаты не найден', 'error');
 }
 
-// Функция переключения уведомлений
-async function toggleNotifications() {
-    console.log('🔔 TOGGLE: Функция toggleNotifications вызвана');
-    console.log('🔔 TOGGLE: Текущее состояние:', userProfile.notificationsEnabled);
-    
-    const previousState = userProfile.notificationsEnabled;
-    
-    // НЕ переключаем состояние здесь - оно уже переключено в handleNotificationToggle!
-    // userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
-    console.log('🔔 TOGGLE: Состояние уже переключено в wrapper:', userProfile.notificationsEnabled);
-    
-    // UI уже обновлен в handleNotificationToggle, не дублируем
-    
-    try {
-        // Сохраняем в локальном хранилище
-        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
-        
-        // Отправляем настройки на сервер
-        const userId = getUserId();
-        const response = await fetch(`${API_BASE}/api/notifications/settings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                userId: userId,
-                notificationsEnabled: userProfile.notificationsEnabled
-            })
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('🔔 TOGGLE: Ответ сервера:', result);
-            
-            if (userProfile.notificationsEnabled) {
-                if (result.telegramConfigured) {
-                    showNotification('🔔 Уведомления включены! Вы будете получать новости о товарах и акциях', 'success');
-                    console.log('✅ Пользователь подписан на уведомления из группы');
-                } else {
-                    showNotification('⚠️ Уведомления включены, но система рассылки не настроена на сервере', 'warning');
-                    console.warn('⚠️ Telegram не настроен на сервере:', result.warning);
-                }
-            } else {
-                showNotification('🔕 Уведомления отключены', 'info');
-                console.log('❌ Пользователь отписан от уведомлений');
-            }
-        } else {
-            const errorData = await response.json().catch(() => ({ error: 'Неизвестная ошибка сервера' }));
-            console.error('❌ TOGGLE: Ошибка ответа сервера:', response.status, errorData);
-            throw new Error(`Ошибка сервера (${response.status}): ${errorData.error || 'Неизвестная ошибка'}`);
-        }
-        
-    } catch (error) {
-        console.error('❌ Ошибка при изменении настроек уведомлений:', error);
-        
-        // Откатываем изменения в случае ошибки
-        userProfile.notificationsEnabled = previousState;
-        localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
-        
-        // UI будет откачен в handleNotificationToggle
-        
-        showNotification('❌ Ошибка изменения настроек уведомлений', 'error');
-    }
-}
 
 
 
