@@ -2776,14 +2776,39 @@ async function syncProfileWithServer() {
 // Функция-обертка для переключения уведомлений (для onclick)
 function handleNotificationToggle() {
     console.log('🔔 WRAPPER: handleNotificationToggle вызвана');
-    alert('🔔 Функция handleNotificationToggle работает!'); // Временно для проверки
+    console.log('🔔 WRAPPER: Текущее состояние перед переключением:', userProfile.notificationsEnabled);
     
     try {
         if (typeof toggleNotifications === 'function') {
             console.log('🔔 WRAPPER: toggleNotifications найдена, вызываем...');
+            
+            // Немедленно обновляем UI для лучшего UX
+            const toggle = document.querySelector('.notification-toggle');
+            const newState = !userProfile.notificationsEnabled;
+            console.log('🔔 WRAPPER: Новое состояние будет:', newState);
+            
+            if (toggle) {
+                if (newState) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
+                console.log('🔔 WRAPPER: UI обновлен, классы:', toggle.classList.toString());
+            }
+            
+            // Вызываем основную функцию
             toggleNotifications().catch(error => {
                 console.error('❌ Ошибка в handleNotificationToggle:', error);
                 showNotification('❌ Ошибка переключения уведомлений', 'error');
+                
+                // Откатываем UI при ошибке
+                if (toggle) {
+                    if (userProfile.notificationsEnabled) {
+                        toggle.classList.add('active');
+                    } else {
+                        toggle.classList.remove('active');
+                    }
+                }
             });
         } else {
             console.error('❌ toggleNotifications не является функцией!');
@@ -3038,15 +3063,7 @@ async function toggleNotifications() {
     userProfile.notificationsEnabled = !userProfile.notificationsEnabled;
     console.log('🔔 TOGGLE: Новое состояние:', userProfile.notificationsEnabled);
     
-    // Обновляем UI немедленно для лучшего UX
-    const toggle = document.querySelector('.notification-toggle');
-    if (toggle) {
-        if (userProfile.notificationsEnabled) {
-            toggle.classList.add('active');
-        } else {
-            toggle.classList.remove('active');
-        }
-    }
+    // UI уже обновлен в handleNotificationToggle, не дублируем
     
     try {
         // Сохраняем в локальном хранилище
@@ -3067,10 +3084,16 @@ async function toggleNotifications() {
         
         if (response.ok) {
             const result = await response.json();
+            console.log('🔔 TOGGLE: Ответ сервера:', result);
             
             if (userProfile.notificationsEnabled) {
-                showNotification('🔔 Уведомления включены! Вы будете получать новости о товарах и акциях', 'success');
-                console.log('✅ Пользователь подписан на уведомления из группы');
+                if (result.telegramConfigured) {
+                    showNotification('🔔 Уведомления включены! Вы будете получать новости о товарах и акциях', 'success');
+                    console.log('✅ Пользователь подписан на уведомления из группы');
+                } else {
+                    showNotification('⚠️ Уведомления включены, но система рассылки не настроена на сервере', 'warning');
+                    console.warn('⚠️ Telegram не настроен на сервере:', result.warning);
+                }
             } else {
                 showNotification('🔕 Уведомления отключены', 'info');
                 console.log('❌ Пользователь отписан от уведомлений');
@@ -3086,15 +3109,7 @@ async function toggleNotifications() {
         userProfile.notificationsEnabled = previousState;
         localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
         
-        // Возвращаем UI в предыдущее состояние
-        const toggle = document.querySelector('.notification-toggle');
-        if (toggle) {
-            if (userProfile.notificationsEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-        }
+        // UI будет откачен в handleNotificationToggle
         
         showNotification('❌ Ошибка изменения настроек уведомлений', 'error');
     }
