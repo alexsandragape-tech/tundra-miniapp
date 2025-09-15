@@ -1813,3 +1813,171 @@ window.addEventListener('beforeunload', (e) => {
         e.returnValue = 'У вас есть несохраненные изменения. Вы уверены, что хотите покинуть страницу?';
     }
 });
+
+// ===== УПРАВЛЕНИЕ КАТЕГОРИЯМИ =====
+
+// Переключение вкладок
+function showTab(tabName) {
+    // Обновляем кнопки вкладок
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+    
+    // Переключаем контент
+    if (tabName === 'products') {
+        document.getElementById('categories-container').style.display = 'block';
+        document.getElementById('categories-management').style.display = 'none';
+    } else if (tabName === 'categories') {
+        document.getElementById('categories-container').style.display = 'none';
+        document.getElementById('categories-management').style.display = 'block';
+        loadCategoriesManagement();
+    }
+}
+
+// Загрузка списка категорий для управления
+async function loadCategoriesManagement() {
+    try {
+        const response = await fetch('/api/admin/categories', {
+            headers: {
+                'Authorization': sessionStorage.getItem('admin_token') || 'admin_password_2024!'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки категорий');
+        }
+        
+        const data = await response.json();
+        renderCategoriesManagement(data.categories);
+        
+    } catch (error) {
+        console.error('Ошибка загрузки категорий:', error);
+        document.getElementById('categories-list').innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #666;">
+                ❌ Ошибка загрузки категорий: ${error.message}
+            </div>
+        `;
+    }
+}
+
+// Отображение списка категорий
+function renderCategoriesManagement(categories) {
+    const container = document.getElementById('categories-list');
+    
+    if (!categories || categories.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #666;">
+                📂 Категории не найдены. Сначала добавьте товары.
+            </div>
+        `;
+        return;
+    }
+    
+    // Генерируем иконки для категорий
+    const categoryIcons = {
+        'sausages': '🌭',
+        'pate': '🥫', 
+        'delicacies': '🥓',
+        'ready-delicacies': '🍖',
+        'frozen': '🧊',
+        'semifabricates': '🥟'
+    };
+    
+    container.innerHTML = categories.map(category => `
+        <div class="category-item">
+            <div class="category-info">
+                <div class="category-icon">
+                    ${categoryIcons[category.category_id] || '📦'}
+                </div>
+                <div class="category-details">
+                    <h3>${category.name || category.category_id}</h3>
+                    <div class="category-stats">
+                        ${category.products_count || 0} товаров, 
+                        ${category.available_products || 0} доступно
+                    </div>
+                </div>
+            </div>
+            <div class="category-actions">
+                <div class="status-badge ${category.is_visible ? 'visible' : 'hidden'}">
+                    ${category.is_visible ? 'Видима' : 'Скрыта'}
+                </div>
+                <div class="visibility-toggle ${category.is_visible ? 'visible' : ''}" 
+                     onclick="toggleCategoryVisibility('${category.category_id}')">
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Переключение видимости категории
+async function toggleCategoryVisibility(categoryId) {
+    try {
+        const response = await fetch(`/api/admin/categories/${categoryId}/visibility`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': sessionStorage.getItem('admin_token') || 'admin_password_2024!'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка изменения видимости');
+        }
+        
+        const data = await response.json();
+        
+        // Показываем уведомление
+        showNotification(data.message, 'success');
+        
+        // Перезагружаем список категорий
+        loadCategoriesManagement();
+        
+    } catch (error) {
+        console.error('Ошибка переключения видимости:', error);
+        showNotification('❌ ' + error.message, 'error');
+    }
+}
+
+// Показ уведомлений (если функция еще не существует)
+function showNotification(message, type = 'info') {
+    // Создаем элемент уведомления
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        transition: all 0.3s ease;
+        max-width: 300px;
+    `;
+    
+    // Устанавливаем цвет в зависимости от типа
+    switch (type) {
+        case 'success':
+            notification.style.backgroundColor = '#4caf50';
+            break;
+        case 'error':
+            notification.style.backgroundColor = '#f44336';
+            break;
+        case 'warning':
+            notification.style.backgroundColor = '#ff9800';
+            break;
+        default:
+            notification.style.backgroundColor = '#2196f3';
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Убираем через 3 секунды
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
