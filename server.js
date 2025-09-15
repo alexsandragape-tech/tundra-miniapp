@@ -3332,8 +3332,41 @@ app.post('/api/notifications/settings', async (req, res) => {
             logger.info(`📊 Всего подписанных пользователей: ${stats.rows[0]?.total_subscribed || 0}`);
             
         } catch (dbError) {
-            logger.warn('⚠️ Ошибка БД при сохранении настроек уведомлений:', dbError.message);
+            logger.error('❌ ДЕТАЛЬНАЯ ОШИБКА БД при сохранении настроек уведомлений:');
+            logger.error(`   Сообщение: ${dbError.message}`);
+            logger.error(`   Код: ${dbError.code}`);
+            logger.error(`   Детали: ${dbError.detail || 'Нет'}`);
+            logger.error(`   SQL State: ${dbError.sqlState || 'Нет'}`);
             logger.warn('📝 Продолжаем работу без серверного хранения настроек');
+            
+            // Попытка создать таблицу если она не существует
+            if (dbError.code === '42P01') { // Table does not exist
+                logger.info('🔧 Попытка создать таблицу user_notification_settings...');
+                try {
+                    await pool.query(`
+                        CREATE TABLE IF NOT EXISTS user_notification_settings (
+                            id SERIAL PRIMARY KEY,
+                            user_id VARCHAR(100) NOT NULL UNIQUE,
+                            notifications_enabled BOOLEAN DEFAULT true,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    `);
+                    logger.info('✅ Таблица user_notification_settings создана');
+                    
+                    // Повторная попытка сохранения
+                    const insertQuery = `
+                        INSERT INTO user_notification_settings (user_id, notifications_enabled, created_at, updated_at) 
+                        VALUES ($1, $2, NOW(), NOW())
+                        ON CONFLICT (user_id) DO UPDATE SET 
+                        notifications_enabled = $2, updated_at = NOW()
+                    `;
+                    await pool.query(insertQuery, [userId, notificationsEnabled]);
+                    logger.info(`✅ Настройки уведомлений сохранены после создания таблицы для пользователя ${userId}`);
+                } catch (createError) {
+                    logger.error('❌ Ошибка создания таблицы:', createError.message);
+                }
+            }
         }
         
         // Проверяем готовность системы уведомлений с реальными значениями
