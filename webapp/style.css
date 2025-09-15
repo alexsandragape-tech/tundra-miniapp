@@ -705,10 +705,22 @@ body {
 /* Профиль */
 .loyalty-card { background: #0b5c56; margin: 20px; padding: 25px; border-radius: 16px; color: white; }
 .loyalty-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.loyalty-stats { display: flex; justify-content: space-between; margin-bottom: 15px; }
-.loyalty-stat { text-align: center; }
-.loyalty-stat-value { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
-.loyalty-stat-label { font-size: 12px; opacity: 0.8; }
+.loyalty-stats { 
+    display: flex; 
+    justify-content: space-between; 
+    margin-bottom: 15px; 
+    gap: 8px;
+}
+.loyalty-stat { 
+    text-align: center; 
+    flex: 1;
+    padding: 12px 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    min-width: 0;
+}
+.loyalty-stat-value { font-size: 18px; font-weight: 700; margin-bottom: 5px; line-height: 1.2; }
+.loyalty-stat-label { font-size: 12px; opacity: 0.9; }
 .loyalty-progress { margin-bottom: 15px; }
 .loyalty-progress-label { font-size: 14px; margin-bottom: 8px; }
 .progress-bar { background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; overflow: hidden; }
@@ -980,7 +992,18 @@ body {
         height: 24px;
         font-size: 14px;
     }
-    .loyalty-stats { flex-direction: column; gap: 15px; }
+    .loyalty-stats { 
+        gap: 6px; /* Меньший отступ на мобильных */
+    }
+    .loyalty-stat {
+        padding: 10px 6px; /* Меньше отступов на мобильных */
+    }
+    .stat-value {
+        font-size: 16px; /* Немного меньше на мобильных */
+    }
+    .stat-label {
+        font-size: 12px; /* Меньше текст на мобильных */
+    }
     .cart-item-controls { flex-direction: column; gap: 15px; align-items: flex-start; }
     
     .modal-content {
@@ -1251,17 +1274,23 @@ body {
     display: flex;
     justify-content: space-between;
     margin-bottom: 20px;
+    gap: 8px;
 }
 
 .loyalty-stat {
     text-align: center;
     flex: 1;
+    padding: 12px 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    min-width: 0; /* Позволяет элементам сжиматься */
 }
 
 .stat-value {
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 700;
     margin-bottom: 4px;
+    line-height: 1.2;
 }
 
 .stat-label {
