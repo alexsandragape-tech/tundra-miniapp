@@ -8,6 +8,8 @@ console.log('🔍 admin-script.js загружен');
 // Глобальные переменные
 let products = {};
 let originalProducts = {};
+// Карта видимости категорий из БД
+let categoryVisibility = {};
 
 // 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
 const categories = {
@@ -59,6 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     loadProducts();
+    // Загрузим видимость категорий для корректных подписей кнопок
+    refreshCategoryVisibility().catch(() => {});
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
@@ -876,6 +880,7 @@ function renderProducts() {
         const categoryProducts = products[categoryId] || [];
         const availableCount = categoryProducts.filter(p => p.available !== false).length;
         const hiddenCount = categoryProducts.filter(p => p.available === false).length;
+        const isCategoryVisible = categoryVisibility[categoryId] !== false; // по умолчанию видима
         
         const categoryHtml = `
             <div class="category-section" data-category="${categoryId}">
@@ -885,12 +890,16 @@ function renderProducts() {
                         <div class="category-stats">
                             Всего: ${categoryProducts.length} | 
                             В наличии: ${availableCount} | 
-                            Скрыто: ${hiddenCount}
+                            Скрыто: ${hiddenCount}${isCategoryVisible ? '' : ' | Категория: скрыта'}
                         </div>
                     </div>
                     <div class="category-actions">
                         <button class="edit-category-btn" onclick="editCategoryName('${categoryId}')" title="Редактировать название категории">
                             ✏️ Изменить название
+                        </button>
+                        <button class="visibility-toggle ${isCategoryVisible ? 'visible' : ''}" 
+                                onclick="toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
+                            ${isCategoryVisible ? 'Скрыть' : 'Показать'}
                         </button>
                         <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
                             ➕ Добавить товар
@@ -918,6 +927,25 @@ function renderProducts() {
             });
         });
     }, 100);
+}
+
+// Загрузить карту видимости категорий из сервера
+async function refreshCategoryVisibility() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/categories`, {
+            headers: { 'X-Admin-Password': getAdminPassword() }
+        });
+        if (!resp.ok) throw new Error('Не удалось загрузить категории');
+        const data = await resp.json();
+        if (data && data.categories) {
+            categoryVisibility = {};
+            data.categories.forEach(c => {
+                categoryVisibility[c.category_id] = c.is_visible !== false;
+            });
+        }
+    } catch (e) {
+        console.warn('Не удалось обновить видимость категорий:', e.message);
+    }
 }
 
 // Отображение карточки товара
@@ -1846,7 +1874,7 @@ async function loadCategoriesManagement() {
     try {
         const response = await fetch('/api/admin/categories', {
             headers: {
-                'Authorization': sessionStorage.getItem('admin_token') || 'admin_password_2024!'
+                'X-Admin-Password': getAdminPassword()
             }
         });
         
@@ -1920,7 +1948,7 @@ async function toggleCategoryVisibility(categoryId) {
         const response = await fetch(`/api/admin/categories/${categoryId}/visibility`, {
             method: 'PUT',
             headers: {
-                'Authorization': sessionStorage.getItem('admin_token') || 'admin_password_2024!'
+                'X-Admin-Password': getAdminPassword()
             }
         });
         
@@ -1933,8 +1961,10 @@ async function toggleCategoryVisibility(categoryId) {
         // Показываем уведомление
         showNotification(data.message, 'success');
         
-        // Перезагружаем список категорий
+        // Обновляем карту видимости и перерисовываем и список и карточки
+        await refreshCategoryVisibility();
         loadCategoriesManagement();
+        renderProducts();
         
     } catch (error) {
         console.error('Ошибка переключения видимости:', error);
