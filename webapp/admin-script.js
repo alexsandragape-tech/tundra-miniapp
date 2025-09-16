@@ -1905,12 +1905,10 @@ function renderCategoriesManagement(categories) {
                 </div>
             </div>
             <div class="category-actions">
-                <div class="status-badge ${category.is_visible ? 'visible' : 'hidden'}">
-                    ${category.is_visible ? 'Видима' : 'Скрыта'}
-                </div>
-                <div class="visibility-toggle ${category.is_visible ? 'visible' : ''}" 
-                     onclick="toggleCategoryVisibility('${category.category_id}')">
-                </div>
+                <button class="visibility-toggle ${category.is_visible ? 'visible' : ''}" 
+                        onclick="toggleCategoryVisibility('${category.category_id}')">
+                    ${category.is_visible ? 'Скрыть' : 'Показать'}
+                </button>
             </div>
         </div>
     `).join('');
