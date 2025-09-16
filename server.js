@@ -2379,6 +2379,12 @@ app.all('/api/telegram/webhook', async (req, res) => {
             logger.info('TELEGRAM WEBHOOK: callback_query обработан успешно');
         } else if (message || channel_post) {
             const msg = message || channel_post;
+            // Игнорируем сообщения, отправленные самим ботом
+            if (msg.from?.is_bot) {
+                logger.info('TELEGRAM WEBHOOK: Сообщение от бота — пропускаем');
+                return;
+            }
+
             logger.info('TELEGRAM WEBHOOK: Обрабатываем сообщение:', msg.text);
             logger.info('TELEGRAM WEBHOOK: Полные данные message:', JSON.stringify(msg, null, 2));
             let broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
@@ -3893,11 +3899,11 @@ async function handleGroupMessage(message) {
         const messageText = message.text;
         const senderName = message.from?.first_name || 'Администратор';
         
-        logger.info(`📢 РАССЫЛКА: Обрабатываем сообщение от ${senderName}: "${messageText}"`);
+        logger.info(`РАССЫЛКА: Обрабатываем сообщение от ${senderName}: "${messageText}"`);
         
         // Пропускаем команды бота и служебные сообщения
-        if (messageText?.startsWith('/') || messageText?.startsWith('🆔') || messageText?.startsWith('📦')) {
-            logger.info('📢 РАССЫЛКА: Пропускаем служебное сообщение');
+        if (messageText?.startsWith('/') || messageText?.startsWith('ID:') || messageText?.startsWith('Заказ')) {
+            logger.info('РАССЫЛКА: Пропускаем служебное сообщение');
             return;
         }
         
@@ -3905,14 +3911,14 @@ async function handleGroupMessage(message) {
         const subscribedUsers = await getSubscribedUsers();
         
         if (subscribedUsers.length === 0) {
-            logger.info('📢 РАССЫЛКА: Нет подписанных пользователей');
+            logger.info('РАССЫЛКА: Нет подписанных пользователей');
             return;
         }
         
-        logger.info(`📢 РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
+        logger.info(`РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
         
         // Формируем сообщение для рассылки
-        const broadcastMessage = `📢 *Уведомление от Tundra Gourmet*\n\n${messageText}`;
+        const broadcastMessage = `Уведомление от Tundra Gourmet\n\n${messageText}`;
         
         // Отправляем сообщение каждому подписчику
         let successCount = 0;
@@ -3923,13 +3929,13 @@ async function handleGroupMessage(message) {
                 await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     chat_id: user.telegram_user_id,
                     text: broadcastMessage,
-                    parse_mode: 'Markdown'
+                    // Без parse_mode, чтобы исключить ошибки форматирования
                 });
                 successCount++;
-                logger.debug(`✅ Сообщение отправлено пользователю ${user.telegram_user_id}`);
+                logger.debug(`Сообщение отправлено пользователю ${user.telegram_user_id}`);
             } catch (error) {
                 errorCount++;
-                logger.warn(`❌ Ошибка отправки пользователю ${user.telegram_user_id}:`, error.response?.data?.description || error.message);
+                logger.warn(`Ошибка отправки пользователю ${user.telegram_user_id}:`, error.response?.data?.description || error.message);
             }
             
             // Небольшая задержка между отправками для избежания rate limiting
@@ -3937,32 +3943,30 @@ async function handleGroupMessage(message) {
         }
         
         // Отправляем отчет в админ-группу
-        const reportMessage = `📊 *Отчет о рассылке*\n\n` +
-            `📝 Сообщение: "${messageText}"\n` +
-            `✅ Успешно отправлено: ${successCount}\n` +
-            `❌ Ошибок: ${errorCount}\n` +
-            `👥 Всего подписчиков: ${subscribedUsers.length}`;
+        const reportMessage = `Отчет о рассылке\n\n` +
+            `Сообщение: "${messageText}"\n` +
+            `Успешно отправлено: ${successCount}\n` +
+            `Ошибок: ${errorCount}\n` +
+            `Всего подписчиков: ${subscribedUsers.length}`;
         
         await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            chat_id: config.TELEGRAM_BROADCAST_CHAT_ID,
-            text: reportMessage,
-            parse_mode: 'Markdown'
+            chat_id: config.TELEGRAM_ADMIN_CHAT_ID || config.TELEGRAM_BROADCAST_CHAT_ID,
+            text: reportMessage
         });
         
-        logger.info(`📢 РАССЫЛКА: Завершена. Успешно: ${successCount}, Ошибок: ${errorCount}`);
+        logger.info(`РАССЫЛКА: Завершена. Успешно: ${successCount}, Ошибок: ${errorCount}`);
         
     } catch (error) {
-        logger.error('❌ РАССЫЛКА: Ошибка обработки группового сообщения:', error.message);
+        logger.error('РАССЫЛКА: Ошибка обработки группового сообщения:', error.message);
         
         // Уведомляем об ошибке в админ-группу
         try {
             await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                chat_id: config.TELEGRAM_BROADCAST_CHAT_ID,
-                text: `❌ *Ошибка рассылки*\n\nОшибка: ${error.message}`,
-                parse_mode: 'Markdown'
+                chat_id: config.TELEGRAM_ADMIN_CHAT_ID || config.TELEGRAM_BROADCAST_CHAT_ID,
+                text: `Ошибка рассылки: ${error.message}`
             });
         } catch (reportError) {
-            logger.error('❌ Не удалось отправить отчет об ошибке:', reportError.message);
+            logger.error('Не удалось отправить отчет об ошибке:', reportError.message);
         }
     }
 }
