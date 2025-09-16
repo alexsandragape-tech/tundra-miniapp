@@ -176,8 +176,14 @@ app.use('/api/telegram/webhook', (req, res, next) => {
         url: req.url,
         timestamp: new Date().toISOString(),
         ip: req.ip,
-        userAgent: req.headers['user-agent']
+        userAgent: req.headers['user-agent'],
+        contentType: req.headers['content-type']
     });
+    try {
+        logger.info('GLOBAL WEBHOOK MIDDLEWARE: Тело запроса', typeof req.body === 'object' ? JSON.stringify(req.body) : String(req.body || ''));
+    } catch (e) {
+        logger.warn('GLOBAL WEBHOOK MIDDLEWARE: Не удалось вывести тело запроса:', e.message);
+    }
     next();
 });
 
