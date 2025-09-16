@@ -3460,6 +3460,87 @@ app.post('/api/debug/test-broadcast', requireAdminAuth, async (req, res) => {
     }
 });
 
+// 🔍 API ДЛЯ ПРОВЕРКИ СТАТУСА WEBHOOK TELEGRAM
+app.get('/api/debug/webhook-info', requireAdminAuth, async (req, res) => {
+    try {
+        if (!config.TELEGRAM_BOT_TOKEN) {
+            return res.status(400).json({ ok: false, error: 'TELEGRAM_BOT_TOKEN не настроен' });
+        }
+        
+        // Получаем информацию о webhook
+        const webhookInfoResponse = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+        
+        // Получаем информацию о боте
+        const botInfoResponse = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getMe`);
+        
+        res.json({
+            ok: true,
+            webhook: webhookInfoResponse.data.result,
+            bot: botInfoResponse.data.result,
+            expected_webhook_url: 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook',
+            broadcast_chat_id: config.TELEGRAM_BROADCAST_CHAT_ID
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка проверки webhook:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔍 API ДЛЯ ПРОВЕРКИ ПРАВ БОТА В ГРУППЕ
+app.get('/api/debug/bot-permissions', requireAdminAuth, async (req, res) => {
+    try {
+        if (!config.TELEGRAM_BOT_TOKEN || !config.TELEGRAM_BROADCAST_CHAT_ID) {
+            return res.status(400).json({ 
+                ok: false, 
+                error: 'TELEGRAM_BOT_TOKEN или TELEGRAM_BROADCAST_CHAT_ID не настроены' 
+            });
+        }
+        
+        let broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID.toString();
+        if (!broadcastChatId.startsWith('-')) {
+            broadcastChatId = '-' + broadcastChatId;
+        }
+        
+        try {
+            // Проверяем, есть ли бот в группе и какие у него права
+            const chatMemberResponse = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getChatMember`, {
+                chat_id: broadcastChatId,
+                user_id: (await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getMe`)).data.result.id
+            });
+            
+            const chatInfoResponse = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getChat`, {
+                chat_id: broadcastChatId
+            });
+            
+            res.json({
+                ok: true,
+                chat_id: broadcastChatId,
+                bot_status: chatMemberResponse.data.result,
+                chat_info: chatInfoResponse.data.result,
+                message: chatMemberResponse.data.result.status === 'administrator' ? 
+                    '✅ Бот является админом в группе' : 
+                    `⚠️ Статус бота: ${chatMemberResponse.data.result.status}`
+            });
+            
+        } catch (apiError) {
+            if (apiError.response?.data?.error_code === 400) {
+                return res.json({
+                    ok: false,
+                    error: '❌ Бот не найден в группе или группа не существует',
+                    chat_id: broadcastChatId,
+                    suggestion: 'Добавьте бота в группу и дайте ему права администратора'
+                });
+            }
+            throw apiError;
+        }
+        
+    } catch (error) {
+        logger.error('❌ Ошибка проверки прав бота:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔍 ОТЛАДОЧНЫЙ API ДЛЯ ДИАГНОСТИКИ РАССЫЛКИ
 app.get('/api/debug/broadcast', requireAdminAuth, async (req, res) => {
     try {
