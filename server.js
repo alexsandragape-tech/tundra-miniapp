@@ -1268,8 +1268,19 @@ app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
         
         // Сохраняем товары через существующую функцию
         await AdminProductsDB.saveAll(products);
-        
-        // Сохраняем категории в памяти сервера (можно добавить в БД позже)
+
+        // Сохраняем названия категорий в БД
+        if (categories && typeof categories === 'object') {
+            for (const [categoryId, name] of Object.entries(categories)) {
+                try {
+                    await CategoriesDB.upsert(categoryId, name);
+                } catch (e) {
+                    logger.warn(`Не удалось сохранить категорию ${categoryId}: ${e.message}`);
+                }
+            }
+        }
+
+        // Дублируем в память (для совместимости текущего рендера на сервере)
         global.categoryNames = categories;
         
         logger.info('✅ Товары и категории сохранены через API');
