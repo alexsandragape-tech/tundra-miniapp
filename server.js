@@ -3395,6 +3395,71 @@ app.get('/api/categories/visible', async (req, res) => {
     }
 });
 
+// 🔍 API ДЛЯ ПРИНУДИТЕЛЬНОГО ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ В РАССЫЛКУ
+app.post('/api/debug/add-user', requireAdminAuth, async (req, res) => {
+    try {
+        const { telegram_user_id, first_name } = req.body;
+        
+        if (!telegram_user_id) {
+            return res.status(400).json({ ok: false, error: 'Не указан telegram_user_id' });
+        }
+        
+        // Добавляем пользователя принудительно
+        const userData = {
+            id: telegram_user_id,
+            first_name: first_name || 'Тестовый пользователь',
+            last_name: '',
+            username: '',
+            language_code: 'ru',
+            is_bot: false
+        };
+        
+        const savedUser = await BotUsersDB.upsert(userData);
+        
+        res.json({
+            ok: true,
+            message: 'Пользователь добавлен в рассылку',
+            user: savedUser
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка добавления пользователя:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔍 API ДЛЯ ТЕСТОВОЙ ОТПРАВКИ СООБЩЕНИЯ
+app.post('/api/debug/test-broadcast', requireAdminAuth, async (req, res) => {
+    try {
+        const { message_text } = req.body;
+        
+        if (!message_text) {
+            return res.status(400).json({ ok: false, error: 'Не указан текст сообщения' });
+        }
+        
+        logger.info('🧪 ТЕСТ РАССЫЛКИ: Запуск тестовой рассылки');
+        
+        // Имитируем сообщение из группы
+        const testMessage = {
+            text: message_text,
+            from: {
+                first_name: 'Тест'
+            }
+        };
+        
+        await handleGroupMessage(testMessage);
+        
+        res.json({
+            ok: true,
+            message: 'Тестовая рассылка запущена'
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка тестовой рассылки:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔍 ОТЛАДОЧНЫЙ API ДЛЯ ДИАГНОСТИКИ РАССЫЛКИ
 app.get('/api/debug/broadcast', requireAdminAuth, async (req, res) => {
     try {
@@ -3539,9 +3604,17 @@ app.post('/api/telegram/webhook', async (req, res) => {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
             
             // Проверяем, из какой группы пришло сообщение
-            const broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
-            const adminChatId = config.TELEGRAM_ADMIN_CHAT_ID?.toString();
+            let broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
+            let adminChatId = config.TELEGRAM_ADMIN_CHAT_ID?.toString();
             const messageChatId = message.chat.id.toString();
+            
+            // Добавляем отрицательный знак если его нет (группы в Telegram имеют отрицательные ID)
+            if (broadcastChatId && !broadcastChatId.startsWith('-')) {
+                broadcastChatId = '-' + broadcastChatId;
+            }
+            if (adminChatId && !adminChatId.startsWith('-')) {
+                adminChatId = '-' + adminChatId;
+            }
             
             logger.info(`🔍 ПРОВЕРКА: Сообщение от ${messageChatId}`);
             logger.info(`📢 Рассылочная группа: ${broadcastChatId}`);
