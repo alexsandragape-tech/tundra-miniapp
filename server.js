@@ -171,19 +171,24 @@ app.use(express.json());
 
 // ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ webhook запросов (для диагностики)
 app.use('/api/telegram/webhook', (req, res, next) => {
+    const traceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     logger.info('GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
         method: req.method,
         url: req.url,
         timestamp: new Date().toISOString(),
         ip: req.ip,
         userAgent: req.headers['user-agent'],
-        contentType: req.headers['content-type']
+        contentType: req.headers['content-type'],
+        traceId
     });
     try {
         logger.info('GLOBAL WEBHOOK MIDDLEWARE: Тело запроса', typeof req.body === 'object' ? JSON.stringify(req.body) : String(req.body || ''));
     } catch (e) {
         logger.warn('GLOBAL WEBHOOK MIDDLEWARE: Не удалось вывести тело запроса:', e.message);
     }
+    res.on('finish', () => {
+        logger.info('GLOBAL WEBHOOK MIDDLEWARE: Ответ отправлен', { statusCode: res.statusCode, traceId });
+    });
     next();
 });
 
@@ -3674,13 +3679,18 @@ app.get('/setup-telegram-webhook', async (req, res) => {
 });
 
 // Webhook для Telegram
-app.post('/api/telegram/webhook', async (req, res) => {
-    try {
+app.all('/api/telegram/webhook', async (req, res) => {
+    // Немедленно подтверждаем получение, чтобы не блокировать Telegram
+    try { res.status(200).json({ ok: true }); } catch (_) {}
+
+    setImmediate(async () => {
+      try {
+        console.log('WEBHOOK HANDLER: ENTER');
         logger.info('TELEGRAM WEBHOOK: Получен запрос от Telegram');
         logger.info('TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
         logger.info('TELEGRAM WEBHOOK: req.headers:', JSON.stringify(req.headers, null, 2));
         
-        const { message, channel_post, callback_query } = req.body;
+        const { message, channel_post, callback_query } = req.body || {};
         
         if (callback_query) {
             logger.info('TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
@@ -3758,16 +3768,14 @@ app.post('/api/telegram/webhook', async (req, res) => {
                 }
             }
         } else {
-            logger.warn('🔔 TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body));
-            logger.warn('🔔 TELEGRAM WEBHOOK: Полные данные:', JSON.stringify(req.body, null, 2));
+            logger.warn('TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body || {}));
+            logger.warn('TELEGRAM WEBHOOK: Полные данные:', JSON.stringify(req.body || {}, null, 2));
         }
-        
-        res.status(200).json({ ok: true });
-    } catch (error) {
-        logger.error('❌ TELEGRAM WEBHOOK: Ошибка обработки:', error.message);
-        logger.error('❌ TELEGRAM WEBHOOK: Стек ошибки:', error.stack);
-        res.status(500).json({ ok: false, error: error.message });
-    }
+      } catch (error) {
+        logger.error('TELEGRAM WEBHOOK: Ошибка обработки (async):', error.message);
+        logger.error('TELEGRAM WEBHOOK: Стек ошибки:', error.stack);
+      }
+    });
 });
 
 // Дополнительный webhook для тестирования
