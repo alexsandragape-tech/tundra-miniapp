@@ -731,6 +731,16 @@ class BotUsersDB {
         const result = await pool.query(query);
         return result.rows;
     }
+
+    // Пометить пользователя неактивным
+    static async deactivate(telegramUserId) {
+        const query = `
+            UPDATE bot_users
+            SET is_active = false, last_interaction = CURRENT_TIMESTAMP
+            WHERE telegram_user_id = $1
+        `;
+        await pool.query(query, [telegramUserId?.toString()]);
+    }
     
     // Получить статистику пользователей
     static async getStats() {
