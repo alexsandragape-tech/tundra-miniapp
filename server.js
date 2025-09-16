@@ -2457,14 +2457,11 @@ app.get('/api/telegram/webhook', (req, res) => {
     res.json({ ok: true, message: 'Telegram webhook доступен', timestamp: new Date().toISOString() });
 });
 
-// 🛡️ ГЛОБАЛЬНАЯ ОБРАБОТКА ОШИБОК
+// 🛡️ ГЛОБАЛЬНАЯ ОБРАБОТКА ОШИБОК (ранняя)
 app.use((err, req, res, next) => {
     logger.error('❌ Необработанная ошибка:', err.message);
     logger.error('❌ Stack trace:', err.stack);
-    
-    // Не показываем детали ошибки в продакшене
     const isDevelopment = process.env.NODE_ENV === 'development';
-    
     res.status(500).json({
         error: 'Внутренняя ошибка сервера',
         message: isDevelopment ? err.message : 'Что-то пошло не так',
@@ -2472,14 +2469,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Обработка 404
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Страница не найдена',
-        path: req.path,
-        timestamp: new Date().toISOString()
-    });
-});
+// Временный no-op 404, настоящую 404 добавляем в самом конце после всех маршрутов
+app.use((req, res, next) => next());
 
 app.get('/ping', (req, res) => {
     res.status(200).send('pong');
@@ -3508,6 +3499,15 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
         logger.error('❌ Ошибка переключения видимости категории:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
+});
+
+// Финальная обработка 404 ПОСЛЕ всех маршрутов
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Страница не найдена',
+        path: req.path,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // API для получения видимых категорий (для основного приложения)
