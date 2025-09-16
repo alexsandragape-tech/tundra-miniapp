@@ -118,6 +118,10 @@ async function loadProductsFromServer() {
                 console.log('✅ Товары загружены с сервера для админ панели');
                 products = result.products;
                 originalProducts = JSON.parse(JSON.stringify(products));
+                // Сохраняем базовую копию названий категорий для отслеживания изменений
+                if (!originalProducts.categories) {
+                    originalProducts.categories = JSON.parse(JSON.stringify(categories));
+                }
                 
                 // Подсчитываем скрытые товары
                 let hiddenCount = 0;
@@ -858,6 +862,8 @@ async function loadProductsFromClient() {
     // 🎯 ВСЕ 60 ТОВАРОВ ДОБАВЛЕНЫ! (49+11) + 4 НОВЫЕ КАТЕГОРИИ
     // Создаем копию для отслеживания изменений
     originalProducts = JSON.parse(JSON.stringify(products));
+    // Базовая копия названий категорий для последующего сравнения
+    originalProducts.categories = JSON.parse(JSON.stringify(categories));
 }
 
 // Отображение товаров
