@@ -670,12 +670,13 @@ class CategoriesDB {
             SELECT 
                 c.category_id,
                 c.name,
+                c.sort_order,
                 c.is_visible,
                 COUNT(ap.id) as products_count,
                 COUNT(CASE WHEN ap.is_available = true THEN 1 END) as available_products
             FROM categories c
             LEFT JOIN admin_products ap ON c.category_id = ap.category_id
-            GROUP BY c.category_id, c.name, c.is_visible
+            GROUP BY c.category_id, c.name, c.sort_order, c.is_visible
             ORDER BY c.sort_order, c.name
         `;
         const result = await pool.query(query);
