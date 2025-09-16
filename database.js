@@ -79,6 +79,37 @@ async function initializeDatabase() {
             END $$;
         `);
         
+        // Создаем таблицу категорий
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                category_id VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                image_url TEXT,
+                is_visible BOOLEAN DEFAULT true,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Создаем таблицу пользователей бота
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS bot_users (
+                id SERIAL PRIMARY KEY,
+                telegram_user_id VARCHAR(50) UNIQUE NOT NULL,
+                first_name VARCHAR(255),
+                last_name VARCHAR(255),
+                username VARCHAR(255),
+                language_code VARCHAR(10),
+                is_bot BOOLEAN DEFAULT false,
+                first_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT true
+            )
+        `);
+        
         // Создаем таблицу товаров админки
         await pool.query(`
             CREATE TABLE IF NOT EXISTS admin_products (
@@ -161,16 +192,6 @@ async function initializeDatabase() {
             CREATE INDEX IF NOT EXISTS idx_admin_products_category ON admin_products(category_id);
         `);
         
-        // Создаем таблицу настроек уведомлений
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS user_notification_settings (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(100) NOT NULL UNIQUE,
-                notifications_enabled BOOLEAN DEFAULT true,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
         
         console.log('✅ База данных инициализирована успешно');
         
@@ -598,11 +619,141 @@ class AdminProductsDB {
     }
 }
 
+// Класс для работы с категориями
+class CategoriesDB {
+    // Получить все видимые категории
+    static async getVisible() {
+        const query = 'SELECT * FROM categories WHERE is_visible = true ORDER BY sort_order, name';
+        const result = await pool.query(query);
+        return result.rows;
+    }
+    
+    // Получить все категории (для админки)
+    static async getAll() {
+        const query = 'SELECT * FROM categories ORDER BY sort_order, name';
+        const result = await pool.query(query);
+        return result.rows;
+    }
+    
+    // Переключить видимость категории
+    static async toggleVisibility(categoryId) {
+        const query = `
+            UPDATE categories 
+            SET is_visible = NOT is_visible, updated_at = CURRENT_TIMESTAMP
+            WHERE category_id = $1
+            RETURNING is_visible
+        `;
+        const result = await pool.query(query, [categoryId]);
+        return result.rows.length > 0 ? result.rows[0].is_visible : null;
+    }
+    
+    // Добавить/обновить категорию
+    static async upsert(categoryId, name, description = '', imageUrl = '') {
+        const query = `
+            INSERT INTO categories (category_id, name, description, image_url, updated_at) 
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            ON CONFLICT (category_id) 
+            DO UPDATE SET 
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                image_url = EXCLUDED.image_url,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING *
+        `;
+        const result = await pool.query(query, [categoryId, name, description, imageUrl]);
+        return result.rows[0];
+    }
+    
+    // Получить статистику категорий
+    static async getStats() {
+        const query = `
+            SELECT 
+                c.category_id,
+                c.name,
+                c.is_visible,
+                COUNT(ap.id) as products_count,
+                COUNT(CASE WHEN ap.is_available = true THEN 1 END) as available_products
+            FROM categories c
+            LEFT JOIN admin_products ap ON c.category_id = ap.category_id
+            GROUP BY c.category_id, c.name, c.is_visible
+            ORDER BY c.sort_order, c.name
+        `;
+        const result = await pool.query(query);
+        return result.rows;
+    }
+}
+
+// Класс для работы с пользователями бота
+class BotUsersDB {
+    // Добавить или обновить пользователя
+    static async upsert(userData) {
+        const query = `
+            INSERT INTO bot_users (
+                telegram_user_id, first_name, last_name, username, 
+                language_code, is_bot, last_interaction
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+            ON CONFLICT (telegram_user_id) 
+            DO UPDATE SET 
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                username = EXCLUDED.username,
+                language_code = EXCLUDED.language_code,
+                last_interaction = CURRENT_TIMESTAMP,
+                is_active = true
+            RETURNING *
+        `;
+        
+        const values = [
+            userData.id?.toString(),
+            userData.first_name || null,
+            userData.last_name || null,
+            userData.username || null,
+            userData.language_code || null,
+            userData.is_bot || false
+        ];
+        
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }
+    
+    // Получить всех активных пользователей для рассылки
+    static async getAllActiveUsers() {
+        const query = `
+            SELECT telegram_user_id, first_name, last_name, username
+            FROM bot_users 
+            WHERE is_active = true 
+            AND telegram_user_id IS NOT NULL 
+            AND telegram_user_id != ''
+            ORDER BY last_interaction DESC
+        `;
+        
+        const result = await pool.query(query);
+        return result.rows;
+    }
+    
+    // Получить статистику пользователей
+    static async getStats() {
+        const query = `
+            SELECT 
+                COUNT(*) as total_users,
+                COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
+                COUNT(CASE WHEN last_interaction > NOW() - INTERVAL '7 days' THEN 1 END) as recent_users
+            FROM bot_users
+        `;
+        
+        const result = await pool.query(query);
+        return result.rows[0];
+    }
+}
+
 // Экспортируем все функции
 module.exports = {
     pool,
     initializeDatabase,
     OrdersDB,
     PurchaseHistoryDB,
-    AdminProductsDB
+    AdminProductsDB,
+    CategoriesDB,
+    BotUsersDB
 };
