@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
     // Загрузим видимость категорий для корректных подписей кнопок
     refreshCategoryVisibility().catch(() => {});
+    // Загрузим актуальные названия категорий из БД и применим к UI
+    loadCategoryNamesFromServer().catch(() => {});
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
@@ -127,6 +129,9 @@ async function loadProductsFromServer() {
                     originalProducts.categories = JSON.parse(JSON.stringify(categories));
                 }
                 
+                // Параллельно подтянем актуальные названия категорий из БД
+                loadCategoryNamesFromServer().catch(() => {});
+                
                 // Подсчитываем скрытые товары
                 let hiddenCount = 0;
                 for (const [categoryId, categoryProducts] of Object.entries(products)) {
@@ -146,6 +151,33 @@ async function loadProductsFromServer() {
     } catch (error) {
         console.error('❌ Ошибка загрузки с сервера:', error);
         return false;
+    }
+}
+
+// Загрузка актуальных названий категорий из сервера (БД)
+async function loadCategoryNamesFromServer() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/admin/categories`, {
+            headers: { 'X-Admin-Password': getAdminPassword() }
+        });
+        if (!resp.ok) throw new Error('Не удалось загрузить категории');
+        const data = await resp.json();
+        if (data && Array.isArray(data.categories)) {
+            data.categories.forEach(row => {
+                if (row.category_id && row.name) {
+                    categories[row.category_id] = row.name;
+                }
+            });
+            // Зафиксируем как исходные названия для трекинга сохранений
+            if (!originalProducts.categories) {
+                originalProducts.categories = {};
+            }
+            originalProducts.categories = JSON.parse(JSON.stringify(categories));
+            // Перерисуем UI с актуальными названиями
+            renderProducts();
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить названия категорий:', e.message);
     }
 }
 
