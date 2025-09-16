@@ -3710,6 +3710,14 @@ app.post('/api/telegram/webhook', async (req, res) => {
             logger.info(`📢 Рассылочная группа: ${broadcastChatId}`);
             logger.info(`📋 Админ группа заказов: ${adminChatId}`);
             
+            logger.info('🔔 TELEGRAM WEBHOOK: СРАВНЕНИЕ ID:', {
+                messageChatId: messageChatId,
+                broadcastChatId: broadcastChatId,
+                isEqual: messageChatId === broadcastChatId,
+                messageType: typeof messageChatId,
+                broadcastType: typeof broadcastChatId
+            });
+            
             if (broadcastChatId && messageChatId === broadcastChatId) {
                 logger.info('📢 РАССЫЛКА: Получено сообщение из группы рассылки для клиентов');
                 await handleGroupMessage(message);
