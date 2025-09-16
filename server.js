@@ -103,7 +103,7 @@ class YooKassaAPI {
     }
 }
 const config = require('./config');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB } = require('./database');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB } = require('./database');
 
 const app = express();
 const PORT = config.PORT;
@@ -3395,6 +3395,55 @@ app.get('/api/categories/visible', async (req, res) => {
     }
 });
 
+// 🔍 ОТЛАДОЧНЫЙ API ДЛЯ ДИАГНОСТИКИ РАССЫЛКИ
+app.get('/api/debug/broadcast', requireAdminAuth, async (req, res) => {
+    try {
+        // Проверяем конфигурацию
+        const configStatus = {
+            TELEGRAM_BOT_TOKEN: config.TELEGRAM_BOT_TOKEN ? '✅ Установлен' : '❌ НЕ установлен',
+            TELEGRAM_BROADCAST_CHAT_ID: config.TELEGRAM_BROADCAST_CHAT_ID ? `✅ ${config.TELEGRAM_BROADCAST_CHAT_ID}` : '❌ НЕ установлен',
+            TELEGRAM_ADMIN_CHAT_ID: config.TELEGRAM_ADMIN_CHAT_ID ? `✅ ${config.TELEGRAM_ADMIN_CHAT_ID}` : '❌ НЕ установлен'
+        };
+        
+        // Получаем статистику пользователей
+        const userStats = await BotUsersDB.getStats();
+        
+        // Получаем список всех пользователей для рассылки
+        const allUsers = await getSubscribedUsers();
+        
+        // Получаем пользователей из orders для сравнения
+        const ordersQuery = `
+            SELECT DISTINCT telegram_user_id, COUNT(*) as orders_count
+            FROM orders 
+            WHERE telegram_user_id IS NOT NULL 
+            AND telegram_user_id != ''
+            AND status != 'cancelled'
+            GROUP BY telegram_user_id
+            ORDER BY orders_count DESC
+        `;
+        const ordersResult = await pool.query(ordersQuery);
+        
+        res.json({
+            ok: true,
+            config: configStatus,
+            userStats,
+            broadcastUsers: {
+                total: allUsers.length,
+                users: allUsers.slice(0, 10) // Первые 10 для примера
+            },
+            ordersUsers: {
+                total: ordersResult.rows.length,
+                users: ordersResult.rows.slice(0, 10)
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        logger.error('❌ Ошибка отладки рассылки:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // API для получения конкретного заказа ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД SPA FALLBACK
 
 // API для обновления статуса заказа
@@ -3472,6 +3521,17 @@ app.post('/api/telegram/webhook', async (req, res) => {
         if (callback_query) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
             logger.info('🔔 TELEGRAM WEBHOOK: callback_query полные данные:', JSON.stringify(callback_query, null, 2));
+            
+            // Сохраняем пользователя в базу данных
+            if (callback_query.from && callback_query.from.id) {
+                try {
+                    await BotUsersDB.upsert(callback_query.from);
+                    logger.debug(`👤 Пользователь ${callback_query.from.id} сохранен/обновлен в БД (callback)`);
+                } catch (error) {
+                    logger.warn(`⚠️ Ошибка сохранения пользователя ${callback_query.from.id}:`, error.message);
+                }
+            }
+            
             // Обрабатываем нажатие на inline-кнопку
             await handleCallbackQuery(callback_query);
             logger.info('🔔 TELEGRAM WEBHOOK: callback_query обработан успешно');
@@ -3496,6 +3556,16 @@ app.post('/api/telegram/webhook', async (req, res) => {
             } else {
                 // Обрабатываем обычные сообщения от пользователей
                 logger.debug(`💬 ЛИЧНОЕ: Получено сообщение от пользователя ${messageChatId}:`, message.text);
+                
+                // Сохраняем пользователя в базу данных
+                if (message.from && message.from.id) {
+                    try {
+                        await BotUsersDB.upsert(message.from);
+                        logger.debug(`👤 Пользователь ${message.from.id} сохранен/обновлен в БД`);
+                    } catch (error) {
+                        logger.warn(`⚠️ Ошибка сохранения пользователя ${message.from.id}:`, error.message);
+                    }
+                }
             }
         } else {
             logger.warn('🔔 TELEGRAM WEBHOOK: Неизвестный тип данных:', Object.keys(req.body));
@@ -3602,29 +3672,37 @@ async function handleGroupMessage(message) {
 // 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ РАССЫЛКИ
 async function getSubscribedUsers() {
     try {
-        // Получаем ВСЕХ пользователей которые когда-либо делали заказы
-        const query = `
-            SELECT DISTINCT o.telegram_user_id 
-            FROM orders o
-            WHERE o.telegram_user_id IS NOT NULL 
-            AND o.telegram_user_id != ''
-            AND o.status != 'cancelled'
-        `;
+        // Получаем ВСЕХ активных пользователей бота (кто когда-либо писал боту)
+        const users = await BotUsersDB.getAllActiveUsers();
         
-        const result = await pool.query(query);
+        logger.info(`📋 Найдено ${users.length} активных пользователей бота для рассылки`);
         
-        const users = result.rows.map(row => ({
-            telegram_user_id: row.telegram_user_id
-        }));
-        
-        logger.info(`📋 Найдено ${users.length} пользователей для обязательной рассылки (все клиенты)`);
+        // Если нет пользователей в bot_users, используем fallback из orders
+        if (users.length === 0) {
+            logger.warn('⚠️ Таблица bot_users пуста, используем fallback из заказов');
+            
+            const fallbackQuery = `
+                SELECT DISTINCT telegram_user_id 
+                FROM orders 
+                WHERE telegram_user_id IS NOT NULL 
+                AND telegram_user_id != ''
+                AND status != 'cancelled'
+            `;
+            const fallbackResult = await pool.query(fallbackQuery);
+            const fallbackUsers = fallbackResult.rows.map(row => ({
+                telegram_user_id: row.telegram_user_id
+            }));
+            
+            logger.info(`📋 Fallback: Найдено ${fallbackUsers.length} пользователей из заказов`);
+            return fallbackUsers;
+        }
         
         return users;
         
     } catch (error) {
-        logger.error('❌ Ошибка получения подписанных пользователей:', error.message);
+        logger.error('❌ Ошибка получения пользователей бота:', error.message);
         
-        // Fallback: получаем всех активных пользователей
+        // Критический fallback: получаем из заказов
         try {
             const fallbackQuery = `
                 SELECT DISTINCT telegram_user_id 
@@ -3638,7 +3716,7 @@ async function getSubscribedUsers() {
                 telegram_user_id: row.telegram_user_id
             }));
             
-            logger.warn(`⚠️ Использован fallback: ${fallbackUsers.length} пользователей`);
+            logger.warn(`⚠️ Критический fallback: ${fallbackUsers.length} пользователей из заказов`);
             return fallbackUsers;
         } catch (fallbackError) {
             logger.error('❌ Критическая ошибка получения пользователей:', fallbackError.message);
