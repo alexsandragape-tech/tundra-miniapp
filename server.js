@@ -169,9 +169,9 @@ let adminProducts = new Map();
 
 app.use(express.json());
 
-// 🔔 ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ webhook запросов (для диагностики)
+// ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ webhook запросов (для диагностики)
 app.use('/api/telegram/webhook', (req, res, next) => {
-    logger.info('🔔 GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
+    logger.info('GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
         method: req.method,
         url: req.url,
         timestamp: new Date().toISOString(),
@@ -3670,15 +3670,15 @@ app.get('/setup-telegram-webhook', async (req, res) => {
 // Webhook для Telegram
 app.post('/api/telegram/webhook', async (req, res) => {
     try {
-        logger.info('🔔 TELEGRAM WEBHOOK: Получен запрос от Telegram');
-        logger.info('🔔 TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
-        logger.info('🔔 TELEGRAM WEBHOOK: req.headers:', JSON.stringify(req.headers, null, 2));
+        logger.info('TELEGRAM WEBHOOK: Получен запрос от Telegram');
+        logger.info('TELEGRAM WEBHOOK: req.body:', JSON.stringify(req.body, null, 2));
+        logger.info('TELEGRAM WEBHOOK: req.headers:', JSON.stringify(req.headers, null, 2));
         
-        const { message, callback_query } = req.body;
+        const { message, channel_post, callback_query } = req.body;
         
         if (callback_query) {
-            logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
-            logger.info('🔔 TELEGRAM WEBHOOK: callback_query полные данные:', JSON.stringify(callback_query, null, 2));
+            logger.info('TELEGRAM WEBHOOK: Обрабатываем callback_query:', callback_query.data);
+            logger.info('TELEGRAM WEBHOOK: callback_query полные данные:', JSON.stringify(callback_query, null, 2));
             
             // Сохраняем пользователя в базу данных
             if (callback_query.from && callback_query.from.id) {
@@ -3692,17 +3692,18 @@ app.post('/api/telegram/webhook', async (req, res) => {
             
             // Обрабатываем нажатие на inline-кнопку
             await handleCallbackQuery(callback_query);
-            logger.info('🔔 TELEGRAM WEBHOOK: callback_query обработан успешно');
-        } else if (message) {
-            logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
-            logger.info('🔔 TELEGRAM WEBHOOK: Полные данные message:', JSON.stringify(message, null, 2));
+            logger.info('TELEGRAM WEBHOOK: callback_query обработан успешно');
+        } else if (message || channel_post) {
+            const msg = message || channel_post;
+            logger.info('TELEGRAM WEBHOOK: Обрабатываем сообщение:', msg.text);
+            logger.info('TELEGRAM WEBHOOK: Полные данные message:', JSON.stringify(msg, null, 2));
             
             // Проверяем, из какой группы пришло сообщение
             let broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
             let adminChatId = config.TELEGRAM_ADMIN_CHAT_ID?.toString();
-            const messageChatId = message.chat.id.toString();
+            const messageChatId = msg.chat.id.toString();
             
-            logger.info('🔔 TELEGRAM WEBHOOK: CONFIG DUMP:', {
+            logger.info('TELEGRAM WEBHOOK: CONFIG DUMP:', {
                 TELEGRAM_BROADCAST_CHAT_ID: config.TELEGRAM_BROADCAST_CHAT_ID,
                 TELEGRAM_ADMIN_CHAT_ID: config.TELEGRAM_ADMIN_CHAT_ID,
                 broadcastChatId_before: broadcastChatId,
@@ -3718,11 +3719,11 @@ app.post('/api/telegram/webhook', async (req, res) => {
                 adminChatId = '-' + adminChatId;
             }
             
-            logger.info(`🔍 ПРОВЕРКА: Сообщение от ${messageChatId}`);
-            logger.info(`📢 Рассылочная группа: ${broadcastChatId}`);
-            logger.info(`📋 Админ группа заказов: ${adminChatId}`);
+            logger.info(`ПРОВЕРКА: Сообщение от ${messageChatId}`);
+            logger.info(`Рассылочная группа: ${broadcastChatId}`);
+            logger.info(`Админ группа заказов: ${adminChatId}`);
             
-            logger.info('🔔 TELEGRAM WEBHOOK: СРАВНЕНИЕ ID:', {
+            logger.info('TELEGRAM WEBHOOK: СРАВНЕНИЕ ID:', {
                 messageChatId: messageChatId,
                 broadcastChatId: broadcastChatId,
                 isEqual: messageChatId === broadcastChatId,
@@ -3731,22 +3732,22 @@ app.post('/api/telegram/webhook', async (req, res) => {
             });
             
             if (broadcastChatId && messageChatId === broadcastChatId) {
-                logger.info('📢 РАССЫЛКА: Получено сообщение из группы рассылки для клиентов');
-                await handleGroupMessage(message);
+                logger.info('РАССЫЛКА: Получено сообщение из группы рассылки для клиентов');
+                await handleGroupMessage(msg);
             } else if (adminChatId && messageChatId === adminChatId) {
-                logger.info('📋 АДМИН: Сообщение из группы заказов (не рассылаем клиентам)');
+                logger.info('АДМИН: Сообщение из группы заказов (не рассылаем клиентам)');
                 // Не обрабатываем сообщения из админ-группы заказов для рассылки
             } else {
                 // Обрабатываем обычные сообщения от пользователей
-                logger.debug(`💬 ЛИЧНОЕ: Получено сообщение от пользователя ${messageChatId}:`, message.text);
+                logger.debug(`ЛИЧНОЕ: Получено сообщение от пользователя ${messageChatId}:`, msg.text);
                 
                 // Сохраняем пользователя в базу данных
-                if (message.from && message.from.id) {
+                if (msg.from && msg.from.id) {
                     try {
-                        await BotUsersDB.upsert(message.from);
-                        logger.debug(`👤 Пользователь ${message.from.id} сохранен/обновлен в БД`);
+                        await BotUsersDB.upsert(msg.from);
+                        logger.debug(`👤 Пользователь ${msg.from.id} сохранен/обновлен в БД`);
                     } catch (error) {
-                        logger.warn(`⚠️ Ошибка сохранения пользователя ${message.from.id}:`, error.message);
+                        logger.warn(`⚠️ Ошибка сохранения пользователя ${msg.from.id}:`, error.message);
                     }
                 }
             }
