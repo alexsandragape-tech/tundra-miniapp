@@ -3655,6 +3655,17 @@ app.get('/setup-telegram-webhook', async (req, res) => {
     }
 });
 
+// Middleware для логирования ВСЕХ запросов к webhook
+app.use('/api/telegram/webhook', (req, res, next) => {
+    logger.info('🔔 GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body
+    });
+    next();
+});
+
 // Webhook для Telegram
 app.post('/api/telegram/webhook', async (req, res) => {
     try {
@@ -3753,10 +3764,24 @@ app.post('/api/telegram/webhook', async (req, res) => {
 
 // Дополнительный webhook для тестирования
 app.get('/api/telegram/webhook', (req, res) => {
+    logger.info('🔔 GET WEBHOOK TEST: Запрос на проверку webhook');
     res.json({ 
         ok: true, 
         message: 'Telegram webhook доступен',
         timestamp: new Date().toISOString()
+    });
+});
+
+// ТЕСТОВЫЙ endpoint для проверки работы сервера
+app.post('/api/test-webhook', (req, res) => {
+    logger.info('🔔 TEST WEBHOOK: Тест запрос получен', {
+        body: req.body,
+        headers: req.headers
+    });
+    res.json({
+        ok: true,
+        message: 'Тест успешен!',
+        received: req.body
     });
 });
 
