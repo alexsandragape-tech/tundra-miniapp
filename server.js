@@ -169,6 +169,18 @@ let adminProducts = new Map();
 
 app.use(express.json());
 
+// 🔔 ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ webhook запросов (для диагностики)
+app.use('/api/telegram/webhook', (req, res, next) => {
+    logger.info('🔔 GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
+        method: req.method,
+        url: req.url,
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+    next();
+});
+
 // 🔧 CORS для админ панели
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -3653,17 +3665,6 @@ app.get('/setup-telegram-webhook', async (req, res) => {
             details: error.message
         });
     }
-});
-
-// Middleware для логирования ВСЕХ запросов к webhook
-app.use('/api/telegram/webhook', (req, res, next) => {
-    logger.info('🔔 GLOBAL WEBHOOK MIDDLEWARE: Запрос получен', {
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        body: req.body
-    });
-    next();
 });
 
 // Webhook для Telegram
