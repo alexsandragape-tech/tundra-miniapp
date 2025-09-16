@@ -3683,11 +3683,20 @@ app.post('/api/telegram/webhook', async (req, res) => {
             logger.info('🔔 TELEGRAM WEBHOOK: callback_query обработан успешно');
         } else if (message) {
             logger.info('🔔 TELEGRAM WEBHOOK: Обрабатываем сообщение:', message.text);
+            logger.info('🔔 TELEGRAM WEBHOOK: Полные данные message:', JSON.stringify(message, null, 2));
             
             // Проверяем, из какой группы пришло сообщение
             let broadcastChatId = config.TELEGRAM_BROADCAST_CHAT_ID?.toString();
             let adminChatId = config.TELEGRAM_ADMIN_CHAT_ID?.toString();
             const messageChatId = message.chat.id.toString();
+            
+            logger.info('🔔 TELEGRAM WEBHOOK: CONFIG DUMP:', {
+                TELEGRAM_BROADCAST_CHAT_ID: config.TELEGRAM_BROADCAST_CHAT_ID,
+                TELEGRAM_ADMIN_CHAT_ID: config.TELEGRAM_ADMIN_CHAT_ID,
+                broadcastChatId_before: broadcastChatId,
+                adminChatId_before: adminChatId,
+                messageChatId: messageChatId
+            });
             
             // Добавляем отрицательный знак если его нет (группы в Telegram имеют отрицательные ID)
             if (broadcastChatId && !broadcastChatId.startsWith('-')) {
