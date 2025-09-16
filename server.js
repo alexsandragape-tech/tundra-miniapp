@@ -3935,7 +3935,14 @@ async function handleGroupMessage(message) {
                 logger.debug(`Сообщение отправлено пользователю ${user.telegram_user_id}`);
             } catch (error) {
                 errorCount++;
-                logger.warn(`Ошибка отправки пользователю ${user.telegram_user_id}:`, error.response?.data?.description || error.message);
+                const description = error.response?.data?.description || error.message;
+                // Снижаем шум в логах: известные причины не логируем как warn, а переводим пользователя в неактивные
+                if (description?.includes('bot was blocked by the user') || description?.includes('chat not found')) {
+                    try { await BotUsersDB.deactivate(user.telegram_user_id); } catch (_) {}
+                    logger.info(`Пользователь ${user.telegram_user_id} деактивирован (причина: ${description})`);
+                } else {
+                    logger.warn(`Ошибка отправки пользователю ${user.telegram_user_id}: ${description}`);
+                }
             }
             
             // Небольшая задержка между отправками для избежания rate limiting
