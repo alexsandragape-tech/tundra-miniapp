@@ -1025,12 +1025,15 @@ async function loadCategoriesFromServer() {
                 });
 
                 // Обновляем глобальный массив categories именами из БД (чтобы везде были актуальные названия)
+                console.log('🔄 ОБНОВЛЯЕМ ЛОКАЛЬНЫЕ НАЗВАНИЯ:');
                 for (let i = 0; i < categories.length; i++) {
                     const dbName = categoryNameMap.get(categories[i].id);
                     if (dbName && dbName !== categories[i].name) {
+                        console.log(`🔄 ${categories[i].id}: "${categories[i].name}" -> "${dbName}"`);
                         categories[i].name = dbName;
                     }
                 }
+                console.log('🔄 ФИНАЛЬНЫЕ ЛОКАЛЬНЫЕ НАЗВАНИЯ:', categories.map(c => `${c.id}: ${c.name}`));
                 
                 console.log('🔄 КАТЕГОРИИ ИЗ БД:', Array.from(dbCategoriesMap.values()).map(c => `${c.id} - ${c.name}`));
                 
