@@ -1281,6 +1281,39 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
     }
 });
 
+// API для переключения видимости товара (по аналогии с категориями)
+app.put('/api/admin/products/:categoryId/:productId/visibility', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId, productId } = req.params;
+        
+        // Получаем текущий статус товара
+        const query = 'SELECT is_available FROM admin_products WHERE category_id = $1 AND product_id = $2';
+        const result = await pool.query(query, [categoryId, productId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ ok: false, error: 'Товар не найден' });
+        }
+        
+        const currentStatus = result.rows[0].is_available;
+        const newStatus = !currentStatus;
+        
+        // Обновляем статус в БД
+        const updateQuery = 'UPDATE admin_products SET is_available = $1, updated_at = CURRENT_TIMESTAMP WHERE category_id = $2 AND product_id = $3';
+        await pool.query(updateQuery, [newStatus, categoryId, productId]);
+        
+        logger.info(`Товар ${categoryId}/${productId} ${newStatus ? 'показан' : 'скрыт'}`);
+        res.json({ 
+            ok: true, 
+            isAvailable: newStatus, 
+            message: `Товар ${newStatus ? 'показан' : 'скрыт'}` 
+        });
+        
+    } catch (error) {
+        logger.error('Ошибка переключения видимости товара:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔧 API для сохранения категорий (админ)
 app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
     try {
