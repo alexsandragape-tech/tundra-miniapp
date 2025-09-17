@@ -1001,8 +1001,8 @@ const categoryNameMap = new Map();
 // 🔄 ЗАГРУЗКА КАТЕГОРИЙ С СЕРВЕРА
 async function loadCategoriesFromServer() {
     try {
-        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', `${API_BASE}/api/categories/visible`);
-        const response = await fetch(`${API_BASE}/api/categories/visible`);
+        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', `/api/categories/visible`);
+        const response = await fetch(`/api/categories/visible`);
         
         console.log('🔄 ОТВЕТ СЕРВЕРА: статус', response.status, response.statusText);
         
@@ -1022,6 +1022,14 @@ async function loadCategoriesFromServer() {
                     // Запоминаем актуальное имя в глобальную карту
                     categoryNameMap.set(cat.category_id, cat.name);
                 });
+
+                // Обновляем глобальный массив categories именами из БД (чтобы везде были актуальные названия)
+                for (let i = 0; i < categories.length; i++) {
+                    const dbName = categoryNameMap.get(categories[i].id);
+                    if (dbName && dbName !== categories[i].name) {
+                        categories[i].name = dbName;
+                    }
+                }
                 
                 console.log('🔄 КАТЕГОРИИ ИЗ БД:', Array.from(dbCategoriesMap.values()).map(c => `${c.id} - ${c.name}`));
                 
