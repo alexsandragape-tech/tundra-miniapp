@@ -920,12 +920,16 @@ function renderProducts() {
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
     
-    // Показываем все категории (включая пустые новые)
+    console.log('renderProducts: Начинаем рендеринг');
+    console.log('renderProducts: Доступные категории:', Object.keys(categories));
+    console.log('renderProducts: Статус видимости:', categoryVisibility);
+    
+    // Показываем все категории (включая скрытые - чтобы можно было их показать)
     Object.keys(categories).forEach(categoryId => {
         const categoryProducts = products[categoryId] || [];
         const availableCount = categoryProducts.filter(p => p.available !== false).length;
         const hiddenCount = categoryProducts.filter(p => p.available === false).length;
-        const isCategoryVisible = categoryVisibility[categoryId] !== false; // по умолчанию видима
+        const isCategoryVisible = categoryVisibility[categoryId] !== false; // статус видимости для клиентов
         
         const categoryHtml = `
             <div class="category-section" data-category="${categoryId}">
