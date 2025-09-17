@@ -927,14 +927,14 @@ function renderProducts() {
                     </div>
                     <div class="category-actions">
                         <button class="edit-category-btn" onclick="editCategoryName('${categoryId}')" title="Редактировать название категории">
-                            ✏️ Изменить название
+                            Изменить название
                         </button>
-                        <button class="visibility-toggle ${isCategoryVisible ? 'visible' : ''}" 
+                        <button class="edit-category-btn" 
                                 onclick="toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
                             ${isCategoryVisible ? 'Скрыть' : 'Показать'}
                         </button>
                         <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
-                            ➕ Добавить товар
+                            Добавить товар
                         </button>
                     </div>
                 </div>
@@ -994,47 +994,24 @@ function renderProductCard(categoryId, product) {
              data-category="${categoryId}" 
              data-product="${product.id}"
              data-category-id="${categoryId}"
-             data-product-id="${product.id}">
+             data-product-id="${product.id}"
+             onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
             
-            <div class="product-status ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
-                ${isHidden ? 'Скрыто' : isModified ? 'Изменено' : 'В наличии'}
+            <div class="product-info">
+                <div class="product-name">${product.name}</div>
+                <div class="product-price">${product.price}₽</div>
+                <div class="product-unit">${product.unit}</div>
             </div>
             
-            <div class="product-header">
-                <div class="product-info">
-                    <div class="product-name">${product.name}</div>
-                    <div class="product-price">${product.price}₽</div>
-                    <div class="product-unit">${product.unit}</div>
-                </div>
-                <div class="product-actions">
-                    <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
-                            data-category="${safeCategoryId}" 
-                            data-product="${safeProductId}"
-                            onclick="toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
-                        ${isHidden ? '👁️ Показать' : '🙈 Скрыть'}
-                    </button>
-                    <button class="edit-btn" onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
-                        ✏️ Изменить
-                    </button>
-                </div>
-            </div>
-            
-            <div class="product-details">
-                <div class="detail-row">
-                    <span class="detail-label">Макс. кол-во:</span>
-                    <span class="detail-value">${product.maxQty} шт.</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Эмодзи:</span>
-                    <span class="detail-value">${product.image}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Состав:</span>
-                    <span class="detail-value">${(product.composition || '').substring(0, 50)}${product.composition && product.composition.length > 50 ? '...' : ''}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Хранение:</span>
-                    <span class="detail-value">${product.storage || ''}</span>
+            <div class="product-actions">
+                <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
+                        data-category="${safeCategoryId}" 
+                        data-product="${safeProductId}"
+                        onclick="event.stopPropagation(); toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
+                    ${isHidden ? 'Показать' : 'Скрыть'}
+                </button>
+                <div class="status-indicator ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
+                    ${isHidden ? 'Скрыто' : isModified ? 'Изменено' : 'В наличии'}
                 </div>
             </div>
         </div>
@@ -1934,28 +1911,15 @@ function renderCategoriesManagement(categories) {
     if (!categories || categories.length === 0) {
         container.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #666;">
-                📂 Категории не найдены. Сначала добавьте товары.
+                Категории не найдены. Сначала добавьте товары.
             </div>
         `;
         return;
     }
     
-    // Генерируем иконки для категорий
-    const categoryIcons = {
-        'sausages': '🌭',
-        'pate': '🥫', 
-        'delicacies': '🥓',
-        'ready-delicacies': '🍖',
-        'frozen': '🧊',
-        'semifabricates': '🥟'
-    };
-    
     container.innerHTML = categories.map(category => `
         <div class="category-item">
             <div class="category-info">
-                <div class="category-icon">
-                    ${categoryIcons[category.category_id] || '📦'}
-                </div>
                 <div class="category-details">
                     <h3>${category.name || category.category_id}</h3>
                     <div class="category-stats">
