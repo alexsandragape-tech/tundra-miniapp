@@ -1185,7 +1185,17 @@ function cancelOrderTimer(orderId) {
 const webRoot = path.join(__dirname, 'webapp');
 console.log('🔍 WebRoot путь:', webRoot);
 console.log('🔍 Существует ли admin.html:', require('fs').existsSync(path.join(webRoot, 'admin.html')));
-app.use(express.static(webRoot));
+
+// Раздаём статику без кэша для HTML/JS/CSS, чтобы клиент всегда получал актуальные правки
+app.use(express.static(webRoot, {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 // Логирование всех входящих запросов
 app.use((req, res, next) => {
