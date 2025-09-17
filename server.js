@@ -1284,24 +1284,24 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
 // API для изменения названия категории
 app.put('/api/admin/categories/:categoryId/name', requireAdminAuth, async (req, res) => {
     try {
-        console.log('🔄 API /api/admin/categories/:categoryId/name ВЫЗВАН');
-        console.log('🔄 Параметры:', req.params);
-        console.log('🔄 Тело запроса:', req.body);
+        console.log('API /api/admin/categories/:categoryId/name ВЫЗВАН');
+        console.log('Параметры:', req.params);
+        console.log('Тело запроса:', req.body);
         
         const { categoryId } = req.params;
         const { name } = req.body;
         
         if (!name || !name.trim()) {
-            console.error('❌ Пустое название категории');
+            console.error('Пустое название категории');
             return res.status(400).json({ ok: false, error: 'Название категории не может быть пустым' });
         }
         
-        console.log('🔄 Обновляем название в БД:', categoryId, '->', name.trim());
+        console.log('Обновляем название в БД:', categoryId, '->', name.trim());
         
         // Сохраняем новое название в БД (только имя)
         const result = await CategoriesDB.updateName(categoryId, name.trim());
         
-        console.log('✅ Результат обновления БД:', result);
+        console.log('Результат обновления БД:', result);
         
         logger.info(`Название категории ${categoryId} изменено на "${name.trim()}"`);
         
@@ -1311,11 +1311,11 @@ app.put('/api/admin/categories/:categoryId/name', requireAdminAuth, async (req, 
             message: `Название категории изменено на "${name.trim()}"` 
         };
         
-        console.log('✅ Отправляем ответ:', response);
+        console.log('Отправляем ответ:', response);
         res.json(response);
         
     } catch (error) {
-        console.error('❌ Ошибка в API изменения названия категории:', error);
+        console.error('Ошибка в API изменения названия категории:', error);
         logger.error('Ошибка изменения названия категории:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
@@ -3604,15 +3604,6 @@ app.get('/api/admin/categories', requireAdminAuth, async (req, res) => {
 });
 
 
-// Финальная обработка 404 ПОСЛЕ всех маршрутов
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Страница не найдена',
-        path: req.path,
-        timestamp: new Date().toISOString()
-    });
-});
-
 // API для получения видимых категорий (для основного приложения)
 app.get('/api/categories/visible', async (req, res) => {
     try {
@@ -3625,9 +3616,18 @@ app.get('/api/categories/visible', async (req, res) => {
         const categories = await CategoriesDB.getVisible();
         res.json({ ok: true, categories });
     } catch (error) {
-        logger.error('❌ Ошибка получения видимых категорий:', error);
+        logger.error('Ошибка получения видимых категорий:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
+});
+
+// Финальная обработка 404 ПОСЛЕ всех маршрутов
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Страница не найдена',
+        path: req.path,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // 🔍 API ДЛЯ ПРИНУДИТЕЛЬНОГО ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ В РАССЫЛКУ
