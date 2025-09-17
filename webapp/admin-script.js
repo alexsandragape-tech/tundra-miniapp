@@ -994,20 +994,19 @@ function renderProductCard(categoryId, product) {
              data-category="${categoryId}" 
              data-product="${product.id}"
              data-category-id="${categoryId}"
-             data-product-id="${product.id}"
-             onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
+             data-product-id="${product.id}">
             
-            <div class="product-info">
+            <div class="product-info" onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
                 <div class="product-name">${product.name}</div>
                 <div class="product-price">${product.price}₽</div>
                 <div class="product-unit">${product.unit}</div>
             </div>
             
             <div class="product-actions">
-                <button class="toggle-btn ${isHidden ? 'hidden' : ''}" 
+                <button class="toggle-btn ${isHidden ? 'show' : 'hide'}" 
                         data-category="${safeCategoryId}" 
                         data-product="${safeProductId}"
-                        onclick="event.stopPropagation(); toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
+                        onclick="toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
                     ${isHidden ? 'Показать' : 'Скрыть'}
                 </button>
                 <div class="status-indicator ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
@@ -1075,10 +1074,6 @@ async function toggleProductAvailability(categoryId, productId) {
         // Обновляем оригинальную копию
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
-        const saveBtn = document.getElementById('save-btn');
-        if (saveBtn) {
-            saveBtn.disabled = true;
-        }
         
         console.log('✅ Товар успешно сохранен на сервере');
         
@@ -1150,7 +1145,6 @@ async function saveProduct() {
         // Обновляем оригинальную копию
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
-        document.getElementById('save-btn').disabled = true;
         
     } catch (error) {
         console.error('❌ Ошибка сохранения изменений товара:', error);
@@ -1208,7 +1202,6 @@ function filterByStatus(status) {
 // Отметка о наличии изменений
 function markAsChanged() {
     hasUnsavedChanges = true;
-    document.getElementById('save-btn').disabled = false;
 }
 
 // Сохранение всех изменений
@@ -1222,7 +1215,6 @@ async function saveAllChanges() {
         // Обновляем оригинальную копию
         originalProducts = JSON.parse(JSON.stringify(products));
         hasUnsavedChanges = false;
-        document.getElementById('save-btn').disabled = true;
         
         renderProducts();
         showNotification('Все изменения сохранены!', 'success');
