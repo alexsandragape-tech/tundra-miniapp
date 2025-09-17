@@ -995,6 +995,36 @@ let products = {
     'konditerka': []
 };
 
+// 🔄 ЗАГРУЗКА КАТЕГОРИЙ С СЕРВЕРА
+async function loadCategoriesFromServer() {
+    try {
+        const response = await fetch(`${API_BASE}/api/categories/visible`);
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.ok && result.categories && result.categories.length > 0) {
+                // Создаем карту видимых категорий из базы данных
+                const visibleCategoryIds = new Set(result.categories.map(cat => cat.category_id));
+                
+                // Фильтруем локальные категории по видимости из БД
+                const filteredCategories = categories.filter(cat => visibleCategoryIds.has(cat.id));
+                
+                console.log('Загружены видимые категории:', visibleCategoryIds);
+                console.log('Отфильтрованные категории:', filteredCategories.map(c => c.id));
+                
+                return filteredCategories;
+            }
+        }
+        
+        console.log('Используем все локальные категории (fallback)');
+        return categories; // Fallback к локальным категориям
+    } catch (error) {
+        console.error('❌ Ошибка загрузки категорий с сервера:', error);
+        return categories; // Fallback к локальным категориям
+    }
+}
+
 // 🔄 ЗАГРУЗКА ТОВАРОВ С СЕРВЕРА
 async function loadProductsFromServer() {
     try {
@@ -2311,11 +2341,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Функция рендеринга категорий
-function renderCategories() {
+async function renderCategories() {
     const grid = document.getElementById('categories-grid');
     grid.innerHTML = '';
 
-    categories.forEach(category => {
+    // Загружаем видимые категории с сервера
+    const visibleCategories = await loadCategoriesFromServer();
+
+    visibleCategories.forEach(category => {
         const card = document.createElement('div');
         card.className = 'category-card';
         card.onclick = () => showCategory(category.id);
@@ -2360,7 +2393,7 @@ async function initApp() {
         // Обновляем отображение категорий если на главной странице
         const currentScreen = document.querySelector('.screen.active');
         if (currentScreen && currentScreen.id === 'main-screen') {
-            renderCategories();
+            await renderCategories();
         }
     }, 30000); // 30 секунд
     
@@ -2369,7 +2402,7 @@ async function initApp() {
     showMain();
 
     // Рендерим категории
-    renderCategories();
+    await renderCategories();
 
     // Обновляем счетчик корзины
     updateCartBadge();
