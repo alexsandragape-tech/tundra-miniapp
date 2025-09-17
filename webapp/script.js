@@ -1001,8 +1001,9 @@ const categoryNameMap = new Map();
 // 🔄 ЗАГРУЗКА КАТЕГОРИЙ С СЕРВЕРА
 async function loadCategoriesFromServer() {
     try {
-        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', `/api/categories/visible`);
-        const response = await fetch(`/api/categories/visible`);
+        const url = `/api/categories/visible?_=${Date.now()}`; // cache-busting
+        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', url);
+        const response = await fetch(url, { cache: 'no-store' });
         
         console.log('🔄 ОТВЕТ СЕРВЕРА: статус', response.status, response.statusText);
         
