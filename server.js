@@ -1255,12 +1255,8 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 
 // API для переключения видимости категории (должен быть ВЫШЕ общего /api/admin/categories)
 app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async (req, res) => {
-    console.log('VISIBILITY ENDPOINT: ВОШЛИ В ФУНКЦИЮ!');
-    console.log('VISIBILITY ENDPOINT: categoryId =', req.params.categoryId);
-    console.log('VISIBILITY ENDPOINT: req.params =', req.params);
     try {
         const { categoryId } = req.params;
-        console.log('VISIBILITY ENDPOINT: Вызываем CategoriesDB.toggleVisibility с', categoryId);
         const isVisible = await CategoriesDB.toggleVisibility(categoryId);
         
         if (isVisible !== null) {
@@ -1278,8 +1274,6 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
 // 🔧 API для сохранения категорий (админ)
 app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
     try {
-        console.log('GENERAL CATEGORIES ENDPOINT: ВЫЗВАН ОБЩИЙ МАРШРУТ CATEGORIES!');
-        console.log('GENERAL CATEGORIES ENDPOINT: req.url =', req.url);
         console.log('🔍 API PUT /api/admin/categories: ENDPOINT ВЫЗВАН!');
         const { products, categories } = req.body;
         
