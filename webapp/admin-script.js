@@ -1006,7 +1006,7 @@ function renderProductCard(categoryId, product) {
                 <button class="toggle-btn ${isHidden ? 'show' : 'hide'}" 
                         data-category="${safeCategoryId}" 
                         data-product="${safeProductId}"
-                        onclick="toggleProductAvailability('${safeCategoryId}', '${safeProductId}')">
+                        onclick="event.stopPropagation(); toggleProductAvailability('${safeCategoryId}', '${safeProductId}');">
                     ${isHidden ? 'Показать' : 'Скрыть'}
                 </button>
                 <div class="status-indicator ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
@@ -1029,42 +1029,19 @@ function hasProductChanged(categoryId, product) {
 async function toggleProductAvailability(categoryId, productId) {
     console.log('🔍 toggleProductAvailability вызвана:', { categoryId, productId });
     
-    // Проверяем, что функция вызывается
-    if (typeof window !== 'undefined') {
-        window.toggleProductAvailability = toggleProductAvailability;
-    }
-    
-    // Проверяем существование категории
+    // Проверяем существование категории и товара
     if (!products[categoryId]) {
         console.error('❌ Категория не найдена:', categoryId);
-        console.log('📋 Доступные категории:', Object.keys(products));
         return;
     }
     
     const product = products[categoryId].find(p => p.id === productId);
     if (!product) {
         console.error('❌ Товар не найден:', categoryId, productId);
-        console.log('📋 Товары в категории:', products[categoryId].map(p => p.id));
         return;
     }
     
     const oldStatus = product.available;
-    product.available = !product.available;
-    const newStatus = product.available;
-    
-    console.log('🔄 Изменение статуса товара:', {
-        name: product.name,
-        oldStatus,
-        newStatus,
-        available: product.available
-    });
-    
-    markAsChanged();
-    renderProducts();
-    updateStats();
-    
-    const status = product.available ? 'показан' : 'скрыт';
-    showNotification(`Товар "${product.name}" ${status}`, 'info');
     
     // 🔥 ИСПОЛЬЗУЕМ НОВЫЙ API ENDPOINT ПО АНАЛОГИИ С КАТЕГОРИЯМИ
     try {
@@ -1097,10 +1074,8 @@ async function toggleProductAvailability(categoryId, productId) {
         console.error('❌ Ошибка переключения видимости товара:', error);
         showNotification('Ошибка изменения видимости товара', 'error');
         
-        // Откатываем изменения при ошибке
-        product.available = oldStatus;
-        renderProducts();
-        updateStats();
+        // НЕ откатываем изменения, так как мы их не делали локально
+        console.log('Локальные данные не изменялись, откат не нужен');
     }
 }
 
@@ -1734,15 +1709,12 @@ function initTouchGestures() {
             const categoryId = productCard.dataset.categoryId;
             
             if (productId && categoryId) {
-                // Свайп вправо - включить товар
-                if (swipeDistance > 0) {
-                    toggleProductAvailability(categoryId, productId, true);
-                    showMobileNotification('✅ Товар включен', 'success');
-                }
-                // Свайп влево - выключить товар
-                else {
-                    toggleProductAvailability(categoryId, productId, false);
-                    showMobileNotification('❌ Товар выключен', 'warning');
+                // Свайп вправо или влево - переключить товар
+                toggleProductAvailability(categoryId, productId);
+                const product = products[categoryId]?.find(p => p.id === productId);
+                if (product) {
+                    const message = product.available ? '✅ Товар показан' : '❌ Товар скрыт';
+                    showMobileNotification(message, product.available ? 'success' : 'warning');
                 }
                 
                 // Визуальная обратная связь
@@ -1796,19 +1768,7 @@ function showMobileNotification(message, type = 'info') {
     }, 2000);
 }
 
-// 📱 ФУНКЦИЯ TOGGLE ДЛЯ МОБИЛЬНЫХ СВАЙПОВ
-function toggleProductAvailability(categoryId, productId, isAvailable) {
-    if (!products[categoryId]) return;
-    
-    const product = products[categoryId].find(p => p.id === productId);
-    if (product) {
-        product.available = isAvailable;
-        markAsChanged();
-        renderProducts();
-        updateStats();
-        updateMobileStats();
-    }
-}
+// 📱 ФУНКЦИЯ ДЛЯ МОБИЛЬНЫХ СВАЙПОВ - УДАЛЕНА, ИСПОЛЬЗУЕМ ОСНОВНУЮ toggleProductAvailability
 
 // Автозаполнение ID при вводе названия
 document.addEventListener('DOMContentLoaded', function() {
