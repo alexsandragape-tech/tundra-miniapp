@@ -629,7 +629,8 @@ class AdminProductsDB {
                     continue;
                 }
                 
-                productData.available = row.is_available;
+                // Маппим статус из БД, если is_available null/undefined - считаем доступным по умолчанию
+                productData.available = row.is_available !== false;
                 products[row.category_id].push(productData);
             } catch (error) {
                 continue;
