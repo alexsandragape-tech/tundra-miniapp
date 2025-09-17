@@ -562,6 +562,11 @@ class AdminProductsDB {
             let savedCount = 0;
             for (const [categoryId, products] of Object.entries(productsData)) {
                 for (const product of products) {
+                    // Проверяем статус доступности товара
+                    const isAvailable = product.available === true || product.available === undefined;
+                    
+                    console.log(`Сохраняем товар ${product.name}: available=${product.available}, isAvailable=${isAvailable}`);
+                    
                     await client.query(
                         `INSERT INTO admin_products (category_id, product_id, product_data, is_available, updated_at) 
                          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
@@ -570,7 +575,7 @@ class AdminProductsDB {
                              product_data = EXCLUDED.product_data,
                              is_available = EXCLUDED.is_available,
                              updated_at = CURRENT_TIMESTAMP`,
-                        [categoryId, product.id, JSON.stringify(product), product.available !== false]
+                        [categoryId, product.id, JSON.stringify(product), isAvailable]
                     );
                     savedCount++;
                 }
