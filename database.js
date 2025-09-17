@@ -112,13 +112,9 @@ async function initializeDatabase() {
         
         for (const category of defaultCategories) {
             await pool.query(`
-                INSERT INTO categories (category_id, name, description, sort_order, is_visible) 
+                INSERT INTO categories (category_id, name, description, sort_order, is_visible)
                 VALUES ($1, $2, $3, $4, true)
-                ON CONFLICT (category_id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    description = EXCLUDED.description,
-                    sort_order = EXCLUDED.sort_order,
-                    updated_at = CURRENT_TIMESTAMP
+                ON CONFLICT (category_id) DO NOTHING
             `, [category.id, category.name, category.desc, category.order]);
         }
         
@@ -689,12 +685,24 @@ class CategoriesDB {
             ON CONFLICT (category_id) 
             DO UPDATE SET 
                 name = EXCLUDED.name,
-                description = EXCLUDED.description,
-                image_url = EXCLUDED.image_url,
+                description = COALESCE(NULLIF(EXCLUDED.description, ''), categories.description),
+                image_url = COALESCE(NULLIF(EXCLUDED.image_url, ''), categories.image_url),
                 updated_at = CURRENT_TIMESTAMP
             RETURNING *
         `;
         const result = await pool.query(query, [categoryId, name, description, imageUrl]);
+        return result.rows[0];
+    }
+
+    // Обновить только название категории
+    static async updateName(categoryId, name) {
+        const query = `
+            UPDATE categories
+            SET name = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE category_id = $1
+            RETURNING *
+        `;
+        const result = await pool.query(query, [categoryId, name]);
         return result.rows[0];
     }
     
