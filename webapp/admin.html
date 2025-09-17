@@ -27,9 +27,9 @@
                 <span></span>
                 <span></span>
             </button>
-            <h1>🥩 Tundra Admin</h1>
+            <h1>Tundra Admin</h1>
             <button class="mobile-save-btn" onclick="saveAllChanges()" title="Сохранить изменения">
-                💾
+                Сохранить
             </button>
         </div>
 
@@ -51,7 +51,7 @@
                     </div>
                 </div>
                 <div class="mobile-search">
-                    <input type="text" id="mobile-search-input" placeholder="🔍 Поиск товаров..." oninput="filterProducts()">
+                    <input type="text" id="mobile-search-input" placeholder="Поиск товаров..." oninput="filterProducts()">
                 </div>
                 <div class="mobile-filters">
                     <button class="mobile-filter-btn active" onclick="filterByStatus('all')">Все</button>
@@ -63,7 +63,7 @@
 
         <!-- ДЕСКТОПНЫЙ ЗАГОЛОВОК -->
         <header class="admin-header desktop-only">
-            <h1>🔧 Админ панель Tundra Gourmet</h1>
+            <h1>Админ панель Tundra Gourmet</h1>
             <div class="admin-stats">
                 <div class="stat">
                     <div class="stat-value" id="total-products">0</div>
@@ -83,7 +83,7 @@
         <!-- ДЕСКТОПНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ -->
         <div class="admin-toolbar desktop-only">
             <div class="search-box">
-                <input type="text" id="search-input" placeholder="🔍 Поиск товаров..." oninput="filterProducts()">
+                <input type="text" id="search-input" placeholder="Поиск товаров..." oninput="filterProducts()">
             </div>
             <div class="filter-buttons">
                 <button class="filter-btn active" onclick="filterByStatus('all')">Все</button>
@@ -91,11 +91,11 @@
                 <button class="filter-btn" onclick="filterByStatus('hidden')">Скрыто</button>
             </div>
             <div class="admin-tabs">
-                <button class="tab-btn active" onclick="showTab('products')">📦 Товары</button>
-                <button class="tab-btn" onclick="showTab('categories')">📂 Категории</button>
+                <button class="tab-btn active" onclick="showTab('products')">Товары</button>
+                <button class="tab-btn" onclick="showTab('categories')">Категории</button>
             </div>
             <button class="save-btn" onclick="saveAllChanges()" id="save-btn" disabled>
-                💾 Сохранить изменения
+                Сохранить изменения
             </button>
         </div>
 
@@ -106,7 +106,7 @@
         <!-- Контейнер управления категориями -->
         <div class="categories-management" id="categories-management" style="display: none;">
             <div class="management-header">
-                <h2>📂 Управление категориями</h2>
+                <h2>Управление категориями</h2>
                 <p>Скрывайте пустые или временно недоступные категории</p>
             </div>
             <div class="categories-list" id="categories-list">
@@ -118,7 +118,7 @@
         <div id="add-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>➕ Добавить новый товар</h3>
+                    <h3>Добавить новый товар</h3>
                     <button class="modal-close" onclick="closeAddModal()">×</button>
                 </div>
                 <div class="modal-body">
@@ -194,7 +194,7 @@
         <div id="edit-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>✏️ Редактировать товар</h3>
+                    <h3>Редактировать товар</h3>
                     <button class="modal-close" onclick="closeEditModal()">×</button>
                 </div>
                 <div class="modal-body">
