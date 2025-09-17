@@ -1253,6 +1253,24 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
     }
 });
 
+// API для переключения видимости категории (должен быть ВЫШЕ общего /api/admin/categories)
+app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const isVisible = await CategoriesDB.toggleVisibility(categoryId);
+        
+        if (isVisible !== null) {
+            logger.info(`Категория ${categoryId} ${isVisible ? 'показана' : 'скрыта'}`);
+            res.json({ ok: true, isVisible, message: `Категория ${isVisible ? 'показана' : 'скрыта'}` });
+        } else {
+            res.status(404).json({ ok: false, error: 'Категория не найдена' });
+        }
+    } catch (error) {
+        logger.error('Ошибка переключения видимости категории:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // 🔧 API для сохранения категорий (админ)
 app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
     try {
@@ -3483,23 +3501,6 @@ app.get('/api/admin/categories', requireAdminAuth, async (req, res) => {
     }
 });
 
-// API для переключения видимости категории
-app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async (req, res) => {
-    try {
-        const { categoryId } = req.params;
-        const isVisible = await CategoriesDB.toggleVisibility(categoryId);
-        
-        if (isVisible !== null) {
-            logger.info(`📂 Категория ${categoryId} ${isVisible ? 'показана' : 'скрыта'}`);
-            res.json({ ok: true, isVisible, message: `Категория ${isVisible ? 'показана' : 'скрыта'}` });
-        } else {
-            res.status(404).json({ ok: false, error: 'Категория не найдена' });
-        }
-    } catch (error) {
-        logger.error('❌ Ошибка переключения видимости категории:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
 
 // Финальная обработка 404 ПОСЛЕ всех маршрутов
 app.use((req, res) => {
