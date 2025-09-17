@@ -1066,20 +1066,41 @@ async function toggleProductAvailability(categoryId, productId) {
     const status = product.available ? 'показан' : 'скрыт';
     showNotification(`Товар "${product.name}" ${status}`, 'info');
     
-    // 🔥 АВТОМАТИЧЕСКИ СОХРАНЯЕМ НА СЕРВЕР
+    // 🔥 ИСПОЛЬЗУЕМ НОВЫЙ API ENDPOINT ПО АНАЛОГИИ С КАТЕГОРИЯМИ
     try {
-        await saveProductsToServer();
-        showNotification(`Товар "${product.name}" ${status} и сохранен на сервере!`, 'success');
+        const response = await fetch(`/api/admin/products/${categoryId}/${productId}/visibility`, {
+            method: 'PUT',
+            headers: {
+                'X-Admin-Password': getAdminPassword()
+            }
+        });
         
-        // Обновляем оригинальную копию
-        originalProducts = JSON.parse(JSON.stringify(products));
-        hasUnsavedChanges = false;
+        if (!response.ok) {
+            throw new Error('Ошибка изменения видимости товара');
+        }
         
-        console.log('✅ Товар успешно сохранен на сервере');
+        const data = await response.json();
+        
+        // Обновляем локальные данные на основе ответа сервера
+        product.available = data.isAvailable;
+        
+        // Показываем уведомление от сервера
+        showNotification(data.message, 'success');
+        
+        // Перерисовываем интерфейс
+        renderProducts();
+        updateStats();
+        
+        console.log('✅ Статус товара успешно изменен и сохранен в БД');
         
     } catch (error) {
-        console.error('❌ Ошибка сохранения:', error);
-        showNotification('Товар изменен локально, но не сохранен на сервере. Нажмите "Сохранить изменения"', 'warning');
+        console.error('❌ Ошибка переключения видимости товара:', error);
+        showNotification('Ошибка изменения видимости товара', 'error');
+        
+        // Откатываем изменения при ошибке
+        product.available = oldStatus;
+        renderProducts();
+        updateStats();
     }
 }
 
