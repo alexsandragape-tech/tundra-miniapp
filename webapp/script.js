@@ -995,6 +995,9 @@ let products = {
     'konditerka': []
 };
 
+// Глобальная карта актуальных названий категорий из БД
+const categoryNameMap = new Map();
+
 // 🔄 ЗАГРУЗКА КАТЕГОРИЙ С СЕРВЕРА
 async function loadCategoriesFromServer() {
     try {
@@ -1016,6 +1019,8 @@ async function loadCategoriesFromServer() {
                         name: cat.name, // ИСПОЛЬЗУЕМ НАЗВАНИЕ ИЗ БД
                         imageUrl: categories.find(c => c.id === cat.category_id)?.imageUrl || ''
                     });
+                    // Запоминаем актуальное имя в глобальную карту
+                    categoryNameMap.set(cat.category_id, cat.name);
                 });
                 
                 console.log('🔄 КАТЕГОРИИ ИЗ БД:', Array.from(dbCategoriesMap.values()).map(c => `${c.id} - ${c.name}`));
@@ -1110,7 +1115,8 @@ function showMain() {
 function showCategory(categoryId) {
     currentCategory = categoryId;
     const category = categories.find(c => c.id === categoryId);
-    document.getElementById('category-title').textContent = category.name;
+    const resolvedName = categoryNameMap.get(categoryId) || category.name;
+    document.getElementById('category-title').textContent = resolvedName;
     
     const productsList = document.getElementById('products-list');
     productsList.innerHTML = '';
