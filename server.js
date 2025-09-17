@@ -1455,10 +1455,20 @@ app.get('/api/products', async (req, res) => {
                 continue;
             }
             
-            const availableProducts = categoryProducts.filter(product => product.available !== false);
+            const availableProducts = categoryProducts.filter(product => {
+                const isAvailable = product.available !== false;
+                if (!isAvailable) {
+                    console.log(`🔒 Товар ${product.name || product.id} скрыт (available: ${product.available})`);
+                }
+                return isAvailable;
+            });
+            
             if (availableProducts.length > 0) {
                 productsObj[categoryId] = availableProducts;
                 totalAvailable += availableProducts.length;
+                console.log(`✅ Категория ${categoryId}: ${availableProducts.length} доступных товаров`);
+            } else {
+                console.log(`❌ Категория ${categoryId}: нет доступных товаров`);
             }
         }
         
