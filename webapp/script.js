@@ -998,29 +998,40 @@ let products = {
 // 🔄 ЗАГРУЗКА КАТЕГОРИЙ С СЕРВЕРА
 async function loadCategoriesFromServer() {
     try {
+        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', `${API_BASE}/api/categories/visible`);
         const response = await fetch(`${API_BASE}/api/categories/visible`);
+        
+        console.log('🔄 ОТВЕТ СЕРВЕРА: статус', response.status, response.statusText);
         
         if (response.ok) {
             const result = await response.json();
+            console.log('🔄 ДАННЫЕ СЕРВЕРА:', JSON.stringify(result, null, 2));
             
             if (result.ok && result.categories && result.categories.length > 0) {
                 // Создаем карту видимых категорий из базы данных
                 const visibleCategoryIds = new Set(result.categories.map(cat => cat.category_id));
                 
+                console.log('🔄 ВИДИМЫЕ ID из БД:', Array.from(visibleCategoryIds));
+                console.log('🔄 ВСЕ ЛОКАЛЬНЫЕ ID:', categories.map(c => c.id));
+                
                 // Фильтруем локальные категории по видимости из БД
                 const filteredCategories = categories.filter(cat => visibleCategoryIds.has(cat.id));
                 
-                console.log('Загружены видимые категории:', visibleCategoryIds);
-                console.log('Отфильтрованные категории:', filteredCategories.map(c => c.id));
+                console.log('🔄 ОТФИЛЬТРОВАННЫЕ КАТЕГОРИИ:', filteredCategories.map(c => `${c.id} - ${c.name}`));
+                console.log('🔄 КОЛИЧЕСТВО: до фильтрации', categories.length, ', после фильтрации', filteredCategories.length);
                 
                 return filteredCategories;
+            } else {
+                console.log('🔄 НЕКОРРЕКТНЫЕ ДАННЫЕ С СЕРВЕРА - используем все локальные');
             }
+        } else {
+            console.log('🔄 ОШИБКА ОТВЕТА СЕРВЕРА - используем все локальные');
         }
         
-        console.log('Используем все локальные категории (fallback)');
+        console.log('🔄 FALLBACK: используем все локальные категории');
         return categories; // Fallback к локальным категориям
     } catch (error) {
-        console.error('❌ Ошибка загрузки категорий с сервера:', error);
+        console.error('❌ ОШИБКА ЗАГРУЗКИ КАТЕГОРИЙ:', error);
         return categories; // Fallback к локальным категориям
     }
 }
@@ -2342,13 +2353,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Функция рендеринга категорий
 async function renderCategories() {
+    console.log('🎨 РЕНДЕРИНГ КАТЕГОРИЙ: начинаем');
     const grid = document.getElementById('categories-grid');
     grid.innerHTML = '';
 
     // Загружаем видимые категории с сервера
     const visibleCategories = await loadCategoriesFromServer();
+    
+    console.log('🎨 БУДЕМ РЕНДЕРИТЬ:', visibleCategories.length, 'категорий');
+    console.log('🎨 СПИСОК ДЛЯ РЕНДЕРИНГА:', visibleCategories.map(c => `${c.id} - ${c.name}`));
 
-    visibleCategories.forEach(category => {
+    visibleCategories.forEach((category, index) => {
+        console.log(`🎨 РЕНДЕРИМ ${index + 1}/${visibleCategories.length}:`, category.name, `(ID: ${category.id})`);
+        
         const card = document.createElement('div');
         card.className = 'category-card';
         card.onclick = () => showCategory(category.id);
@@ -2365,6 +2382,8 @@ async function renderCategories() {
 
         grid.appendChild(card);
     });
+    
+    console.log('🎨 РЕНДЕРИНГ ЗАВЕРШЁН: добавлено', grid.children.length, 'карточек в DOM');
 }
 
 // Инициализация приложения
@@ -2406,6 +2425,16 @@ async function initApp() {
 
     // Обновляем счетчик корзины
     updateCartBadge();
+    
+    // 🔄 ДОБАВЛЯЕМ КНОПКУ ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ ДЛЯ ОТЛАДКИ
+    const debugBtn = document.createElement('button');
+    debugBtn.textContent = '🔄 Обновить категории';
+    debugBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;';
+    debugBtn.onclick = async () => {
+        console.log('🔄 ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ КАТЕГОРИЙ');
+        await renderCategories();
+    };
+    document.body.appendChild(debugBtn);
     
     // 🔥 Синхронизируем профиль с сервером при запуске (неблокирующе)
     syncProfileWithServer().then(() => {
