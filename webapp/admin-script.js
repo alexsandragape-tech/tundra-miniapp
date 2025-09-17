@@ -924,8 +924,16 @@ function renderProducts() {
     console.log('renderProducts: Доступные категории:', Object.keys(categories));
     console.log('renderProducts: Статус видимости:', categoryVisibility);
     
+    // Получаем все категории из БД (включая скрытые)
+    const allCategoryIds = new Set([
+        ...Object.keys(categories),
+        ...Object.keys(categoryVisibility)
+    ]);
+    
+    console.log('renderProducts: Все ID категорий:', Array.from(allCategoryIds));
+    
     // Показываем все категории (включая скрытые - чтобы можно было их показать)
-    Object.keys(categories).forEach(categoryId => {
+    Array.from(allCategoryIds).forEach(categoryId => {
         const categoryProducts = products[categoryId] || [];
         const availableCount = categoryProducts.filter(p => p.available !== false).length;
         const hiddenCount = categoryProducts.filter(p => p.available === false).length;
@@ -935,7 +943,7 @@ function renderProducts() {
             <div class="category-section" data-category="${categoryId}">
                 <div class="category-header">
                     <div class="category-info">
-                        <div class="category-title" id="category-title-${categoryId}">${categories[categoryId]}</div>
+                        <div class="category-title" id="category-title-${categoryId}">${categories[categoryId] || categoryId}</div>
                         <div class="category-stats">
                             Всего: ${categoryProducts.length} | 
                             В наличии: ${availableCount} | 
