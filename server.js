@@ -1284,24 +1284,38 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
 // API для изменения названия категории
 app.put('/api/admin/categories/:categoryId/name', requireAdminAuth, async (req, res) => {
     try {
+        console.log('🔄 API /api/admin/categories/:categoryId/name ВЫЗВАН');
+        console.log('🔄 Параметры:', req.params);
+        console.log('🔄 Тело запроса:', req.body);
+        
         const { categoryId } = req.params;
         const { name } = req.body;
         
         if (!name || !name.trim()) {
+            console.error('❌ Пустое название категории');
             return res.status(400).json({ ok: false, error: 'Название категории не может быть пустым' });
         }
         
+        console.log('🔄 Обновляем название в БД:', categoryId, '->', name.trim());
+        
         // Сохраняем новое название в БД (только имя)
-        await CategoriesDB.updateName(categoryId, name.trim());
+        const result = await CategoriesDB.updateName(categoryId, name.trim());
+        
+        console.log('✅ Результат обновления БД:', result);
         
         logger.info(`Название категории ${categoryId} изменено на "${name.trim()}"`);
-        res.json({ 
+        
+        const response = { 
             ok: true, 
             name: name.trim(), 
             message: `Название категории изменено на "${name.trim()}"` 
-        });
+        };
+        
+        console.log('✅ Отправляем ответ:', response);
+        res.json(response);
         
     } catch (error) {
+        console.error('❌ Ошибка в API изменения названия категории:', error);
         logger.error('Ошибка изменения названия категории:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
