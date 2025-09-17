@@ -1514,15 +1514,18 @@ function editCategoryName(categoryId) {
         // Обновляем название в объекте категорий
         categories[categoryId] = newName;
         
-        // Отмечаем как несохраненные изменения
-        markAsChanged();
-        
         // Восстанавливаем заголовок
         titleElement.innerHTML = `<div class="category-title" id="category-title-${categoryId}">${newName}</div>`;
         
-        showNotification(`Название категории изменено на "${newName}"`, 'success');
+        showNotification(`Название категории изменено на "${newName}"`, 'info');
         
         console.log('✅ Категория переименована:', categoryId, '->', newName);
+        
+        // Автоматически сохраняем на сервер по аналогии с товарами
+        saveCategoryToServer(categoryId, newName).catch(error => {
+            console.error('❌ Ошибка сохранения названия категории:', error);
+            showNotification('Название изменено локально, но не сохранено на сервере', 'warning');
+        });
     };
     
     // Обработчик отмены
@@ -1769,6 +1772,36 @@ function showMobileNotification(message, type = 'info') {
 }
 
 // 📱 ФУНКЦИЯ ДЛЯ МОБИЛЬНЫХ СВАЙПОВ - УДАЛЕНА, ИСПОЛЬЗУЕМ ОСНОВНУЮ toggleProductAvailability
+
+// Сохранение названия категории на сервер
+async function saveCategoryToServer(categoryId, newName) {
+    try {
+        // Используем новый API endpoint специально для изменения названия
+        const response = await fetch(`/api/admin/categories/${categoryId}/name`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Password': getAdminPassword()
+            },
+            body: JSON.stringify({
+                name: newName
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+        
+        const data = await response.json();
+        showNotification(data.message, 'success');
+        
+        console.log('✅ Название категории успешно сохранено в БД');
+        
+    } catch (error) {
+        console.error('❌ Ошибка сохранения названия категории:', error);
+        throw error; // Пробрасываем ошибку для catch в вызывающей функции
+    }
+}
 
 // Автозаполнение ID при вводе названия
 document.addEventListener('DOMContentLoaded', function() {
