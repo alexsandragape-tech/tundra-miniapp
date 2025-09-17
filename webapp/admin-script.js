@@ -1775,24 +1775,35 @@ function showMobileNotification(message, type = 'info') {
 
 // Сохранение названия категории на сервер
 async function saveCategoryToServer(categoryId, newName) {
+    console.log('🔄 saveCategoryToServer ВЫЗВАНА:', { categoryId, newName });
+    
     try {
+        const url = `/api/admin/categories/${categoryId}/name`;
+        const body = { name: newName };
+        
+        console.log('🔄 Отправляем запрос:', { url, body });
+        
         // Используем новый API endpoint специально для изменения названия
-        const response = await fetch(`/api/admin/categories/${categoryId}/name`, {
+        const response = await fetch(url, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Admin-Password': getAdminPassword()
             },
-            body: JSON.stringify({
-                name: newName
-            })
+            body: JSON.stringify(body)
         });
         
+        console.log('🔄 Ответ сервера:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            const errorText = await response.text();
+            console.error('❌ Ошибка ответа сервера:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
+        console.log('✅ Данные от сервера:', data);
+        
         showNotification(data.message, 'success');
         
         console.log('✅ Название категории успешно сохранено в БД');
