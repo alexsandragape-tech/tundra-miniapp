@@ -103,7 +103,7 @@ class YooKassaAPI {
     }
 }
 const config = require('./config');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB } = require('./database');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, pool } = require('./database');
 
 const app = express();
 const PORT = config.PORT;
