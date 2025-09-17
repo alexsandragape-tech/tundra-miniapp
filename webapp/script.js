@@ -2426,16 +2426,6 @@ async function initApp() {
     // Обновляем счетчик корзины
     updateCartBadge();
     
-    // 🔄 ДОБАВЛЯЕМ КНОПКУ ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ ДЛЯ ОТЛАДКИ
-    const debugBtn = document.createElement('button');
-    debugBtn.textContent = '🔄 Обновить категории';
-    debugBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;';
-    debugBtn.onclick = async () => {
-        console.log('🔄 ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ КАТЕГОРИЙ');
-        await renderCategories();
-    };
-    document.body.appendChild(debugBtn);
-    
     // 🔥 Синхронизируем профиль с сервером при запуске (неблокирующе)
     syncProfileWithServer().then(() => {
         // Обновляем карту лояльности после синхронизации
