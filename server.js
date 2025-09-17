@@ -1373,10 +1373,19 @@ app.get('/api/products', async (req, res) => {
             allProducts = fullProducts;
         }
         
-        // Фильтруем только доступные товары для клиентов
+        // Фильтруем только доступные товары И видимые категории для клиентов
+        const visibleCategories = await CategoriesDB.getVisible();
+        const visibleCategoryIds = new Set(visibleCategories.map(cat => cat.category_id));
+        
         const productsObj = {};
         let totalAvailable = 0;
         for (const [categoryId, categoryProducts] of Object.entries(allProducts)) {
+            // Пропускаем скрытые категории
+            if (!visibleCategoryIds.has(categoryId)) {
+                console.log(`🔒 Категория ${categoryId} скрыта - пропускаем товары`);
+                continue;
+            }
+            
             const availableProducts = categoryProducts.filter(product => product.available !== false);
             if (availableProducts.length > 0) {
                 productsObj[categoryId] = availableProducts;
