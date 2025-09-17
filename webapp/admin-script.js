@@ -163,16 +163,29 @@ async function loadCategoryNamesFromServer() {
         if (!resp.ok) throw new Error('Не удалось загрузить категории');
         const data = await resp.json();
         if (data && Array.isArray(data.categories)) {
+            console.log('Загружаем категории с сервера:', data.categories.length);
+            
             data.categories.forEach(row => {
                 if (row.category_id && row.name) {
+                    // Загружаем название категории
                     categories[row.category_id] = row.name;
+                    
+                    // Загружаем статус видимости категории
+                    categoryVisibility[row.category_id] = row.is_visible;
+                    
+                    console.log(`Категория ${row.category_id}: "${row.name}" (видимость: ${row.is_visible})`);
                 }
             });
+            
             // Зафиксируем как исходные названия для трекинга сохранений
             if (!originalProducts.categories) {
                 originalProducts.categories = {};
             }
             originalProducts.categories = JSON.parse(JSON.stringify(categories));
+            
+            console.log('Категории загружены с сервера:', Object.keys(categories).length);
+            console.log('Видимость категорий:', categoryVisibility);
+            
             // Перерисуем UI с актуальными названиями
             renderProducts();
         }
@@ -1775,13 +1788,13 @@ function showMobileNotification(message, type = 'info') {
 
 // Сохранение названия категории на сервер
 async function saveCategoryToServer(categoryId, newName) {
-    console.log('🔄 saveCategoryToServer ВЫЗВАНА:', { categoryId, newName });
+    console.log('saveCategoryToServer ВЫЗВАНА:', { categoryId, newName });
     
     try {
         const url = `/api/admin/categories/${categoryId}/name`;
         const body = { name: newName };
         
-        console.log('🔄 Отправляем запрос:', { url, body });
+        console.log('Отправляем запрос:', { url, body });
         
         // Используем новый API endpoint специально для изменения названия
         const response = await fetch(url, {
@@ -1793,23 +1806,23 @@ async function saveCategoryToServer(categoryId, newName) {
             body: JSON.stringify(body)
         });
         
-        console.log('🔄 Ответ сервера:', response.status, response.statusText);
+        console.log('Ответ сервера:', response.status, response.statusText);
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ Ошибка ответа сервера:', errorText);
+            console.error('Ошибка ответа сервера:', errorText);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
-        console.log('✅ Данные от сервера:', data);
+        console.log('Данные от сервера:', data);
         
         showNotification(data.message, 'success');
         
-        console.log('✅ Название категории успешно сохранено в БД');
+        console.log('Название категории успешно сохранено в БД');
         
     } catch (error) {
-        console.error('❌ Ошибка сохранения названия категории:', error);
+        console.error('Ошибка сохранения названия категории:', error);
         throw error; // Пробрасываем ошибку для catch в вызывающей функции
     }
 }
