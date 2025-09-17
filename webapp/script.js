@@ -2360,11 +2360,14 @@ async function renderCategories() {
     // Загружаем видимые категории с сервера
     const visibleCategories = await loadCategoriesFromServer();
     
-    console.log('🎨 БУДЕМ РЕНДЕРИТЬ:', visibleCategories.length, 'категорий');
-    console.log('🎨 СПИСОК ДЛЯ РЕНДЕРИНГА:', visibleCategories.map(c => `${c.id} - ${c.name}`));
+    // Дополнительно фильтруем: показываем только категории, где есть доступные товары
+    const categoriesWithProducts = visibleCategories.filter(cat => Array.isArray(products[cat.id]) && products[cat.id].length > 0);
+    
+    console.log('🎨 БУДЕМ РЕНДЕРИТЬ:', categoriesWithProducts.length, 'категорий');
+    console.log('🎨 СПИСОК ДЛЯ РЕНДЕРИНГА:', categoriesWithProducts.map(c => `${c.id} - ${c.name}`));
 
-    visibleCategories.forEach((category, index) => {
-        console.log(`🎨 РЕНДЕРИМ ${index + 1}/${visibleCategories.length}:`, category.name, `(ID: ${category.id})`);
+    categoriesWithProducts.forEach((category, index) => {
+        console.log(`🎨 РЕНДЕРИМ ${index + 1}/${categoriesWithProducts.length}:`, category.name, `(ID: ${category.id})`);
         
         const card = document.createElement('div');
         card.className = 'category-card';
@@ -2400,11 +2403,13 @@ async function initApp() {
         showTestModeIndicator();
     }
     
-    // Загружаем товары с сервера (неблокирующе)
-    loadProductsFromServer().catch(error => {
+    // Загружаем товары с сервера (ждём завершения, важно для фильтрации категорий)
+    try {
+        await loadProductsFromServer();
+    } catch (error) {
         console.error('❌ Ошибка загрузки товаров:', error);
         // Продолжаем работу с локальными товарами
-    });
+    }
     
     // 🔄 ПЕРИОДИЧЕСКИ ОБНОВЛЯЕМ ТОВАРЫ (каждые 2 минуты)
     setInterval(async () => {
@@ -2414,7 +2419,7 @@ async function initApp() {
         if (currentScreen && currentScreen.id === 'main-screen') {
             await renderCategories();
         }
-    }, 12000000); // 2 минуты
+    }, 120000); // 2 минуты
     
     // Показываем приветственный экран
     // Сразу показываем каталог
