@@ -94,6 +94,34 @@ async function initializeDatabase() {
             )
         `);
         
+        // Заполняем таблицу категорий базовыми данными
+        const defaultCategories = [
+            { id: 'kolbasy', name: 'Колбасы', desc: 'Сыровяленые деликатесы из оленины', order: 1 },
+            { id: 'pashtet', name: 'Паштеты', desc: 'Рийеты с трюфелем и грибами', order: 2 },
+            { id: 'delikatesy', name: 'Деликатесы', desc: 'Карпаччо, хамон, снеки премиум', order: 3 },
+            { id: 'gotovye', name: 'Готовые деликатесы', desc: 'Запечённые корейки и окорок', order: 4 },
+            { id: 'zamorozhennye', name: 'Замороженные', desc: 'Пельмени с олениной и трюфелем', order: 5 },
+            { id: 'polufabrikaty', name: 'Полуфабрикаты', desc: 'Мясо для приготовления', order: 6 },
+            { id: 'pirogi-sytnye', name: 'Пироги сытные', desc: 'С олениной, грибами, трюфелем', order: 7 },
+            { id: 'pirogi-sladkie', name: 'Пироги сладкие', desc: 'С ягодами и творогом', order: 8 },
+            { id: 'sousy-marinad', name: 'Соусы и маринады', desc: 'Авторские соусы и маринады', order: 9 },
+            { id: 'napitki', name: 'Напитки', desc: 'Натуральные соки и компоты', order: 10 },
+            { id: 'deserty', name: 'Десерты', desc: 'Сладкие деликатесы', order: 11 },
+            { id: 'konditerka', name: 'Кондитерские изделия', desc: 'Торты, пирожные, печенье', order: 12 }
+        ];
+        
+        for (const category of defaultCategories) {
+            await pool.query(`
+                INSERT INTO categories (category_id, name, description, sort_order, is_visible) 
+                VALUES ($1, $2, $3, $4, true)
+                ON CONFLICT (category_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    sort_order = EXCLUDED.sort_order,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [category.id, category.name, category.desc, category.order]);
+        }
+        
         // Создаем таблицу пользователей бота
         await pool.query(`
             CREATE TABLE IF NOT EXISTS bot_users (
