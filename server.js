@@ -3602,6 +3602,12 @@ app.use((req, res) => {
 // API для получения видимых категорий (для основного приложения)
 app.get('/api/categories/visible', async (req, res) => {
     try {
+        // Отключаем кеширование, чтобы всегда отдавать актуальные названия
+        res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
         const categories = await CategoriesDB.getVisible();
         res.json({ ok: true, categories });
     } catch (error) {
