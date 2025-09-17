@@ -1291,8 +1291,8 @@ app.put('/api/admin/categories/:categoryId/name', requireAdminAuth, async (req, 
             return res.status(400).json({ ok: false, error: 'Название категории не может быть пустым' });
         }
         
-        // Сохраняем новое название в БД
-        await CategoriesDB.upsert(categoryId, name.trim());
+        // Сохраняем новое название в БД (только имя)
+        await CategoriesDB.updateName(categoryId, name.trim());
         
         logger.info(`Название категории ${categoryId} изменено на "${name.trim()}"`);
         res.json({ 
