@@ -1281,6 +1281,32 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
     }
 });
 
+// API для изменения названия категории
+app.put('/api/admin/categories/:categoryId/name', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { name } = req.body;
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ ok: false, error: 'Название категории не может быть пустым' });
+        }
+        
+        // Сохраняем новое название в БД
+        await CategoriesDB.upsert(categoryId, name.trim());
+        
+        logger.info(`Название категории ${categoryId} изменено на "${name.trim()}"`);
+        res.json({ 
+            ok: true, 
+            name: name.trim(), 
+            message: `Название категории изменено на "${name.trim()}"` 
+        });
+        
+    } catch (error) {
+        logger.error('Ошибка изменения названия категории:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // API для переключения видимости товара (по аналогии с категориями)
 app.put('/api/admin/products/:categoryId/:productId/visibility', requireAdminAuth, async (req, res) => {
     try {
