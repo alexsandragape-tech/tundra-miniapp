@@ -1002,14 +1002,14 @@ const categoryNameMap = new Map();
 async function loadCategoriesFromServer() {
     try {
         const url = `/api/categories/visible?_=${Date.now()}`; // cache-busting
-        console.log('🔄 ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', url);
+        console.log('ЗАГРУЖАЕМ КАТЕГОРИИ: запрос к', url);
         const response = await fetch(url, { cache: 'no-store' });
         
-        console.log('🔄 ОТВЕТ СЕРВЕРА: статус', response.status, response.statusText);
+        console.log('ОТВЕТ СЕРВЕРА: статус', response.status, response.statusText);
         
         if (response.ok) {
             const result = await response.json();
-            console.log('🔄 ДАННЫЕ СЕРВЕРА:', JSON.stringify(result, null, 2));
+            console.log('ДАННЫЕ СЕРВЕРА:', JSON.stringify(result, null, 2));
             
             if (result.ok && result.categories && result.categories.length > 0) {
                 // Создаем карту данных категорий из БД (с актуальными названиями)
@@ -1025,36 +1025,36 @@ async function loadCategoriesFromServer() {
                 });
 
                 // Обновляем глобальный массив categories именами из БД (чтобы везде были актуальные названия)
-                console.log('🔄 ОБНОВЛЯЕМ ЛОКАЛЬНЫЕ НАЗВАНИЯ:');
+                console.log('ОБНОВЛЯЕМ ЛОКАЛЬНЫЕ НАЗВАНИЯ:');
                 for (let i = 0; i < categories.length; i++) {
                     const dbName = categoryNameMap.get(categories[i].id);
                     if (dbName && dbName !== categories[i].name) {
-                        console.log(`🔄 ${categories[i].id}: "${categories[i].name}" -> "${dbName}"`);
+                        console.log(`${categories[i].id}: "${categories[i].name}" -> "${dbName}"`);
                         categories[i].name = dbName;
                     }
                 }
-                console.log('🔄 ФИНАЛЬНЫЕ ЛОКАЛЬНЫЕ НАЗВАНИЯ:', categories.map(c => `${c.id}: ${c.name}`));
+                console.log('ФИНАЛЬНЫЕ ЛОКАЛЬНЫЕ НАЗВАНИЯ:', categories.map(c => `${c.id}: ${c.name}`));
                 
-                console.log('🔄 КАТЕГОРИИ ИЗ БД:', Array.from(dbCategoriesMap.values()).map(c => `${c.id} - ${c.name}`));
+                console.log('КАТЕГОРИИ ИЗ БД:', Array.from(dbCategoriesMap.values()).map(c => `${c.id} - ${c.name}`));
                 
                 // Возвращаем категории с названиями из БД
                 const resultCategories = Array.from(dbCategoriesMap.values());
                 
-                console.log('🔄 ИТОГОВЫЕ КАТЕГОРИИ:', resultCategories.map(c => `${c.id} - ${c.name}`));
-                console.log('🔄 КОЛИЧЕСТВО:', resultCategories.length);
+                console.log('ИТОГОВЫЕ КАТЕГОРИИ:', resultCategories.map(c => `${c.id} - ${c.name}`));
+                console.log('КОЛИЧЕСТВО:', resultCategories.length);
                 
                 return resultCategories;
             } else {
-                console.log('🔄 НЕКОРРЕКТНЫЕ ДАННЫЕ С СЕРВЕРА - используем все локальные');
+                console.log('НЕКОРРЕКТНЫЕ ДАННЫЕ С СЕРВЕРА - используем все локальные');
             }
         } else {
-            console.log('🔄 ОШИБКА ОТВЕТА СЕРВЕРА - используем все локальные');
+            console.log('ОШИБКА ОТВЕТА СЕРВЕРА - используем все локальные');
         }
         
-        console.log('🔄 FALLBACK: используем все локальные категории');
+        console.log('FALLBACK: используем все локальные категории');
         return categories; // Fallback к локальным категориям
     } catch (error) {
-        console.error('❌ ОШИБКА ЗАГРУЗКИ КАТЕГОРИЙ:', error);
+        console.error('ОШИБКА ЗАГРУЗКИ КАТЕГОРИЙ:', error);
         return categories; // Fallback к локальным категориям
     }
 }
@@ -2377,21 +2377,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Функция рендеринга категорий
 async function renderCategories() {
-    console.log('🎨 РЕНДЕРИНГ КАТЕГОРИЙ: начинаем');
+    console.log('РЕНДЕРИНГ КАТЕГОРИЙ: начинаем');
     const grid = document.getElementById('categories-grid');
     grid.innerHTML = '';
 
     // Загружаем видимые категории с сервера
+    console.log('ВЫЗЫВАЕМ loadCategoriesFromServer()...');
     const visibleCategories = await loadCategoriesFromServer();
+    console.log('loadCategoriesFromServer() ЗАВЕРШЕН, получили:', visibleCategories.length, 'категорий');
     
     // Дополнительно фильтруем: показываем только категории, где есть доступные товары
     const categoriesWithProducts = visibleCategories.filter(cat => Array.isArray(products[cat.id]) && products[cat.id].length > 0);
     
-    console.log('🎨 БУДЕМ РЕНДЕРИТЬ:', categoriesWithProducts.length, 'категорий');
-    console.log('🎨 СПИСОК ДЛЯ РЕНДЕРИНГА:', categoriesWithProducts.map(c => `${c.id} - ${c.name}`));
+    console.log('БУДЕМ РЕНДЕРИТЬ:', categoriesWithProducts.length, 'категорий');
+    console.log('СПИСОК ДЛЯ РЕНДЕРИНГА:', categoriesWithProducts.map(c => `${c.id} - ${c.name}`));
 
     categoriesWithProducts.forEach((category, index) => {
-        console.log(`🎨 РЕНДЕРИМ ${index + 1}/${categoriesWithProducts.length}:`, category.name, `(ID: ${category.id})`);
+        console.log(`РЕНДЕРИМ ${index + 1}/${categoriesWithProducts.length}:`, category.name, `(ID: ${category.id})`);
         
         const card = document.createElement('div');
         card.className = 'category-card';
@@ -2410,7 +2412,7 @@ async function renderCategories() {
         grid.appendChild(card);
     });
     
-    console.log('🎨 РЕНДЕРИНГ ЗАВЕРШЁН: добавлено', grid.children.length, 'карточек в DOM');
+    console.log('РЕНДЕРИНГ ЗАВЕРШЁН: добавлено', grid.children.length, 'карточек в DOM');
 }
 
 // Инициализация приложения
