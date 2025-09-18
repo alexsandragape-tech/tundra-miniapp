@@ -1407,7 +1407,7 @@ function addNewProduct() {
             price: price,
             unit: unit,
             maxQty: maxQty,
-            image: image || '🛍️',
+            image: image || '',
             imageUrl: imageUrl || `images/products/${categoryId}/${productId}.jpg`,
             composition: composition,
             nutrition: nutrition,
@@ -1416,24 +1416,36 @@ function addNewProduct() {
             available: available
         };
         
-        // Добавляем товар в категорию
+        // Добавляем товар в категорию (локально)
         if (!products[categoryId]) {
             products[categoryId] = [];
         }
-        
         products[categoryId].push(newProduct);
         
         // Отмечаем изменения
         markAsChanged();
         
-        // Перерендериваем товары
-        renderProducts();
-        updateStats();
-        
-        // Закрываем модальное окно
-        closeAddModal();
-        
-        showNotification(`Товар "${name}" добавлен в категорию "${categories[categoryId]}"`, 'success');
+        // Немедленно сохраняем на сервер
+        (async () => {
+            try {
+                await saveProductsToServer();
+                // Обновляем оригинальную копию и сбрасываем флаг изменений
+                originalProducts = JSON.parse(JSON.stringify(products));
+                hasUnsavedChanges = false;
+                
+                // Перерендериваем товары и статистику
+                renderProducts();
+                updateStats();
+                
+                // Закрываем модальное окно только при успехе
+                closeAddModal();
+                
+                showNotification(`Товар "${name}" добавлен и сохранен`, 'success');
+            } catch (saveError) {
+                console.error('Ошибка сохранения нового товара:', saveError);
+                showNotification('Товар добавлен локально, но не сохранен на сервере', 'warning');
+            }
+        })();
         
     } catch (error) {
         console.error('Ошибка добавления товара:', error);
