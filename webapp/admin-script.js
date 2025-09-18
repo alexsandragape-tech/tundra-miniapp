@@ -955,7 +955,7 @@ function renderProducts() {
                             Изменить название
                         </button>
                         <button class="edit-category-btn" 
-                                onclick="console.log('КНОПКА НАЖАТА для:', '${categoryId}'); toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
+                                onclick="toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
                             ${isCategoryVisible ? 'Скрыть' : 'Показать'}
                         </button>
                         <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
@@ -989,16 +989,21 @@ function renderProducts() {
 // Загрузить карту видимости категорий из сервера
 async function refreshCategoryVisibility() {
     try {
+        console.log('refreshCategoryVisibility: ЗАГРУЖАЕМ видимость категорий');
         const resp = await fetch(`${API_BASE}/api/admin/categories`, {
             headers: { 'X-Admin-Password': getAdminPassword() }
         });
         if (!resp.ok) throw new Error('Не удалось загрузить категории');
         const data = await resp.json();
+        console.log('refreshCategoryVisibility: Данные с сервера:', data);
         if (data && data.categories) {
+            const oldVisibility = { ...categoryVisibility };
             categoryVisibility = {};
             data.categories.forEach(c => {
                 categoryVisibility[c.category_id] = c.is_visible !== false;
             });
+            console.log('refreshCategoryVisibility: СТАРАЯ карта:', oldVisibility);
+            console.log('refreshCategoryVisibility: НОВАЯ карта:', categoryVisibility);
         }
     } catch (e) {
         console.warn('Не удалось обновить видимость категорий:', e.message);
@@ -1972,7 +1977,7 @@ function renderCategoriesManagement(categories) {
             </div>
             <div class="category-actions">
                 <button class="visibility-toggle ${category.is_visible ? 'visible' : ''}" 
-                        onclick="toggleCategoryVisibility('${category.category_id}')">
+                        onclick="console.log('КНОПКА КАТЕГОРИИ НАЖАТА для:', '${category.category_id}'); toggleCategoryVisibility('${category.category_id}')">
                     ${category.is_visible ? 'Скрыть' : 'Показать'}
                 </button>
             </div>
