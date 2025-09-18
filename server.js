@@ -2339,29 +2339,35 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         order.telegramUsername = customerInfo.telegramUsername;
         order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
         
-        // Создаем реальный платеж через ЮKassa
-        const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
-        
-        // Логируем детали платежа для отладки
-        logger.info('💳 Детали платежа ЮKassa:', {
-            paymentId: payment.id,
-            status: payment.status,
-            confirmation: payment.confirmation,
-            confirmationUrl: payment.confirmation?.confirmation_url
-        });
-        
-        // Сохраняем ID платежа в заказе
-        order.paymentId = payment.id;
-        order.paymentUrl = payment.confirmation?.confirmation_url;
-        
-        // Проверяем, что URL получен
-        if (!order.paymentUrl) {
-            logger.error('❌ PaymentUrl не получен от ЮKassa!', {
-                payment: payment,
-                confirmation: payment.confirmation
+        // Создаем платеж в ЮKassa с защитой от падения
+        try {
+            const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
+            logger.info('💳 Детали платежа ЮKassa:', {
+                paymentId: payment.id,
+                status: payment.status,
+                confirmation: payment.confirmation,
+                confirmationUrl: payment.confirmation?.confirmation_url
             });
-        } else {
-            logger.info('✅ PaymentUrl получен:', order.paymentUrl);
+            // Сохраняем ID платежа в заказе
+            order.paymentId = payment.id;
+            order.paymentUrl = payment.confirmation?.confirmation_url;
+            if (!order.paymentUrl) {
+                logger.error('❌ PaymentUrl не получен от ЮKassa!', {
+                    payment: payment,
+                    confirmation: payment.confirmation
+                });
+            } else {
+                logger.info('✅ PaymentUrl получен:', order.paymentUrl);
+            }
+        } catch (paymentError) {
+            // Не прерываем создание заказа для пользователя
+            logger.error('❌ Создание платежа не удалось, заказ будет сохранен без оплаты:', paymentError.message);
+            if (paymentError.response) {
+                logger.error('📋 Детали ошибки YooKassa:', paymentError.response.data);
+            }
+            order.paymentStatus = 'pending';
+            order.paymentId = null;
+            order.paymentUrl = null;
         }
         
         // Обновляем заказ в памяти
@@ -3924,7 +3930,7 @@ app.put('/api/orders/:orderId/status', (req, res) => {
         
         if (order) {
             logger.info(`📝 Статус заказа ${orderId} изменен на: ${status}`);
-            res.json({ ok: true, order });
+        res.json({ ok: true, order });
         } else {
             res.status(404).json({ ok: false, error: 'Заказ не найден' });
         }
