@@ -3612,7 +3612,37 @@ app.get('/api/orders', (req, res) => {
 // API для управления категориями
 app.get('/api/admin/categories', requireAdminAuth, async (req, res) => {
     try {
-        const categories = await CategoriesDB.getStats();
+        console.log('API /api/admin/categories: ЗАГРУЖАЕМ все категории');
+        
+        // Используем getAll() вместо getStats() чтобы точно получить ВСЕ категории
+        const allCategories = await CategoriesDB.getAll();
+        console.log('API /api/admin/categories: Найдено категорий в БД:', allCategories.length);
+        
+        // Добавляем статистику товаров для каждой категории
+        const categories = [];
+        for (const category of allCategories) {
+            // Получаем статистику товаров для этой категории
+            const statsQuery = `
+                SELECT 
+                    COUNT(ap.id) as products_count,
+                    COUNT(CASE WHEN ap.is_available = true THEN 1 END) as available_products
+                FROM admin_products ap 
+                WHERE ap.category_id = $1
+            `;
+            const statsResult = await pool.query(statsQuery, [category.category_id]);
+            const stats = statsResult.rows[0];
+            
+            categories.push({
+                category_id: category.category_id,
+                name: category.name,
+                sort_order: category.sort_order,
+                is_visible: category.is_visible,
+                products_count: parseInt(stats.products_count) || 0,
+                available_products: parseInt(stats.available_products) || 0
+            });
+        }
+        
+        console.log('API /api/admin/categories: Отправляем категории:', categories.map(c => `${c.category_id} (видима: ${c.is_visible})`));
         res.json({ ok: true, categories });
     } catch (error) {
         logger.error('❌ Ошибка получения категорий:', error);
