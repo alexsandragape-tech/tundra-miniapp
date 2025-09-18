@@ -955,7 +955,7 @@ function renderProducts() {
                             Изменить название
                         </button>
                         <button class="edit-category-btn" 
-                                onclick="toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
+                                onclick="console.log('КНОПКА НАЖАТА для:', '${categoryId}'); toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
                             ${isCategoryVisible ? 'Скрыть' : 'Показать'}
                         </button>
                         <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
