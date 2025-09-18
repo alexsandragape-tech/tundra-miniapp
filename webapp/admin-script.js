@@ -1976,7 +1976,7 @@ function renderCategoriesManagement(categories) {
     
     console.log('renderCategoriesManagement: Будем рендерить', categories.length, 'категорий');
     
-    container.innerHTML = categories.map(category => `
+    const htmlContent = categories.map(category => `
         <div class="category-item">
             <div class="category-info">
                 <div class="category-details">
@@ -1995,6 +1995,14 @@ function renderCategoriesManagement(categories) {
             </div>
         </div>
     `).join('');
+    
+    console.log('renderCategoriesManagement: Сгенерированный HTML длиной:', htmlContent.length, 'символов');
+    console.log('renderCategoriesManagement: HTML первые 200 символов:', htmlContent.substring(0, 200));
+    
+    container.innerHTML = htmlContent;
+    
+    console.log('renderCategoriesManagement: HTML записан в контейнер');
+    console.log('renderCategoriesManagement: Контейнер после записи:', container.children.length, 'элементов');
 }
 
 // Переключение видимости категории
