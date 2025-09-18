@@ -1124,16 +1124,36 @@ function showMain() {
     updateWorkStatus();
 }
 
-function showCategory(categoryId) {
+async function showCategory(categoryId) {
     currentCategory = categoryId;
-    const category = categories.find(c => c.id === categoryId);
-    const resolvedName = categoryNameMap.get(categoryId) || category.name;
+
+    // Обеспечиваем наличие категории в списке и корректное название
+    const category = categories.find(c => c.id === categoryId) || { id: categoryId, name: categoryNameMap.get(categoryId) || categoryId };
+    const resolvedName = categoryNameMap.get(categoryId) || category.name || categoryId;
     document.getElementById('category-title').textContent = resolvedName;
     
     const productsList = document.getElementById('products-list');
     productsList.innerHTML = '';
+
+    // Если для категории нет товаров в памяти — пробуем догрузить с сервера
+    if (!Array.isArray(products[categoryId])) {
+        console.log('Товары категории отсутствуют в кэше, пробуем загрузить с сервера:', categoryId);
+        await loadProductsFromServer();
+    }
+
+    const categoryProducts = Array.isArray(products[categoryId]) ? products[categoryId] : [];
+
+    if (categoryProducts.length === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.style.cssText = 'padding: 24px; color: #666; text-align: center;';
+        emptyEl.textContent = 'В этой категории пока нет товаров';
+        productsList.appendChild(emptyEl);
+        showScreen('category-screen');
+        updateCartBadge();
+        return;
+    }
     
-    products[categoryId].forEach(product => {
+    categoryProducts.forEach(product => {
         console.log('Loading product:', product.name, 'with imageUrl:', product.imageUrl);
         const productCard = document.createElement('div');
         productCard.className = 'product-card';
