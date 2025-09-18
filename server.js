@@ -959,7 +959,9 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             formattedPhone: formattedPhone
         });
         
-        const returnUrl = `${config.BASE_URL}/payment/success?order=${orderId}`;
+        // Надежно определяем базовый URL (fallback на production URL)
+        const baseUrl = config.BASE_URL || 'https://tundra-miniapp-production.up.railway.app';
+        const returnUrl = `${baseUrl}/payment/success?order=${orderId}`;
         
         const fullPaymentData = {
             amount: {
@@ -1015,8 +1017,8 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             }
         };
         
-        // Создаем уникальный ключ идемпотентности
-        const idempotenceKey = crypto.randomUUID();
+        // Стабильный ключ идемпотентности на основе номера заказа, чтобы не было дублей
+        const idempotenceKey = `order-${orderId}`;
         logger.debug('🔑 Idempotence Key:', idempotenceKey);
         logger.debug('📋 Данные платежа (полные):', JSON.stringify(fullPaymentData, null, 2));
         
@@ -1031,7 +1033,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             // Повторяем с минимальным payload при 400/403, которые часто связаны с настройками чеков/налогов
             if (status === 400 || status === 403) {
                 logger.warn('🔁 Пробуем повторить запрос с минимальным payload без чека');
-                const retryKey = crypto.randomUUID();
+                const retryKey = `order-${orderId}-retry`;
                 logger.debug('🔑 Retry Idempotence Key:', retryKey);
                 logger.debug('📋 Данные платежа (минимальные):', JSON.stringify(minimalPaymentData, null, 2));
                 const payment = await checkout.createPayment(minimalPaymentData, retryKey);
