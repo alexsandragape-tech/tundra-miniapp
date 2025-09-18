@@ -1266,8 +1266,24 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
 // API для переключения видимости категории (должен быть ВЫШЕ общего /api/admin/categories)
 app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async (req, res) => {
     try {
+        console.log('API toggleVisibility ВЫЗВАН для категории:', req.params.categoryId);
+        
         const { categoryId } = req.params;
+        
+        // Сначала проверим, существует ли категория
+        const checkQuery = 'SELECT category_id, is_visible FROM categories WHERE category_id = $1';
+        const checkResult = await pool.query(checkQuery, [categoryId]);
+        
+        console.log('Проверка категории в БД:', checkResult.rows);
+        
+        if (checkResult.rows.length === 0) {
+            console.log('Категория не найдена в БД:', categoryId);
+            return res.status(404).json({ ok: false, error: 'Категория не найдена в БД' });
+        }
+        
         const isVisible = await CategoriesDB.toggleVisibility(categoryId);
+        
+        console.log('Результат toggleVisibility:', isVisible);
         
         if (isVisible !== null) {
             logger.info(`Категория ${categoryId} ${isVisible ? 'показана' : 'скрыта'}`);
@@ -1276,6 +1292,7 @@ app.put('/api/admin/categories/:categoryId/visibility', requireAdminAuth, async 
             res.status(404).json({ ok: false, error: 'Категория не найдена' });
         }
     } catch (error) {
+        console.error('Ошибка в API toggleVisibility:', error);
         logger.error('Ошибка переключения видимости категории:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
