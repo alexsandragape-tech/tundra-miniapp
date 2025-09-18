@@ -1928,6 +1928,7 @@ function showTab(tabName) {
 // Загрузка списка категорий для управления
 async function loadCategoriesManagement() {
     try {
+        console.log('loadCategoriesManagement: ЗАГРУЖАЕМ список категорий');
         const response = await fetch('/api/admin/categories', {
             headers: {
                 'X-Admin-Password': getAdminPassword()
@@ -1939,6 +1940,11 @@ async function loadCategoriesManagement() {
         }
         
         const data = await response.json();
+        console.log('loadCategoriesManagement: Получили данные:', data);
+        console.log('loadCategoriesManagement: Количество категорий:', data.categories?.length);
+        data.categories?.forEach(cat => {
+            console.log(`- Категория: ${cat.category_id} (${cat.name}) - видима: ${cat.is_visible}`);
+        });
         renderCategoriesManagement(data.categories);
         
     } catch (error) {
@@ -1955,7 +1961,11 @@ async function loadCategoriesManagement() {
 function renderCategoriesManagement(categories) {
     const container = document.getElementById('categories-list');
     
+    console.log('renderCategoriesManagement: РЕНДЕРИМ список категорий');
+    console.log('renderCategoriesManagement: Входящие данные:', categories);
+    
     if (!categories || categories.length === 0) {
+        console.log('renderCategoriesManagement: Категории НЕ НАЙДЕНЫ');
         container.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #666;">
                 Категории не найдены. Сначала добавьте товары.
@@ -1963,6 +1973,8 @@ function renderCategoriesManagement(categories) {
         `;
         return;
     }
+    
+    console.log('renderCategoriesManagement: Будем рендерить', categories.length, 'категорий');
     
     container.innerHTML = categories.map(category => `
         <div class="category-item">
@@ -2014,7 +2026,7 @@ async function toggleCategoryVisibility(categoryId) {
         // Обновляем карту видимости и перерисовываем и список и карточки
         console.log('Обновляем интерфейс...');
         await refreshCategoryVisibility();
-        loadCategoriesManagement();
+        await loadCategoriesManagement();
         renderProducts();
         
         console.log('toggleCategoryVisibility ЗАВЕРШЕНА');
