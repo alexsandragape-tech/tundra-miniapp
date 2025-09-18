@@ -2386,14 +2386,14 @@ async function renderCategories() {
     const visibleCategories = await loadCategoriesFromServer();
     console.log('loadCategoriesFromServer() ЗАВЕРШЕН, получили:', visibleCategories.length, 'категорий');
     
-    // Дополнительно фильтруем: показываем только категории, где есть доступные товары
-    const categoriesWithProducts = visibleCategories.filter(cat => Array.isArray(products[cat.id]) && products[cat.id].length > 0);
+    // Рендерим ВСЕ видимые категории без дополнительной фильтрации по товарам
+    const categoriesToRender = visibleCategories;
     
-    console.log('БУДЕМ РЕНДЕРИТЬ:', categoriesWithProducts.length, 'категорий');
-    console.log('СПИСОК ДЛЯ РЕНДЕРИНГА:', categoriesWithProducts.map(c => `${c.id} - ${c.name}`));
+    console.log('БУДЕМ РЕНДЕРИТЬ:', categoriesToRender.length, 'категорий');
+    console.log('СПИСОК ДЛЯ РЕНДЕРИНГА:', categoriesToRender.map(c => `${c.id} - ${c.name}`));
 
-    categoriesWithProducts.forEach((category, index) => {
-        console.log(`РЕНДЕРИМ ${index + 1}/${categoriesWithProducts.length}:`, category.name, `(ID: ${category.id})`);
+    categoriesToRender.forEach((category, index) => {
+        console.log(`РЕНДЕРИМ ${index + 1}/${categoriesToRender.length}:`, category.name, `(ID: ${category.id})`);
         
         const card = document.createElement('div');
         card.className = 'category-card';
