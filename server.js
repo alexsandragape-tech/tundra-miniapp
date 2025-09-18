@@ -5113,3 +5113,33 @@ function cleanup() {
     
     logger.info('✅ Ресурсы очищены');
 }
+
+// Добавление/обновление одного товара в категории (админ)
+app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { product } = req.body || {};
+
+        if (!categoryId || !product || typeof product !== 'object') {
+            return res.status(400).json({ ok: false, error: 'Некорректные данные товара' });
+        }
+        if (!product.id || typeof product.id !== 'string' || product.id.trim().length === 0) {
+            return res.status(400).json({ ok: false, error: 'Некорректный ID товара' });
+        }
+
+        // По умолчанию считаем товар доступным, если не указано обратное
+        const normalizedProduct = { ...product };
+        if (typeof normalizedProduct.available === 'undefined') {
+            normalizedProduct.available = true;
+        }
+
+        // Сохраняем один товар через обобщенный механизм
+        await AdminProductsDB.saveAll({ [categoryId]: [normalizedProduct] });
+
+        logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
+        res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
+    } catch (error) {
+        logger.error('Ошибка сохранения товара:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
