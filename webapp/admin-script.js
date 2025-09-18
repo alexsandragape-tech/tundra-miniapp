@@ -1375,7 +1375,6 @@ function clearAddForm() {
 // 🆕 ФУНКЦИЯ ДОБАВЛЕНИЯ НОВОГО ТОВАРА
 function addNewProduct() {
     try {
-        // Получаем данные формы
         const categoryId = document.getElementById('add-category').value;
         const productId = document.getElementById('add-id').value.trim();
         const name = document.getElementById('add-name').value.trim();
@@ -1390,63 +1389,62 @@ function addNewProduct() {
         const storage = document.getElementById('add-storage').value.trim();
         const available = document.getElementById('add-available').checked;
         
-        // Валидация
         if (!categoryId || !productId || !name || !price || !unit || !maxQty) {
             throw new Error('Заполните все обязательные поля');
         }
-        
-        // Проверяем уникальность ID в категории
         if (products[categoryId] && products[categoryId].find(p => p.id === productId)) {
             throw new Error('Товар с таким ID уже существует в этой категории');
         }
         
-        // Создаем новый товар
         const newProduct = {
             id: productId,
-            name: name,
-            price: price,
-            unit: unit,
-            maxQty: maxQty,
+            name,
+            price,
+            unit,
+            maxQty,
             image: image || '',
             imageUrl: imageUrl || `images/products/${categoryId}/${productId}.jpg`,
-            composition: composition,
-            nutrition: nutrition,
-            calories: calories,
-            storage: storage,
-            available: available
+            composition,
+            nutrition,
+            calories,
+            storage,
+            available
         };
         
-        // Добавляем товар в категорию (локально)
-        if (!products[categoryId]) {
-            products[categoryId] = [];
-        }
-        products[categoryId].push(newProduct);
-        
-        // Отмечаем изменения
-        markAsChanged();
-        
-        // Немедленно сохраняем на сервер
+        // Немедленно сохраняем в БД через новый endpoint
         (async () => {
             try {
-                await saveProductsToServer();
-                // Обновляем оригинальную копию и сбрасываем флаг изменений
+                const response = await fetch(`${API_BASE}/api/admin/products/${categoryId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': getAdminPassword()
+                    },
+                    body: JSON.stringify({ product: newProduct })
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                const result = await response.json();
+                if (!result.ok) {
+                    throw new Error(result.error || 'Ошибка сохранения товара');
+                }
+                // Обновляем локально
+                if (!Array.isArray(products[categoryId])) products[categoryId] = [];
+                products[categoryId].push(result.product);
                 originalProducts = JSON.parse(JSON.stringify(products));
                 hasUnsavedChanges = false;
                 
-                // Перерендериваем товары и статистику
                 renderProducts();
                 updateStats();
-                
-                // Закрываем модальное окно только при успехе
                 closeAddModal();
-                
                 showNotification(`Товар "${name}" добавлен и сохранен`, 'success');
-            } catch (saveError) {
-                console.error('Ошибка сохранения нового товара:', saveError);
-                showNotification('Товар добавлен локально, но не сохранен на сервере', 'warning');
+            } catch (saveErr) {
+                console.error('Ошибка сохранения нового товара:', saveErr);
+                showNotification('Не удалось сохранить товар на сервере', 'error');
             }
         })();
-        
     } catch (error) {
         console.error('Ошибка добавления товара:', error);
         showNotification(error.message, 'error');
