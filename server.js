@@ -959,9 +959,10 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             formattedPhone: formattedPhone
         });
         
-        // Надежно определяем базовый URL (fallback на production URL)
-        const baseUrl = config.BASE_URL || 'https://tundra-miniapp-production.up.railway.app';
+        // Надежно определяем базовый URL (используем FRONTEND_URL из config)
+        const baseUrl = config.FRONTEND_URL || 'https://tundra-miniapp-production.up.railway.app';
         const returnUrl = `${baseUrl}/payment/success?order=${orderId}`;
+        logger.debug('🔗 Return URL для ЮKassa:', returnUrl);
         
         const fullPaymentData = {
             amount: {
@@ -1017,8 +1018,8 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             }
         };
         
-        // Стабильный ключ идемпотентности на основе номера заказа, чтобы не было дублей
-        const idempotenceKey = `order-${orderId}`;
+        // Уникальный ключ идемпотентности с timestamp для избежания конфликтов
+        const idempotenceKey = `order-${orderId}-${Date.now()}`;
         logger.debug('🔑 Idempotence Key:', idempotenceKey);
         logger.debug('📋 Данные платежа (полные):', JSON.stringify(fullPaymentData, null, 2));
         
@@ -1033,7 +1034,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             // Повторяем с минимальным payload при 400/403, которые часто связаны с настройками чеков/налогов
             if (status === 400 || status === 403) {
                 logger.warn('🔁 Пробуем повторить запрос с минимальным payload без чека');
-                const retryKey = `order-${orderId}-retry`;
+                const retryKey = `order-${orderId}-retry-${Date.now()}`;
                 logger.debug('🔑 Retry Idempotence Key:', retryKey);
                 logger.debug('📋 Данные платежа (минимальные):', JSON.stringify(minimalPaymentData, null, 2));
                 const payment = await checkout.createPayment(minimalPaymentData, retryKey);
@@ -2360,14 +2361,25 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                 logger.info('✅ PaymentUrl получен:', order.paymentUrl);
             }
         } catch (paymentError) {
-            // Не прерываем создание заказа для пользователя
-            logger.error('❌ Создание платежа не удалось, заказ будет сохранен без оплаты:', paymentError.message);
+            logger.error('❌ Создание платежа не удалось:', paymentError.message);
             if (paymentError.response) {
                 logger.error('📋 Детали ошибки YooKassa:', paymentError.response.data);
             }
-            order.paymentStatus = 'pending';
-            order.paymentId = null;
-            order.paymentUrl = null;
+            // Очищаем временно созданный заказ и таймер автоотмены
+            try {
+                if (order && orders.has(order.id)) {
+                    orders.delete(order.id);
+                }
+                const t = orderTimers.get(order.id);
+                if (t) {
+                    clearTimeout(t);
+                    orderTimers.delete(order.id);
+                }
+            } catch (e) {
+                logger.warn('⚠️ Ошибка очистки временного заказа:', e.message);
+            }
+            // Возвращаем ошибку клиенту
+            throw paymentError; // Пробрасываем ошибку дальше
         }
         
         // Обновляем заказ в памяти
@@ -2385,7 +2397,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             totalAmount: totalAmount,
             status: 'new',
             paymentStatus: 'pending',
-            paymentId: payment.id,
+            paymentId: order.paymentId,
             paymentUrl: order.paymentUrl
         });
         
@@ -2739,7 +2751,7 @@ app.get('/test-webhook', (req, res) => {
     res.json({
         ok: true,
         message: 'Webhook endpoint доступен',
-        webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
+        webhookUrl: `${config.FRONTEND_URL}/webhook/yookassa`,
         timestamp: new Date().toISOString()
     });
 });
@@ -3401,7 +3413,7 @@ app.get('/api/check-db', async (req, res) => {
 // 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ НАСТРОЕК WEBHOOK
 app.get('/api/check-webhook', async (req, res) => {
     try {
-        const webhookUrl = `${config.BASE_URL}/webhook/yookassa`;
+        const webhookUrl = `${config.FRONTEND_URL}/webhook/yookassa`;
         
         res.json({
             ok: true,
@@ -3476,7 +3488,7 @@ app.get('/api/webhook-logs', async (req, res) => {
         
         res.json({
             ok: true,
-            webhookUrl: `${config.BASE_URL}/webhook/yookassa`,
+            webhookUrl: `${config.FRONTEND_URL}/webhook/yookassa`,
             purchaseHistoryCount: purchases.length,
             totalOrders: orders.length,
             paidOrders: paidOrders.length,
