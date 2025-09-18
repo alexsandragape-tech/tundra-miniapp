@@ -1018,8 +1018,8 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             }
         };
         
-        // Уникальный ключ идемпотентности с timestamp для избежания конфликтов
-        const idempotenceKey = `order-${orderId}-${Date.now()}`;
+        // Создаем уникальный ключ идемпотентности как было раньше
+        const idempotenceKey = crypto.randomUUID();
         logger.debug('🔑 Idempotence Key:', idempotenceKey);
         logger.debug('📋 Данные платежа (полные):', JSON.stringify(fullPaymentData, null, 2));
         
@@ -1034,7 +1034,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             // Повторяем с минимальным payload при 400/403, которые часто связаны с настройками чеков/налогов
             if (status === 400 || status === 403) {
                 logger.warn('🔁 Пробуем повторить запрос с минимальным payload без чека');
-                const retryKey = `order-${orderId}-retry-${Date.now()}`;
+                const retryKey = crypto.randomUUID();
                 logger.debug('🔑 Retry Idempotence Key:', retryKey);
                 logger.debug('📋 Данные платежа (минимальные):', JSON.stringify(minimalPaymentData, null, 2));
                 const payment = await checkout.createPayment(minimalPaymentData, retryKey);
