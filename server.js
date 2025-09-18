@@ -959,14 +959,16 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
             formattedPhone: formattedPhone
         });
         
-        const paymentData = {
+        const returnUrl = `${config.BASE_URL}/payment/success?order=${orderId}`;
+        
+        const fullPaymentData = {
             amount: {
                 value: amount.toFixed(2),
                 currency: 'RUB'
             },
             confirmation: {
                 type: 'redirect',
-                return_url: `https://tundra-miniapp-production.up.railway.app/payment/success?order=${orderId}`
+                return_url: returnUrl
             },
             capture: true,
             description: description,
@@ -983,7 +985,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
                             value: amount.toFixed(2),
                             currency: 'RUB'
                         },
-                        vat_code: 1, // НДС 20%
+                        vat_code: 1,
                         payment_mode: 'full_payment',
                         payment_subject: 'commodity'
                     }
@@ -993,21 +995,51 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo)
                 orderId: orderId,
                 customerName: customerInfo.customerName || 'Клиент',
                 phone: customerInfo.phone || ''
+            }
+        };
+        
+        // Минимальный payload на случай отказа ЮKassa из-за настроек чека
+        const minimalPaymentData = {
+            amount: {
+                value: amount.toFixed(2),
+                currency: 'RUB'
             },
-            // Добавляем webhook URL для уведомлений
-            webhook_url: 'https://tundra-miniapp-production.up.railway.app/webhook/yookassa'
+            confirmation: {
+                type: 'redirect',
+                return_url: returnUrl
+            },
+            capture: true,
+            description: description,
+            metadata: {
+                orderId: orderId
+            }
         };
         
         // Создаем уникальный ключ идемпотентности
         const idempotenceKey = crypto.randomUUID();
         logger.debug('🔑 Idempotence Key:', idempotenceKey);
-        logger.debug('📋 Данные платежа для YooKassa:', JSON.stringify(paymentData, null, 2));
+        logger.debug('📋 Данные платежа (полные):', JSON.stringify(fullPaymentData, null, 2));
         
-        const payment = await checkout.createPayment(paymentData, idempotenceKey);
-
-        logger.info(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
-        logger.debug(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
-        return payment;
+        try {
+            const payment = await checkout.createPayment(fullPaymentData, idempotenceKey);
+            logger.info(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
+            logger.debug(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
+            return payment;
+        } catch (primaryError) {
+            const status = primaryError.response?.status;
+            logger.error('❌ Основной запрос в ЮKassa отклонен:', status, primaryError.response?.data);
+            // Повторяем с минимальным payload при 400/403, которые часто связаны с настройками чеков/налогов
+            if (status === 400 || status === 403) {
+                logger.warn('🔁 Пробуем повторить запрос с минимальным payload без чека');
+                const retryKey = crypto.randomUUID();
+                logger.debug('🔑 Retry Idempotence Key:', retryKey);
+                logger.debug('📋 Данные платежа (минимальные):', JSON.stringify(minimalPaymentData, null, 2));
+                const payment = await checkout.createPayment(minimalPaymentData, retryKey);
+                logger.info(`✅ Платеж (минимальный) создан: ${payment.id}`);
+                return payment;
+            }
+            throw primaryError;
+        }
     } catch (error) {
         logger.error('❌ Ошибка создания платежа ЮKassa:', error.message);
         if (error.response) {
