@@ -1983,6 +1983,8 @@ function renderCategoriesManagement(categories) {
 // Переключение видимости категории
 async function toggleCategoryVisibility(categoryId) {
     try {
+        console.log('toggleCategoryVisibility ВЫЗВАНА для:', categoryId);
+        
         const response = await fetch(`/api/admin/categories/${categoryId}/visibility`, {
             method: 'PUT',
             headers: {
@@ -1990,23 +1992,31 @@ async function toggleCategoryVisibility(categoryId) {
             }
         });
         
+        console.log('Ответ API visibility:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error('Ошибка изменения видимости');
+            const errorText = await response.text();
+            console.error('Ошибка ответа API:', errorText);
+            throw new Error('Ошибка изменения видимости: ' + errorText);
         }
         
         const data = await response.json();
+        console.log('Данные от API visibility:', data);
         
         // Показываем уведомление
         showNotification(data.message, 'success');
         
         // Обновляем карту видимости и перерисовываем и список и карточки
+        console.log('Обновляем интерфейс...');
         await refreshCategoryVisibility();
         loadCategoriesManagement();
         renderProducts();
         
+        console.log('toggleCategoryVisibility ЗАВЕРШЕНА');
+        
     } catch (error) {
         console.error('Ошибка переключения видимости:', error);
-        showNotification('❌ ' + error.message, 'error');
+        showNotification('Ошибка: ' + error.message, 'error');
     }
 }
 
