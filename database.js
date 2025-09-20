@@ -153,7 +153,7 @@ async function initializeDatabase() {
             CREATE TABLE IF NOT EXISTS purchase_history (
                 id SERIAL PRIMARY KEY,
                 user_id VARCHAR(100) NOT NULL,
-                order_id VARCHAR(50) NOT NULL,
+                order_id VARCHAR(50) NOT NULL UNIQUE,
                 customer_name VARCHAR(255),
                 phone VARCHAR(20),
                 amount INTEGER NOT NULL,
@@ -537,6 +537,104 @@ class PurchaseHistoryDB {
                 return row;
             }
         });
+    }
+
+    // 🔥 ДОБАВИТЬ ПОКУПКУ В СИСТЕМУ ЛОЯЛЬНОСТИ (с поддержкой объекта)
+    static async add(purchaseData) {
+        let orderId, userId, amount;
+        
+        if (typeof purchaseData === 'object' && purchaseData.orderId) {
+            // Новый формат с объектом
+            orderId = purchaseData.orderId;
+            userId = purchaseData.userId;
+            amount = purchaseData.amount;
+        } else {
+            // Старый формат с отдельными параметрами
+            userId = arguments[0];
+            orderId = arguments[1];
+            amount = arguments[2];
+        }
+        
+        const query = `
+            INSERT INTO purchase_history (user_id, order_id, amount)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (order_id) DO NOTHING
+            RETURNING *
+        `;
+        
+        try {
+            const result = await pool.query(query, [userId, orderId, amount]);
+            if (result.rows.length > 0) {
+                console.log(`✅ PurchaseHistoryDB.add: Добавлена покупка ${orderId} для пользователя ${userId}, сумма: ${amount}₽`);
+                return result.rows[0];
+            } else {
+                console.log(`⚠️ PurchaseHistoryDB.add: Покупка ${orderId} уже существует`);
+                return null;
+            }
+        } catch (error) {
+            console.error('❌ PurchaseHistoryDB.add: Ошибка добавления покупки:', error.message);
+            throw error;
+        }
+    }
+
+    // 🔍 ПРОВЕРИТЬ СУЩЕСТВОВАНИЕ ПОКУПКИ ПО ORDER_ID
+    static async getByOrderId(orderId) {
+        const query = `
+            SELECT * FROM purchase_history 
+            WHERE order_id = $1
+        `;
+        
+        try {
+            const result = await pool.query(query, [orderId]);
+            return result.rows[0] || null;
+        } catch (error) {
+            console.error('❌ PurchaseHistoryDB.getByOrderId: Ошибка:', error.message);
+            throw error;
+        }
+    }
+
+    // 📊 ПОЛУЧИТЬ СТАТИСТИКУ ЛОЯЛЬНОСТИ ПОЛЬЗОВАТЕЛЯ
+    static async getUserStats(userId) {
+        const query = `
+            SELECT 
+                COUNT(*) as totalPurchases,
+                COALESCE(SUM(amount), 0) as totalSpent
+            FROM purchase_history 
+            WHERE user_id = $1
+        `;
+        
+        try {
+            const result = await pool.query(query, [userId]);
+            const stats = result.rows[0];
+            
+            const totalSpent = parseInt(stats.totalspent) || 0;
+            const totalPurchases = parseInt(stats.totalpurchases) || 0;
+            
+            // Рассчитываем текущую скидку по логике карты лояльности
+            let currentDiscount = 0;
+            if (totalSpent >= 50000) {
+                currentDiscount = 10;
+            } else if (totalSpent >= 25000) {
+                currentDiscount = 5;
+            } else if (totalSpent >= 10000) {
+                currentDiscount = 3;
+            }
+            
+            console.log(`📊 PurchaseHistoryDB.getUserStats для ${userId}:`, {
+                totalSpent,
+                totalPurchases,
+                currentDiscount
+            });
+            
+            return {
+                totalSpent,
+                totalPurchases,
+                currentDiscount
+            };
+        } catch (error) {
+            console.error('❌ PurchaseHistoryDB.getUserStats: Ошибка:', error.message);
+            throw error;
+        }
     }
 }
 
