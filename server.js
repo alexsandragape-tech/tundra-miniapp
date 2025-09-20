@@ -3650,6 +3650,52 @@ app.get('/api/purchases/:userId', async (req, res) => {
     }
 });
 
+// 🔥 API ДЛЯ ПОЛУЧЕНИЯ СТАТИСТИКИ ЛОЯЛЬНОСТИ (для syncLoyaltyWithServer)
+app.get('/api/loyalty/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        logger.info(`🔍 LOYALTY API: Запрос статистики лояльности для пользователя: ${userId}`);
+        
+        // 🔄 СИНХРОНИЗИРУЕМ ОПЛАЧЕННЫЕ ЗАКАЗЫ С СИСТЕМОЙ ЛОЯЛЬНОСТИ
+        await syncPaidOrdersToLoyalty(userId);
+        
+        // Получаем статистику из системы лояльности
+        const userStats = await PurchaseHistoryDB.getUserStats(userId);
+        
+        if (userStats) {
+            logger.info(`📊 LOYALTY API: Статистика для пользователя ${userId}:`, {
+                totalSpent: userStats.totalSpent,
+                totalPurchases: userStats.totalPurchases,
+                currentDiscount: userStats.currentDiscount
+            });
+            
+            res.json({
+                ok: true,
+                data: {
+                    totalSpent: userStats.totalSpent,
+                    totalPurchases: userStats.totalPurchases,
+                    currentDiscount: userStats.currentDiscount
+                }
+            });
+        } else {
+            // Если нет данных, возвращаем базовые значения
+            logger.info(`📊 LOYALTY API: Нет данных для пользователя ${userId}, возвращаем базовые значения`);
+            res.json({
+                ok: true,
+                data: {
+                    totalSpent: 0,
+                    totalPurchases: 0,
+                    currentDiscount: 0
+                }
+            });
+        }
+        
+    } catch (error) {
+        logger.error('❌ LOYALTY API: Ошибка получения статистики лояльности:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // API для получения всех заказов
 app.get('/api/orders', (req, res) => {
     try {
@@ -4316,9 +4362,6 @@ async function handleCallbackQuery(callbackQuery) {
                 return;
         }
         
-        // Обновляем статус заказа в памяти
-        order = updateOrderStatus(orderId, newStatus);
-        
         // 🔥 ОБНОВЛЯЕМ СТАТУС В БАЗЕ ДАННЫХ
         try {
             await OrdersDB.update(orderId, { 
@@ -4328,6 +4371,12 @@ async function handleCallbackQuery(callbackQuery) {
         } catch (dbError) {
             logger.error(`❌ Ошибка обновления статуса в БД:`, dbError.message);
         }
+        
+        // Обновляем статус заказа в памяти
+        order = updateOrderStatus(orderId, newStatus);
+        
+        // 🔥 ВАЖНО: Перезагружаем заказ из БД для получения всех данных включая telegramUserId
+        order = await getOrder(orderId);
         
         // Обновляем сообщение в админ-группе
         await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
@@ -4375,7 +4424,17 @@ async function handleCallbackQuery(callbackQuery) {
         }
         
         // 📱 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ КЛИЕНТУ
-        logger.info(`📱 ПРОВЕРКА УВЕДОМЛЕНИЯ: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
+        logger.info(`📱 ПРОВЕРКА УВЕДОМЛЕНИЯ для заказа ${orderId}:`, {
+            telegramUserId: order.telegramUserId,
+            hasToken: !!config.TELEGRAM_BOT_TOKEN,
+            newStatus: newStatus,
+            orderData: {
+                id: order.id,
+                customerName: order.customerName,
+                phone: order.phone,
+                totals: order.totals
+            }
+        });
         
         if (order.telegramUserId && config.TELEGRAM_BOT_TOKEN) {
             try {
@@ -4388,7 +4447,7 @@ async function handleCallbackQuery(callbackQuery) {
                 }
             }
         } else {
-            logger.warn(`⚠️ Не удалось отправить уведомление клиенту: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
+            logger.warn(`⚠️ Не удалось отправить уведомление клиенту для заказа ${orderId}: telegramUserId=${order.telegramUserId}, token=${!!config.TELEGRAM_BOT_TOKEN}`);
         }
         
         // Отправляем подтверждение
