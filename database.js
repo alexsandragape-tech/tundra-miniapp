@@ -558,20 +558,19 @@ class PurchaseHistoryDB {
         const query = `
             INSERT INTO purchase_history (user_id, order_id, amount)
             VALUES ($1, $2, $3)
-            ON CONFLICT (order_id) DO NOTHING
             RETURNING *
         `;
         
         try {
             const result = await pool.query(query, [userId, orderId, amount]);
-            if (result.rows.length > 0) {
-                console.log(`✅ PurchaseHistoryDB.add: Добавлена покупка ${orderId} для пользователя ${userId}, сумма: ${amount}₽`);
-                return result.rows[0];
-            } else {
+            console.log(`✅ PurchaseHistoryDB.add: Добавлена покупка ${orderId} для пользователя ${userId}, сумма: ${amount}₽`);
+            return result.rows[0];
+        } catch (error) {
+            // Проверяем, является ли это ошибкой дубликата
+            if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
                 console.log(`⚠️ PurchaseHistoryDB.add: Покупка ${orderId} уже существует`);
                 return null;
             }
-        } catch (error) {
             console.error('❌ PurchaseHistoryDB.add: Ошибка добавления покупки:', error.message);
             throw error;
         }
@@ -607,7 +606,7 @@ class PurchaseHistoryDB {
             const result = await pool.query(query, [userId]);
             const stats = result.rows[0];
             
-            const totalSpent = parseInt(stats.totalspent) || 0;
+            const totalSpent = parseFloat(stats.totalspent) || 0;
             const totalPurchases = parseInt(stats.totalpurchases) || 0;
             
             // Рассчитываем текущую скидку по логике карты лояльности
