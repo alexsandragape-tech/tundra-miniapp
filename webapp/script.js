@@ -2800,7 +2800,7 @@ async function syncLoyaltyWithServer() {
         const userId = window.Telegram.WebApp.initDataUnsafe.user.id;
         console.log(`🔄 ЛОЯЛЬНОСТЬ: Синхронизируем данные лояльности для пользователя ${userId}`);
         
-        const response = await fetch(`/api/loyalty/${userId}`);
+        const response = await fetch(`${API_BASE}/api/loyalty/${userId}`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
