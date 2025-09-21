@@ -1777,8 +1777,8 @@ function showSuccessFromLocalStorage(orderId) {
             // Удаляем данные ожидающего заказа
             localStorage.removeItem('pending_order');
             
-            // Обновляем карту лояльности
-            updateLoyaltyCard();
+            // 🚫 УБРАЛИ ОБНОВЛЕНИЕ КАРТЫ ЛОЯЛЬНОСТИ ПОСЛЕ ОПЛАТЫ
+            // Карта обновится только при завершении заказа админом
             
             // Очищаем URL
             window.history.replaceState({}, document.title, window.location.pathname);
