@@ -2163,8 +2163,15 @@ async function updateClientLoyalty(order) {
                     `📊 Всего потрачено: ${userStats.totalSpent.toLocaleString()}₽\n` +
                     `🛒 Заказов выполнено: ${userStats.totalPurchases}\n` +
                     `🔥 Текущая скидка: ${userStats.currentDiscount}%\n\n` +
-                    `_Данные лояльности автоматически обновлены в приложении_`,
-                parse_mode: 'Markdown'
+                    `🔄 _Откройте приложение и нажмите "Синхронизировать" в профиле для обновления карты лояльности_`,
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '🛒 Открыть приложение', url: config.FRONTEND_URL }
+                        ]
+                    ]
+                }
             });
             
             logger.info(`✅ ЛОЯЛЬНОСТЬ: Уведомление о начислении баллов отправлено пользователю ${userId}`);
@@ -3544,8 +3551,23 @@ app.get('/api/loyalty/:userId', async (req, res) => {
         // 🚫 УБРАЛИ АВТОМАТИЧЕСКУЮ СИНХРОНИЗАЦИЮ - лояльность обновляется только при завершении заказа админом
         // await syncPaidOrdersToLoyalty(userId);
         
+        // Сначала проверим сколько записей в purchase_history для этого пользователя
+        const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        logger.info(`🔍 LOYALTY API: Найдено ${purchases.length} записей в purchase_history для пользователя ${userId}`);
+        
+        if (purchases.length > 0) {
+            logger.info(`🔍 LOYALTY API: Первые 3 записи:`, purchases.slice(0, 3).map(p => ({
+                order_id: p.order_id,
+                amount: p.amount,
+                totalAmount: p.totalAmount,
+                purchase_date: p.purchase_date
+            })));
+        }
+        
         // Получаем статистику из системы лояльности
         const userStats = await PurchaseHistoryDB.getUserStats(userId);
+        
+        logger.info(`🔍 LOYALTY API: Результат getUserStats:`, userStats);
         
         if (userStats) {
             logger.info(`📊 LOYALTY API: Статистика для пользователя ${userId}:`, {
@@ -4749,6 +4771,148 @@ app.get('/api/orders/user/:userId', async (req, res) => {
         res.json({ ok: true, orders: formattedOrders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔄 ФУНКЦИЯ МИГРАЦИИ СТАРЫХ ЗАКАЗОВ В СИСТЕМУ ЛОЯЛЬНОСТИ
+async function migrateOldOrdersToLoyalty(userId = null) {
+    try {
+        logger.info('🔄 МИГРАЦИЯ: Начинаем миграцию старых заказов в систему лояльности');
+        
+        let orders;
+        if (userId) {
+            // Миграция для конкретного пользователя
+            orders = await OrdersDB.getByUserId(userId);
+            logger.info(`🔄 МИГРАЦИЯ: Найдено ${orders.length} заказов для пользователя ${userId}`);
+        } else {
+            // Миграция для всех пользователей
+            orders = await OrdersDB.getAll();
+            logger.info(`🔄 МИГРАЦИЯ: Найдено ${orders.length} заказов во всей базе`);
+        }
+        
+        // Фильтруем только завершенные оплаченные заказы
+        const completedOrders = orders.filter(order => 
+            (order.payment_status === 'paid' || order.payment_id) &&
+            (order.status === 'completed' || order.status === 'delivered') &&
+            order.user_id && order.user_id !== 'unknown' &&
+            order.total_amount && order.total_amount > 0
+        );
+        
+        logger.info(`🔄 МИГРАЦИЯ: Найдено ${completedOrders.length} завершенных заказов для миграции`);
+        
+        let migrated = 0;
+        let skipped = 0;
+        
+        for (const order of completedOrders) {
+            try {
+                // Проверяем, не был ли уже мигрирован этот заказ
+                const existingPurchase = await PurchaseHistoryDB.getByOrderId(order.order_id);
+                if (existingPurchase) {
+                    skipped++;
+                    continue;
+                }
+                
+                // Добавляем заказ в purchase_history
+                await PurchaseHistoryDB.add({
+                    orderId: order.order_id,
+                    userId: order.user_id,
+                    amount: parseFloat(order.total_amount),
+                    purchaseDate: order.created_at || new Date()
+                });
+                
+                migrated++;
+                logger.info(`✅ МИГРАЦИЯ: Заказ ${order.order_id} мигрирован (${order.total_amount}₽)`);
+                
+            } catch (error) {
+                logger.error(`❌ МИГРАЦИЯ: Ошибка миграции заказа ${order.order_id}:`, error.message);
+            }
+        }
+        
+        logger.info(`🎉 МИГРАЦИЯ: Завершена! Мигрировано: ${migrated}, Пропущено: ${skipped}`);
+        
+        return {
+            total: completedOrders.length,
+            migrated,
+            skipped
+        };
+        
+    } catch (error) {
+        logger.error('❌ МИГРАЦИЯ: Ошибка миграции заказов:', error.message);
+        throw error;
+    }
+}
+
+// API для миграции старых заказов
+app.post('/api/admin/migrate-loyalty/:userId?', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        logger.info(`🔄 API МИГРАЦИЯ: Запуск миграции${userId ? ` для пользователя ${userId}` : ' для всех пользователей'}`);
+        
+        const result = await migrateOldOrdersToLoyalty(userId);
+        
+        res.json({
+            ok: true,
+            message: `Миграция завершена! Мигрировано: ${result.migrated}, Пропущено: ${result.skipped}`,
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('❌ API МИГРАЦИЯ: Ошибка:', error.message);
+        res.status(500).json({ 
+            ok: false, 
+            error: error.message 
+        });
+    }
+});
+
+// 🔍 DEBUG API для прямой проверки данных лояльности
+app.get('/debug/loyalty/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        logger.info(`🔍 DEBUG LOYALTY: Полная диагностика для пользователя ${userId}`);
+        
+        // 1. Проверяем purchase_history
+        const purchases = await PurchaseHistoryDB.getByUserId(userId);
+        
+        // 2. Проверяем getUserStats
+        const userStats = await PurchaseHistoryDB.getUserStats(userId);
+        
+        // 3. Проверяем напрямую в БД
+        const directQuery = await pool.query(
+            'SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total FROM purchase_history WHERE user_id = $1',
+            [userId]
+        );
+        
+        const result = {
+            userId,
+            purchaseHistory: {
+                count: purchases.length,
+                records: purchases.map(p => ({
+                    order_id: p.order_id,
+                    amount: p.amount,
+                    totalAmount: p.totalAmount,
+                    purchase_date: p.purchase_date
+                }))
+            },
+            getUserStats: userStats,
+            directQuery: {
+                count: parseInt(directQuery.rows[0].count),
+                total: parseFloat(directQuery.rows[0].total)
+            },
+            timestamp: new Date().toISOString()
+        };
+        
+        logger.info(`🔍 DEBUG LOYALTY: Результат диагностики:`, result);
+        
+        res.json({
+            ok: true,
+            debug: result
+        });
+        
+    } catch (error) {
+        logger.error(`❌ DEBUG LOYALTY: Ошибка диагностики:`, error.message);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
