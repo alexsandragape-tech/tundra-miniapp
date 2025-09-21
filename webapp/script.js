@@ -2523,12 +2523,22 @@ async function loadLoyaltyData() {
         const userId = getUserId();
         console.log(`🔍 CLIENT: Загружаем данные лояльности для пользователя: ${userId}`);
         
-        const response = await fetch(`${API_BASE}/api/user-purchases/${userId}`);
+        const response = await fetch(`${API_BASE}/api/loyalty/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
-            console.log(`🔍 CLIENT: Получены данные лояльности:`, data.stats);
-            return data.stats || null;
+            console.log(`🔍 CLIENT: Получены данные лояльности:`, data);
+            if (data && data.ok && data.data) {
+                return {
+                    totalSpent: data.data.totalSpent,
+                    totalPurchases: data.data.totalPurchases,
+                    currentDiscount: data.data.currentDiscount,
+                    nextLevelTarget: null, // будет рассчитано позже
+                    nextLevelProgress: null, // будет рассчитано позже
+                    levelName: null // будет рассчитано позже
+                };
+            }
+            return null;
         } else {
             console.warn('Не удалось загрузить данные лояльности с сервера');
             return null;
