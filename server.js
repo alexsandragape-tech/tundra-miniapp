@@ -1127,6 +1127,13 @@ async function getOrder(orderId) {
                     telegramUserId: dbOrder.user_id // Предполагаем, что user_id это telegramUserId
                 };
                 
+                logger.info(`📦 Заказ ${orderId} загружен из БД:`, {
+                    dbOrderUserId: dbOrder.user_id,
+                    dbOrderTotalAmount: dbOrder.total_amount,
+                    convertedTelegramUserId: order.telegramUserId,
+                    convertedTotalsTotal: order.totals.total
+                });
+                
                 // Сохраняем в памяти для быстрого доступа
                 orders.set(orderId, order);
                 logger.info(`📦 Заказ ${orderId} загружен из БД в память`);
@@ -2091,8 +2098,19 @@ async function sendClientNotification(order, status, statusText, statusEmoji) {
 // 🔥 ФУНКЦИЯ ОБНОВЛЕНИЯ ЛОЯЛЬНОСТИ КЛИЕНТА ПРИ ЗАВЕРШЕНИИ ЗАКАЗА
 async function updateClientLoyalty(order) {
     try {
+        logger.info('🔥 ЛОЯЛЬНОСТЬ: Начало обработки заказа для лояльности:', {
+            orderId: order.id,
+            telegramUserId: order.telegramUserId,
+            totalsTotal: order.totals?.total,
+            fullOrder: JSON.stringify(order, null, 2)
+        });
+        
         if (!order.telegramUserId || !order.totals?.total) {
-            logger.warn('⚠️ Не удалось обновить лояльность: нет telegramUserId или суммы заказа');
+            logger.warn('⚠️ Не удалось обновить лояльность: нет telegramUserId или суммы заказа', {
+                telegramUserId: order.telegramUserId,
+                totalsTotal: order.totals?.total,
+                totalsObject: order.totals
+            });
             return;
         }
         
@@ -4244,6 +4262,14 @@ async function handleCallbackQuery(callbackQuery) {
         
         // 🔥 ВАЖНО: Перезагружаем заказ из БД для получения всех данных включая telegramUserId
         order = await getOrder(orderId);
+        
+        logger.info(`🔍 CALLBACK: Заказ после перезагрузки из БД:`, {
+            orderId: order?.id,
+            telegramUserId: order?.telegramUserId,
+            totals: order?.totals,
+            status: order?.status,
+            paymentStatus: order?.paymentStatus
+        });
         
         // Обновляем сообщение в админ-группе
         await updateOrderMessage(message.chat.id, message.message_id, order, newStatus);
