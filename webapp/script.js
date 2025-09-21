@@ -9,6 +9,10 @@ function getUserId() {
     // Пытаемся получить из Telegram Web App
     if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
         currentUserId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+        // Синхронизируем локальный кэш, чтобы убрать случайные browser_* значения
+        try {
+            localStorage.setItem('tundra_user_id', currentUserId);
+        } catch (_) {}
         return currentUserId;
     }
     
@@ -1612,6 +1616,7 @@ function proceedToOrder() {
 // Функция показа профиля
 function showProfile() {
     console.log('📱 ПРОФИЛЬ: Открываем профиль, вызываем updateLoyaltyCard(true)');
+    showNotification('🔄 Синхронизируем карту лояльности...', 'info');
     showScreen('profile-screen');
     
     // Загружаем актуальные данные лояльности с сервера
