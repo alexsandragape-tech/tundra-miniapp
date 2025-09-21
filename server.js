@@ -3298,94 +3298,6 @@ app.get('/test-webhook', (req, res) => {
 // API для заказов ПЕРЕМЕЩЕН ВЫШЕ - ПЕРЕД SPA FALLBACK
 
 
-// 🔄 ФУНКЦИЯ СИНХРОНИЗАЦИИ ОПЛАЧЕННЫХ ЗАКАЗОВ С ЛОЯЛЬНОСТЬЮ
-async function syncPaidOrdersToLoyalty(userId) {
-    try {
-        console.log('🔍 СИНХРОНИЗАЦИЯ: НАЧАЛО для пользователя ' + userId);
-        logger.info('🔄 СИНХРОНИЗАЦИЯ: Проверяем оплаченные заказы для пользователя ' + userId);
-        
-        // Получаем все заказы пользователя из БД
-        const orders = await OrdersDB.getByUserId(userId);
-        logger.info('🔄 СИНХРОНИЗАЦИЯ: Найдено ' + orders.length + ' заказов в БД');
-        console.log('🔍 СИНХРОНИЗАЦИЯ: Все заказы:', orders.map(o => ({
-            order_id: o.order_id,
-            payment_status: o.payment_status,
-            status: o.status,
-            payment_id: o.payment_id,
-            total_amount: o.total_amount
-        })));
-        
-        // Получаем существующие записи в purchase_history
-        const existingPurchases = await PurchaseHistoryDB.getByUserId(userId);
-        const existingOrderIds = new Set(existingPurchases.map(p => p.order_id));
-        logger.info('🔄 СИНХРОНИЗАЦИЯ: Уже есть ' + existingOrderIds.size + ' записей в purchase_history');
-        
-        let addedCount = 0;
-        
-        // Проверяем каждый заказ
-        for (const order of orders) {
-            console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ':', {
-                payment_status: order.payment_status,
-                status: order.status,
-                total_amount: order.total_amount
-            });
-            
-            // Пропускаем если уже есть в purchase_history
-            if (existingOrderIds.has(order.order_id)) {
-                console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' уже есть в purchase_history');
-                continue;
-            }
-            
-            // Проверяем статус оплаты (расширенные условия)
-            const isPaid = order.payment_status === 'paid' || 
-                          order.status === 'completed' || 
-                          order.status === 'delivered' ||
-                          order.status === 'accepted' ||
-                          (order.payment_id && order.payment_id !== '');
-            
-            if (isPaid) {
-                logger.info('🔄 СИНХРОНИЗАЦИЯ: Добавляем оплаченный заказ ' + order.order_id + ' в лояльность');
-                logger.info('🔄 СИНХРОНИЗАЦИЯ: Данные заказа:', {
-                    order_id: order.order_id,
-                    total_amount: order.total_amount,
-                    totalAmount: order.totalAmount,
-                    payment_status: order.payment_status,
-                    status: order.status
-                });
-                
-                try {
-                    await PurchaseHistoryDB.create({
-                        order_id: order.order_id,
-                        user_id: order.user_id,
-                        customer_name: order.user_name || 'Клиент',
-                        phone: order.phone || '',
-                        total_amount: order.total_amount || order.totalAmount || 0,
-                        items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
-                        items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
-                        payment_id: order.payment_id || '',
-                        delivery_zone: order.delivery_zone || 'moscow',
-                        address_data: order.address || '{}'
-                    });
-                    
-                    addedCount++;
-                    logger.info('✅ СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' добавлен в лояльность');
-                } catch (error) {
-                    logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка добавления заказа ' + order.order_id + ':', error.message);
-                }
-            } else {
-                console.log('🔍 СИНХРОНИЗАЦИЯ: Заказ ' + order.order_id + ' не подходит - payment_status: ' + order.payment_status + ', status: ' + order.status + ', payment_id: ' + order.payment_id);
-            }
-        }
-        
-        logger.info('🔄 СИНХРОНИЗАЦИЯ: Добавлено ' + addedCount + ' новых записей в лояльность');
-        console.log('🔍 СИНХРОНИЗАЦИЯ: КОНЕЦ - добавлено ' + addedCount + ' записей');
-        return addedCount;
-    } catch (error) {
-        logger.error('❌ СИНХРОНИЗАЦИЯ: Ошибка синхронизации лояльности:', error.message);
-        console.log('🔍 СИНХРОНИЗАЦИЯ: ОШИБКА - ' + error.message);
-        return 0;
-    }
-}
 
 // 🔍 ENDPOINT ДЛЯ ПРОВЕРКИ ТАБЛИЦЫ PURCHASE_HISTORY
 app.get('/api/check-db', async (req, res) => {
@@ -3515,25 +3427,6 @@ app.get('/api/webhook-logs', async (req, res) => {
     }
 });
 
-// 🔄 ENDPOINT ДЛЯ РУЧНОЙ СИНХРОНИЗАЦИИ ЛОЯЛЬНОСТИ
-app.post('/api/sync-loyalty/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        logger.info(`🔄 РУЧНАЯ СИНХРОНИЗАЦИЯ: Запрос для пользователя ${userId}`);
-        
-        const addedCount = await syncPaidOrdersToLoyalty(userId);
-        
-        res.json({
-            ok: true,
-            userId,
-            addedCount,
-            message: `Добавлено ${addedCount} новых записей в лояльность`
-        });
-    } catch (error) {
-        logger.error('❌ РУЧНАЯ СИНХРОНИЗАЦИЯ: Ошибка:', error.message);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
 
 // 🔍 ДИАГНОСТИЧЕСКИЙ ENDPOINT ДЛЯ ПРОВЕРКИ ДАННЫХ В БД
 app.get('/debug-purchases/:userId', async (req, res) => {
