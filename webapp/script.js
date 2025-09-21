@@ -1611,10 +1611,11 @@ function proceedToOrder() {
 
 // Функция показа профиля
 function showProfile() {
+    console.log('📱 ПРОФИЛЬ: Открываем профиль, вызываем updateLoyaltyCard(true)');
     showScreen('profile-screen');
     
-    // Обновляем карту лояльности локальными данными (без обращения к серверу)
-    updateLoyaltyCard();
+    // Загружаем актуальные данные лояльности с сервера
+    updateLoyaltyCard(true);
     
 }
 
@@ -2560,8 +2561,13 @@ function updateLoyaltyDisplay() {
 
 // Функция обновления карты лояльности
 async function updateLoyaltyCard(forceServerSync = false) {
+    console.log(`🔄 ЛОЯЛЬНОСТЬ: updateLoyaltyCard вызвана с forceServerSync=${forceServerSync}`);
+    
     const loyaltyCard = document.querySelector('.loyalty-card');
-    if (!loyaltyCard) return;
+    if (!loyaltyCard) {
+        console.log('⚠️ ЛОЯЛЬНОСТЬ: Карта лояльности не найдена в DOM');
+        return;
+    }
 
     let serverStats = null;
     
