@@ -1925,6 +1925,13 @@ async function createOrder(orderData) {
 
 // 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ КЛИЕНТАМ
 async function sendClientNotification(order, status, statusText, statusEmoji) {
+    logger.info(`📱 УВЕДОМЛЕНИЕ: sendClientNotification вызвана со статусом: ${status}`, {
+        orderId: order.id,
+        status: status,
+        telegramUserId: order.telegramUserId,
+        hasToken: !!config.TELEGRAM_BOT_TOKEN
+    });
+    
     if (!config.TELEGRAM_BOT_TOKEN || !order.telegramUserId) {
         logger.warn('⚠️ Не удалось отправить уведомление клиенту: нет токена или telegramUserId');
         return;
