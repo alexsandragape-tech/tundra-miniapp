@@ -3103,54 +3103,28 @@ app.post('/webhook/yookassa', express.raw({type: 'application/json'}), async (re
                         if (order.user_id && order.user_id !== 'unknown') {
                             logger.info(`📝 WEBHOOK: Создаем запись в purchase_history для заказа ${orderId}, пользователь: ${order.user_id}`);
                             
-                            try {
-                                // Детальное логирование как рекомендует специалист
-                                logger.info('=== YOOKASSA WEBHOOK DEBUG ===');
-                                logger.info('📝 WEBHOOK: Полные данные платежа:', JSON.stringify(payment, null, 2));
-                                logger.info('📝 WEBHOOK: Структура amount:', JSON.stringify(payment.amount, null, 2));
-                                
-                                // Проверяем путь к сумме
-                                const amountPath = payment.amount?.value ?? 'PATH_NOT_FOUND';
-                                logger.info(`📝 WEBHOOK: Amount path check: ${amountPath}`);
-                                
-                                // Парсим сумму
-                                const totalAmount = parseFloat(amountPath);
-                                logger.info(`📝 WEBHOOK: Before save to DB - amount: ${totalAmount}`);
-                                
-                                // Проверяем, что сумма валидна
-                                if (isNaN(totalAmount) || totalAmount <= 0) {
-                                    logger.error(`❌ WEBHOOK: НЕВЕРНАЯ СУММА! Сырая: ${amountPath}, Парсинг: ${totalAmount}`);
-                                }
-                                logger.info('============================');
-                                
-                                const purchaseRecord = await PurchaseHistoryDB.create({
-                                    order_id: orderId,
-                                    user_id: order.user_id,
-                                    customer_name: order.user_name || 'Клиент',
-                                    phone: order.phone || '',
-                                    total_amount: order.total_amount, // Используем сумму из заказа, а не из платежа
-                                    items_count: Array.isArray(order.items) ? order.items.length : JSON.parse(order.items || '[]').length,
-                                    items_data: typeof order.items === 'string' ? order.items : JSON.stringify(order.items),
-                                    payment_id: payment.id,
-                                    delivery_zone: order.delivery_zone || 'moscow',
-                                    address_data: order.address || '{}'
-                                });
-                                
-                                logger.info('✅ WEBHOOK: Заказ добавлен в историю покупок:', {
-                                    id: purchaseRecord.id,
-                                    user_id: purchaseRecord.user_id,
-                                    amount_in_db: purchaseRecord.amount,
-                                    total_amount_from_order: order.total_amount,
-                                    payment_amount: totalAmount
-                                });
-                                
-                                // Проверяем, что сумма сохранилась правильно
-                                if (purchaseRecord.amount !== order.total_amount) {
-                                    logger.error(`❌ WEBHOOK: СУММА НЕ СОВПАДАЕТ! Отправлено: ${order.total_amount}, В БД: ${purchaseRecord.amount}`);
-                                }
-                            } catch (purchaseError) {
-                                logger.error('❌ WEBHOOK: Ошибка создания записи в purchase_history:', purchaseError.message);
+                            // Детальное логирование как рекомендует специалист
+                            logger.info('=== YOOKASSA WEBHOOK DEBUG ===');
+                            logger.info('📝 WEBHOOK: Полные данные платежа:', JSON.stringify(payment, null, 2));
+                            logger.info('📝 WEBHOOK: Структура amount:', JSON.stringify(payment.amount, null, 2));
+                            
+                            // Проверяем путь к сумме
+                            const amountPath = payment.amount?.value ?? 'PATH_NOT_FOUND';
+                            logger.info(`📝 WEBHOOK: Amount path check: ${amountPath}`);
+                            
+                            // Парсим сумму
+                            const totalAmount = parseFloat(amountPath);
+                            logger.info(`📝 WEBHOOK: Before save to DB - amount: ${totalAmount}`);
+                            
+                            // Проверяем, что сумма валидна
+                            if (isNaN(totalAmount) || totalAmount <= 0) {
+                                logger.error(`❌ WEBHOOK: НЕВЕРНАЯ СУММА! Сырая: ${amountPath}, Парсинг: ${totalAmount}`);
                             }
+                            logger.info('============================');
+                            
+                            // 🚫 УБРАЛИ АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ В ЛОЯЛЬНОСТЬ
+                            // Лояльность обновляется только при завершении заказа админом через кнопку "✅ Доставлен"
+                            logger.info('💭 WEBHOOK: Заказ оплачен, но НЕ добавляем в лояльность - ждем завершения админом');
                         } else {
                             logger.warn(`⚠️ WEBHOOK: Пропускаем создание записи в purchase_history - user_id: ${order.user_id}`);
                         }
