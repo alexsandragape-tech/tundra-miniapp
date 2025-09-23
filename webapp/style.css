@@ -409,7 +409,7 @@ body {
 }
 
 .qty-display {
-    font-size: 14px;
+    font-size: 12px; /* меньше цифра */
     font-weight: 600;
     color: #0b5c56;
     min-width: 22px;
@@ -418,6 +418,9 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-family: "Segoe UI", "Inter", "Roboto", system-ui, sans-serif; /* строже шрифт */
+    font-variant-numeric: tabular-nums; /* ровные цифры */
+    line-height: 1;
 }
 
 .add-to-cart-btn:hover:not(:disabled) {
