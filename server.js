@@ -47,6 +47,7 @@ const path = require('path');
 const axios = require('axios');
 const crypto = require('crypto');
 const cors = require('cors');
+const { initYooKassa, createYooKassaPayment: createYooKassaPaymentSvc, formatPhoneForYooKassa: formatPhoneForYooKassaSvc } = require('./services/yookassa');
 // 💳 СОБСТВЕННАЯ РЕАЛИЗАЦИЯ ЮKASSA API
 class YooKassaAPI {
     constructor(shopId, secretKey) {
@@ -136,6 +137,8 @@ class YooKassaAPI {
 }
 const config = require('./config');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, pool } = require('./database');
+const LoyaltyService = require('./services/loyalty');
+const { mapDbOrderToApi, mapDbOrderToList, isOrderCompletedOrPaid } = require('./services/order-utils');
 
 const app = express();
 const PORT = config.PORT;
@@ -160,7 +163,7 @@ async function initializeYooKassa() {
         }
         
         logger.info('🔧 Инициализируем ЮKassa API...');
-        checkout = new YooKassaAPI(config.YOOKASSA_SHOP_ID, config.YOOKASSA_SECRET_KEY);
+        checkout = await initYooKassa();
         logger.info('✅ ЮKassa API объект создан');
         
         // Тестируем доступность API ЮKassa
@@ -954,129 +957,19 @@ async function loadFullProductCatalog() {
 
 // 📞 ФУНКЦИЯ ФОРМАТИРОВАНИЯ НОМЕРА ТЕЛЕФОНА ДЛЯ YOOKASSA
 function formatPhoneForYooKassa(phone) {
-    if (!phone) return '+79000000000';
-    
-    // Убираем все символы кроме цифр
-    let cleanPhone = phone.replace(/\D/g, '');
-    
-    // Если номер начинается с 8, заменяем на 7
-    if (cleanPhone.startsWith('8')) {
-        cleanPhone = '7' + cleanPhone.substring(1);
-    }
-    
-    // Если номер начинается с 7 и имеет 11 цифр, добавляем +
-    if (cleanPhone.startsWith('7') && cleanPhone.length === 11) {
-        return '+' + cleanPhone;
-    }
-    
-    // Если номер начинается с 7 и имеет 10 цифр, добавляем +7
-    if (cleanPhone.startsWith('7') && cleanPhone.length === 10) {
-        return '+7' + cleanPhone;
-    }
-    
-    // Если номер не соответствует формату, возвращаем fallback
-    logger.warn(`⚠️ Некорректный формат номера телефона: ${phone}, используем fallback`);
-    return '+79000000000';
+    return formatPhoneForYooKassaSvc(phone);
 }
 
 // 💳 ФУНКЦИЯ СОЗДАНИЯ ПЛАТЕЖА В YOOKASSA
 async function createYooKassaPayment(orderId, amount, description, customerInfo) {
     try {
-        const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
-        logger.debug('💳 Создаем платеж ЮKassa с параметрами:', {
-            amount: amount.toFixed(2) + ' RUB',
-            description: description,
-            customer: customerInfo.customerName,
-            originalPhone: customerInfo.phone,
-            formattedPhone: formattedPhone
-        });
-        
-        // Надежно определяем базовый URL (используем FRONTEND_URL из config)
-        const baseUrl = config.FRONTEND_URL || 'https://tundra-miniapp-production.up.railway.app';
-        const returnUrl = `${baseUrl}/payment/success?order=${orderId}`;
-        logger.debug('🔗 Return URL для ЮKassa:', returnUrl);
-        
-        const fullPaymentData = {
-            amount: {
-                value: amount.toFixed(2),
-                currency: 'RUB'
-            },
-            confirmation: {
-                type: 'redirect',
-                return_url: returnUrl
-            },
-            capture: true,
-            description: description,
-            receipt: {
-                customer: {
-                    email: customerInfo.email || 'customer@example.com',
-                    phone: formattedPhone
-                },
-                items: [
-                    {
-                        description: description,
-                        quantity: '1',
-                        amount: {
-                            value: amount.toFixed(2),
-                            currency: 'RUB'
-                        },
-                        vat_code: 1,
-                        payment_mode: 'full_payment',
-                        payment_subject: 'commodity'
-                    }
-                ]
-            },
-            metadata: {
-                orderId: orderId,
-                customerName: customerInfo.customerName || 'Клиент',
-                phone: customerInfo.phone || ''
-            }
-        };
-        
-        // Минимальный payload на случай отказа ЮKassa из-за настроек чека
-        const minimalPaymentData = {
-            amount: {
-                value: amount.toFixed(2),
-                currency: 'RUB'
-            },
-            confirmation: {
-                type: 'redirect',
-                return_url: returnUrl
-            },
-            capture: true,
-            description: description,
-            metadata: {
-                orderId: orderId
-            }
-        };
-        
-        // Создаем уникальный ключ идемпотентности как было раньше
-        const idempotenceKey = crypto.randomUUID();
-        logger.debug('🔑 Idempotence Key:', idempotenceKey);
-        logger.debug('📋 Данные платежа (полные):', JSON.stringify(fullPaymentData, null, 2));
-        
-        try {
-            const payment = await checkout.createPayment(fullPaymentData, idempotenceKey);
-            logger.info(`✅ Платеж создан в ЮKassa: ${payment.id} на сумму ${amount}₽`);
-            logger.debug(`🔗 URL подтверждения: ${payment.confirmation?.confirmation_url}`);
-            return payment;
-        } catch (primaryError) {
-            const status = primaryError.response?.status;
-            logger.error('❌ Основной запрос в ЮKassa отклонен:', status, primaryError.response?.data);
-            // Повторяем с минимальным payload при 400/403, которые часто связаны с настройками чеков/налогов
-            if (status === 400 || status === 403) {
-                logger.warn('🔁 Пробуем повторить запрос с минимальным payload без чека');
-                const retryKey = crypto.randomUUID();
-                logger.debug('🔑 Retry Idempotence Key:', retryKey);
-                logger.debug('📋 Данные платежа (минимальные):', JSON.stringify(minimalPaymentData, null, 2));
-                const payment = await checkout.createPayment(minimalPaymentData, retryKey);
-                logger.info(`✅ Платеж (минимальный) создан: ${payment.id}`);
-                return payment;
-            }
-            throw primaryError;
-        }
+        const returnUrlBase = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+        const returnUrl = `${returnUrlBase.replace(/\/$/, '')}/payment-success?orderId=${orderId}`;
+        const payment = await createYooKassaPaymentSvc(orderId, amount, description, customerInfo, returnUrl);
+        logger.info('✅ Платеж ЮKassa создан:', payment.id);
+        return payment;
     } catch (error) {
-        logger.error('❌ Ошибка создания платежа ЮKassa:', error.message);
+        logger.error('❌ Ошибка при создании платежа ЮKassa:', error.message);
         if (error.response) {
             logger.error('📋 Детали ошибки YooKassa:', {
                 status: error.response.status,
@@ -1129,35 +1022,7 @@ async function getOrder(orderId) {
             const dbOrder = await OrdersDB.getById(orderId);
             if (dbOrder) {
                 // Конвертируем данные из БД в формат, ожидаемый клиентом
-                order = {
-                    id: dbOrder.order_id,
-                    status: dbOrder.status,
-                    paymentStatus: dbOrder.payment_status,
-                    totals: {
-                        total: parseFloat(dbOrder.total_amount || 0)
-                    },
-                    items: (() => {
-                        try {
-                            return typeof dbOrder.items === 'string' ? JSON.parse(dbOrder.items) : (dbOrder.items || []);
-                        } catch (e) {
-                            logger.warn('⚠️ Ошибка парсинга items в getOrder:', e.message);
-                            return [];
-                        }
-                    })(),
-                    address: (() => {
-                        try {
-                            return typeof dbOrder.address === 'string' ? JSON.parse(dbOrder.address) : (dbOrder.address || {});
-                        } catch (e) {
-                            logger.warn('⚠️ Ошибка парсинга address в getOrder:', e.message);
-                            return {};
-                        }
-                    })(),
-                    phone: dbOrder.phone,
-                    customerName: dbOrder.user_name,
-                    createdAt: dbOrder.created_at,
-                    payment_id: dbOrder.payment_id,
-                    telegramUserId: dbOrder.user_id // Предполагаем, что user_id это telegramUserId
-                };
+                order = mapDbOrderToApi(dbOrder);
                 
                 logger.info(`📦 Заказ ${orderId} загружен из БД:`, {
                     dbOrderUserId: dbOrder.user_id,
@@ -1278,6 +1143,20 @@ app.use((req, res, next) => {
     }
     next();
 });
+
+// Подключаем модульные роуты заказов по фиче-флагу
+try {
+    const ordersRouterFactory = require('./routes/orders');
+    if (process.env.USE_ORDERS_ROUTER === 'true') {
+        const ordersRouter = ordersRouterFactory(logger);
+        app.use('/api', ordersRouter);
+        logger.info('🧭 Orders router enabled (USE_ORDERS_ROUTER=true)');
+    } else {
+        logger.info('🧭 Orders router disabled (set USE_ORDERS_ROUTER=true to enable)');
+    }
+} catch (e) {
+    logger.warn('⚠️ Orders router not loaded:', e.message);
+}
 
 // CORS для всех запросов
 app.use(cors());
@@ -1594,24 +1473,8 @@ app.get('/api/user-orders/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const orders = await OrdersDB.getByUserId(userId);
-        
-        const paidOrders = orders.filter(order => 
-            order.payment_status === 'paid' || 
-            order.status === 'completed' || 
-            order.status === 'delivered' ||
-            order.status === 'accepted' ||
-            (order.payment_id && order.payment_id !== '')
-        );
-        
-        const formattedOrders = paidOrders.map(order => ({
-            order_id: order.order_id,
-            amount: order.total_amount || order.totalAmount || 0,
-            purchase_date: order.created_at || order.createdAt,
-            items: order.items || [],
-            status: order.status,
-            payment_status: order.payment_status
-        }));
-        
+        const paidOrders = orders.filter(isOrderCompletedOrPaid);
+        const formattedOrders = paidOrders.map(mapDbOrderToList);
         res.json({ ok: true, orders: formattedOrders });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
@@ -1820,33 +1683,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
             }
             
             // Конвертируем данные из БД в формат, ожидаемый клиентом
-            order = {
-                id: order.id,
-                status: order.status,
-                paymentStatus: order.payment_status,
-                totals: {
-                    total: parseFloat(order.total_amount || 0)
-                },
-                items: (() => {
-                    try {
-                        return typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
-                    } catch (e) {
-                        logger.warn('⚠️ Ошибка парсинга items для заказа ' + orderId + ':', e.message);
-                        return [];
-                    }
-                })(),
-                address: (() => {
-                    try {
-                        return typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {});
-                    } catch (e) {
-                        logger.warn('⚠️ Ошибка парсинга address для заказа ' + orderId + ':', e.message);
-                        return {};
-                    }
-                })(),
-                phone: order.phone,
-                customerName: order.user_name,
-                createdAt: order.created_at
-            };
+            order = mapDbOrderToApi(order);
         } else {
             // Если не найден в БД, пробуем получить из памяти (для очень новых заказов)
             logger.info('🔍 API: Заказ ' + orderId + ' не найден в БД, ищем в памяти...');
@@ -2136,90 +1973,7 @@ async function sendClientNotification(order, status, statusText, statusEmoji) {
 
 // 🔥 ФУНКЦИЯ ОБНОВЛЕНИЯ ЛОЯЛЬНОСТИ КЛИЕНТА ПРИ ЗАВЕРШЕНИИ ЗАКАЗА
 async function updateClientLoyalty(order) {
-    try {
-        logger.info('🔥 ЛОЯЛЬНОСТЬ: Начало обработки заказа для лояльности:', {
-            orderId: order.id,
-            telegramUserId: order.telegramUserId,
-            totalsTotal: order.totals?.total,
-            fullOrder: JSON.stringify(order, null, 2)
-        });
-        
-        if (!order.telegramUserId || !order.totals?.total) {
-            logger.warn('⚠️ Не удалось обновить лояльность: нет telegramUserId или суммы заказа', {
-                telegramUserId: order.telegramUserId,
-                totalsTotal: order.totals?.total,
-                totalsObject: order.totals
-            });
-            return;
-        }
-        
-        const userId = order.telegramUserId;
-        const orderAmount = order.totals.total;
-        
-        logger.info(`🔥 ЛОЯЛЬНОСТЬ: Обновляем лояльность для пользователя ${userId}, сумма заказа: ${orderAmount}₽`);
-        
-        // Проверяем, не был ли уже учтен этот заказ в системе лояльности
-        const existingPurchase = await PurchaseHistoryDB.getByOrderId(order.id);
-        if (existingPurchase) {
-            logger.warn(`⚠️ ЛОЯЛЬНОСТЬ: Заказ ${order.id} уже учтен в системе лояльности`);
-            return;
-        }
-        
-        // Добавляем заказ в purchase_history для подсчета лояльности
-        await PurchaseHistoryDB.add({
-            orderId: order.id,
-            userId: userId,
-            amount: orderAmount,
-            purchaseDate: new Date()
-        });
-        
-        logger.info(`✅ ЛОЯЛЬНОСТЬ: Заказ ${order.id} добавлен в систему лояльности`);
-        
-        // Получаем обновленную статистику пользователя
-        const userStats = await PurchaseHistoryDB.getUserStats(userId);
-        
-        if (userStats) {
-            logger.info(`📊 ЛОЯЛЬНОСТЬ: Обновленная статистика пользователя ${userId}:`, {
-                totalSpent: userStats.totalSpent,
-                totalPurchases: userStats.totalPurchases,
-                currentDiscount: userStats.currentDiscount
-            });
-            
-            // Отправляем команду клиенту для обновления локального профиля
-            const loyaltyUpdateData = {
-                action: 'update_loyalty',
-                totalSpent: userStats.totalSpent,
-                completedOrders: userStats.totalPurchases,
-                currentDiscount: userStats.currentDiscount,
-                orderAmount: orderAmount
-            };
-            
-            // Отправляем специальное сообщение с командой обновления лояльности
-            await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                chat_id: userId,
-                text: `🔥 *Баллы лояльности начислены!*\n\n` +
-                    `💰 За заказ №${order.id}: +${orderAmount}₽\n` +
-                    `📊 Всего потрачено: ${userStats.totalSpent.toLocaleString()}₽\n` +
-                    `🛒 Заказов выполнено: ${userStats.totalPurchases}\n` +
-                    `🔥 Текущая скидка: ${userStats.currentDiscount}%\n\n` +
-                    `🔄 _Откройте приложение и нажмите "Синхронизировать" в профиле для обновления карты лояльности_`,
-                parse_mode: 'Markdown',
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            { text: '🛒 Открыть приложение', url: config.FRONTEND_URL }
-                        ]
-                    ]
-                }
-            });
-            
-            logger.info(`✅ ЛОЯЛЬНОСТЬ: Уведомление о начислении баллов отправлено пользователю ${userId}`);
-        }
-        
-    } catch (error) {
-        logger.error('❌ ЛОЯЛЬНОСТЬ: Ошибка обновления лояльности:', error.message);
-        // Не пробрасываем ошибку, чтобы не нарушить основной процесс доставки
-    }
+    return LoyaltyService.updateClientLoyalty(order, logger);
 }
 
 // 📱 ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ В TELEGRAM АДМИНАМ
@@ -4676,29 +4430,9 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
 app.get('/api/orders/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        
-        // ПРОСТОЕ РЕШЕНИЕ: Берем заказы напрямую из таблицы orders
         const orders = await OrdersDB.getByUserId(userId);
-        
-        // Фильтруем только оплаченные заказы
-        const paidOrders = orders.filter(order => 
-            order.payment_status === 'paid' || 
-            order.status === 'completed' || 
-            order.status === 'delivered' ||
-            order.status === 'accepted' ||
-            (order.payment_id && order.payment_id !== '')
-        );
-        
-        // Преобразуем в формат для клиента
-        const formattedOrders = paidOrders.map(order => ({
-            order_id: order.order_id,
-            amount: order.total_amount || order.totalAmount || 0,
-            purchase_date: order.created_at || order.createdAt,
-            items: order.items || [],
-            status: order.status,
-            payment_status: order.payment_status
-        }));
-        
+        const paidOrders = orders.filter(isOrderCompletedOrPaid);
+        const formattedOrders = paidOrders.map(mapDbOrderToList);
         res.json({ ok: true, orders: formattedOrders });
     } catch (error) {
         logger.error('❌ Ошибка загрузки заказов пользователя:', error.message);
@@ -4708,70 +4442,7 @@ app.get('/api/orders/user/:userId', async (req, res) => {
 
 // 🔄 ФУНКЦИЯ МИГРАЦИИ СТАРЫХ ЗАКАЗОВ В СИСТЕМУ ЛОЯЛЬНОСТИ
 async function migrateOldOrdersToLoyalty(userId = null) {
-    try {
-        logger.info('🔄 МИГРАЦИЯ: Начинаем миграцию старых заказов в систему лояльности');
-        
-        let orders;
-        if (userId) {
-            // Миграция для конкретного пользователя
-            orders = await OrdersDB.getByUserId(userId);
-            logger.info(`🔄 МИГРАЦИЯ: Найдено ${orders.length} заказов для пользователя ${userId}`);
-        } else {
-            // Миграция для всех пользователей
-            orders = await OrdersDB.getAll();
-            logger.info(`🔄 МИГРАЦИЯ: Найдено ${orders.length} заказов во всей базе`);
-        }
-        
-        // Фильтруем только завершенные оплаченные заказы
-        const completedOrders = orders.filter(order => 
-            (order.payment_status === 'paid' || order.payment_id) &&
-            (order.status === 'completed' || order.status === 'delivered') &&
-            order.user_id && order.user_id !== 'unknown' &&
-            order.total_amount && order.total_amount > 0
-        );
-        
-        logger.info(`🔄 МИГРАЦИЯ: Найдено ${completedOrders.length} завершенных заказов для миграции`);
-        
-        let migrated = 0;
-        let skipped = 0;
-        
-        for (const order of completedOrders) {
-            try {
-                // Проверяем, не был ли уже мигрирован этот заказ
-                const existingPurchase = await PurchaseHistoryDB.getByOrderId(order.order_id);
-                if (existingPurchase) {
-                    skipped++;
-                    continue;
-                }
-                
-                // Добавляем заказ в purchase_history
-                await PurchaseHistoryDB.add({
-                    orderId: order.order_id,
-                    userId: order.user_id,
-                    amount: parseFloat(order.total_amount),
-                    purchaseDate: order.created_at || new Date()
-                });
-                
-                migrated++;
-                logger.info(`✅ МИГРАЦИЯ: Заказ ${order.order_id} мигрирован (${order.total_amount}₽)`);
-                
-            } catch (error) {
-                logger.error(`❌ МИГРАЦИЯ: Ошибка миграции заказа ${order.order_id}:`, error.message);
-            }
-        }
-        
-        logger.info(`🎉 МИГРАЦИЯ: Завершена! Мигрировано: ${migrated}, Пропущено: ${skipped}`);
-        
-        return {
-            total: completedOrders.length,
-            migrated,
-            skipped
-        };
-        
-    } catch (error) {
-        logger.error('❌ МИГРАЦИЯ: Ошибка миграции заказов:', error.message);
-        throw error;
-    }
+    return LoyaltyService.migrateOldOrdersToLoyalty(userId, logger);
 }
 
 // API для миграции старых заказов
@@ -5065,65 +4736,6 @@ process.on('unhandledRejection', (reason, promise) => {
 // Запускаем сервер
 startServer();
 
-/*
-            border-radius: 12px;
-            font-size: 16px;
-            margin-bottom: 20px;
-            background: rgba(255,255,255,0.9);
-            color: #2c3e50;
-        }
-        .login-btn {
-            width: 100%;
-            background: #D4A574;
-            color: #1A1F2E;
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .login-btn:hover { background: #c19660; transform: translateY(-2px); }
-        .error-msg {
-            background: rgba(231, 76, 60, 0.2);
-            color: #ff6b6b;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(231, 76, 60, 0.3);
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-icon">🔐</div>
-        <div class="login-title">Админ панель</div>
-        <div class="login-subtitle">Tundra Gourmet</div>
-        
-        <div class="error-msg">❌ Неверный пароль</div>
-        
-        <form class="login-form" method="GET">
-            <input type="password" 
-                   name="password" 
-                   class="login-input" 
-                   placeholder="Введите пароль" 
-                   required 
-                   autofocus>
-            <button type="submit" class="login-btn">🚀 Войти</button>
-        </form>
-        
-        <div style="margin-top: 30px; font-size: 14px; opacity: 0.7;">
-            💡 Если забыли пароль, обратитесь к разработчику
-        </div>
-    </div>
-</body>
-</html>
-            `);
-*/
-
-// Второй SPA fallback удален - дублирует первый
-
 // 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
 process.on('uncaughtException', (error) => {
     console.error('💥 Неперехваченная ошибка:', error.message);
@@ -5242,3 +4854,7 @@ app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) =
         res.status(500).json({ ok: false, error: error.message });
     }
 });
+
+// Подключаем модульные роуты
+const ordersRouter = require('./routes/orders')(logger);
+app.use('/api', ordersRouter);
