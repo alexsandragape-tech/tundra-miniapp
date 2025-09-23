@@ -887,25 +887,26 @@ body {
 }
 
 .work-hours-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: block; /* показываем день и время один под другим */
     margin-bottom: 15px;
     padding: 15px;
     background: #f8f9fa;
     border-radius: 12px;
-    flex-wrap: nowrap; /* Запрещаем перенос */
 }
 
 .work-hours-row .day {
+    display: block;
     font-weight: 600;
     color: #1A1F2E;
+    white-space: nowrap; /* не переносим */
 }
 
 .work-hours-row .time {
+    display: block;
     font-weight: 700;
     color: #0b5c56;
     font-size: 18px;
+    margin-top: 6px; /* отступ от дня */
 }
 
 .work-hours-note {
