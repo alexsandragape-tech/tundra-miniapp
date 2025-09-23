@@ -1438,7 +1438,7 @@ function showCart() {
     if (cartItems.length === 0) {
         cartContent.innerHTML = `
             <div class="empty-cart">
-                <div class="empty-cart-icon">🛒</div>
+                <!-- Иконка скрыта по просьбе пользователя -->
                 <div class="empty-cart-title">Корзина пуста</div>
                 <div class="empty-cart-desc">Добавьте товары из каталога</div>
                 <button class="go-shopping-btn" onclick="showMain()">
@@ -1446,85 +1446,84 @@ function showCart() {
                 </button>
             </div>
         `;
-    } else {
-        let cartHTML = '<div style="padding: 20px;">';
+        return;
+    }
 
-        cartItems.forEach(item => {
-            // Определяем, что отображать: изображение или эмодзи
-            let cartImageContent = '';
-            let cartEmojiContent = '';
-            
-            if (item.imageUrl) {
-                cartImageContent = `<img src="${item.imageUrl}" alt="${item.name}" class="cart-item-image-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
-                cartEmojiContent = `<div class="cart-item-image-emoji" style="display: none;">${item.image}</div>`;
-            } else {
-                cartImageContent = '';
-                cartEmojiContent = `<div class="cart-item-image-emoji">${item.image}</div>`;
-            }
-            
-            cartHTML += `
-                <div class="cart-item">
-                    <div class="cart-item-header">
-                                        <div class="cart-item-image">
-                    ${cartImageContent}
-                    ${cartEmojiContent}
-                </div>
-                        <div class="cart-item-info">
-                            <div class="cart-item-name">${item.name}</div>
-                            <div class="cart-item-price">${item.price}₽${item.unit}</div>
-                        </div>
-                    </div>
-                    <div class="cart-item-controls">
-                        <div class="cart-qty-controls">
-                            <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', -1)">-</button>
-                            <span class="qty-display">${item.quantity}</span>
-                            <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', 1)">+</button>
-                        </div>
-                        <div class="cart-item-total">${item.price * item.quantity}₽</div>
-                    </div>
-                </div>
-            `;
-        });
+    let cartHTML = '<div style="padding: 20px;">';
 
-        const { rawSubtotal, loyaltyDiscount, subtotal, delivery, total } = calculateCartTotal();
-        const loyalty = calculateLoyalty(userProfile.totalSpent);
+    cartItems.forEach(item => {
+        // Определяем, что отображать: изображение или эмодзи
+        let cartImageContent = '';
+        let cartEmojiContent = '';
         
-        cartHTML += `
-            <div class="cart-summary">
-                <div class="summary-row">
-                    <span>Товары:</span>
-                    <span>${rawSubtotal}₽</span>
-                </div>`;
-        
-        // Показываем скидку лояльности если она есть
-        if (loyaltyDiscount > 0) {
-            cartHTML += `
-                <div class="summary-row loyalty-discount">
-                    <span>🔥 Скидка лояльности (${loyalty.discount}%):</span>
-                    <span>-${loyaltyDiscount}₽</span>
-                </div>`;
+        if (item.imageUrl) {
+            cartImageContent = `<img src="${item.imageUrl}" alt="${item.name}" class="cart-item-image-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
+            cartEmojiContent = `<div class="cart-item-image-emoji" style="display: none;">${item.image}</div>`;
+        } else {
+            cartImageContent = '';
+            cartEmojiContent = `<div class="cart-item-image-emoji">${item.image}</div>`;
         }
         
         cartHTML += `
-                <div class="summary-row">
-                    <span>Доставка:</span>
-                    <span>${delivery}₽</span>
-                </div>
-                <div class="summary-row summary-total">
-                    <span>Итого:</span>
-                    <span>${total}₽</span>
-                </div>
-                <button class="checkout-btn" onclick="proceedToOrder()">
-                    Оформить заказ
-                </button>
-                <!-- Временно убрано ограничение минимального заказа -->
+            <div class="cart-item">
+                <div class="cart-item-header">
+                                    <div class="cart-item-image">
+                ${cartImageContent}
+                ${cartEmojiContent}
             </div>
-        </div>`;
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div class="cart-item-price">${item.price}₽${item.unit}</div>
+                    </div>
+                </div>
+                <div class="cart-item-controls">
+                    <div class="cart-qty-controls">
+                        <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', -1)">-</button>
+                        <span class="qty-display">${item.quantity}</span>
+                        <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', 1)">+</button>
+                    </div>
+                    <div class="cart-item-total">${item.price * item.quantity}₽</div>
+                </div>
+            </div>
+        `;
+    });
 
-        cartContent.innerHTML = cartHTML;
+    const { rawSubtotal, loyaltyDiscount, subtotal, delivery, total } = calculateCartTotal();
+    const loyalty = calculateLoyalty(userProfile.totalSpent);
+    
+    cartHTML += `
+        <div class="cart-summary">
+            <div class="summary-row">
+                <span>Товары:</span>
+                <span>${rawSubtotal}₽</span>
+            </div>`;
+    
+    // Показываем скидку лояльности если она есть
+    if (loyaltyDiscount > 0) {
+        cartHTML += `
+            <div class="summary-row loyalty-discount">
+                <span>🔥 Скидка лояльности (${loyalty.discount}%):</span>
+                <span>-${loyaltyDiscount}₽</span>
+            </div>`;
     }
     
-    showScreen('cart-screen');
+    cartHTML += `
+            <div class="summary-row">
+                <span>Доставка:</span>
+                <span>${delivery}₽</span>
+            </div>
+            <div class="summary-row summary-total">
+                <span>Итого:</span>
+                <span>${total}₽</span>
+            </div>
+            <button class="checkout-btn" onclick="proceedToOrder()">
+                Оформить заказ
+            </button>
+            <!-- Временно убрано ограничение минимального заказа -->
+        </div>
+    </div>`;
+
+    cartContent.innerHTML = cartHTML;
 }
 
 // Функция изменения количества в корзине
