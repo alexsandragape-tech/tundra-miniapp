@@ -375,6 +375,7 @@ body {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+    border: 1px solid transparent; /* синхронизируем толщину с счетчиком */
 }
 
 /* Счетчик количества на карточке товара */
@@ -389,6 +390,12 @@ body {
     padding: 6px 10px;
     border: 1px solid #0b5c56; /* тоньше рамка */
     box-sizing: border-box;
+}
+
+/* Гарантируем одинаковое позиционирование внутри карточки */
+.product-actions .add-to-cart-btn,
+.product-actions .quantity-selector {
+    margin: 0; /* без разницы в отступах */
 }
 
 .qty-btn {
