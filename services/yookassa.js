@@ -31,6 +31,16 @@ class YooKassaAPI {
         const response = await axios.post(url, paymentData, { headers, auth, timeout: 10000 });
         return response.data;
     }
+
+    async getPayment(paymentId) {
+        const auth = {
+            username: this.shopId,
+            password: this.secretKey
+        };
+        const url = `${this.baseURL}/payments/${paymentId}`;
+        const response = await axios.get(url, { auth, timeout: 10000 });
+        return response.data;
+    }
 }
 
 let checkout = null;
