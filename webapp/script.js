@@ -137,6 +137,10 @@ let currentCategory = null;
 let currentProduct = null;
 let cart = JSON.parse(localStorage.getItem('tundra_cart') || '{}');
 let userProfile = JSON.parse(localStorage.getItem('tundra_profile') || '{"totalSpent": 0, "completedOrders": 0}');
+// Обратная совместимость: маппим completedOrders -> totalPurchases
+if (userProfile && userProfile.completedOrders != null && userProfile.totalPurchases == null) {
+    userProfile.totalPurchases = userProfile.completedOrders;
+}
 let orderCounter = parseInt(localStorage.getItem('tundra_order_counter') || '0');
 
 // 🔥 ПЕРЕМЕННЫЕ ДЛЯ ТАЙМЕРА ОПЛАТЫ
@@ -2610,7 +2614,7 @@ async function updateLoyaltyCard(forceServerSync = false) {
         const loyalty = calculateLoyalty(userProfile.totalSpent);
         stats = {
             totalSpent: userProfile.totalSpent,
-            totalPurchases: userProfile.completedOrders,
+            totalPurchases: userProfile.totalPurchases ?? userProfile.completedOrders,
             currentDiscount: loyalty.discount,
             nextLevelTarget: loyalty.nextLevel,
             nextLevelProgress: loyalty.progress,
@@ -2773,8 +2777,10 @@ function resetUserProfile() {
     
     userProfile = {
         totalSpent: 0,
-        completedOrders: 0
+        totalPurchases: 0
     };
+    // сохраняем и старое имя поля для совместимости
+    userProfile.completedOrders = userProfile.totalPurchases;
     
     localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
     localStorage.removeItem('pending_order');
@@ -2809,14 +2815,15 @@ async function syncLoyaltyWithServer() {
         if (serverStats && serverStats.ok) {
             // Обновляем локальный профиль данными с сервера
             userProfile.totalSpent = serverStats.data.totalSpent || 0;
-            userProfile.completedOrders = serverStats.data.totalPurchases || 0;
+            userProfile.totalPurchases = serverStats.data.totalPurchases || 0;
+            userProfile.completedOrders = userProfile.totalPurchases; // совместимость
             
             // Сохраняем обновленный профиль
             localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
             
             console.log('✅ ЛОЯЛЬНОСТЬ: Профиль синхронизирован с сервером:', {
                 totalSpent: userProfile.totalSpent,
-                completedOrders: userProfile.completedOrders,
+                totalPurchases: userProfile.totalPurchases,
                 currentDiscount: serverStats.data.currentDiscount
             });
             
@@ -2849,7 +2856,8 @@ async function syncProfileWithServer() {
             if (data.stats) {
                 // Обновляем локальный профиль данными с сервера
                 userProfile.totalSpent = data.stats.totalSpent || 0;
-                userProfile.completedOrders = data.stats.totalPurchases || 0;
+                userProfile.totalPurchases = data.stats.totalPurchases || 0;
+                userProfile.completedOrders = userProfile.totalPurchases; // совместимость
                 localStorage.setItem('tundra_profile', JSON.stringify(userProfile));
                 
                 console.log('✅ Профиль синхронизирован с сервером:', userProfile);
