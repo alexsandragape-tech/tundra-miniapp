@@ -1432,6 +1432,11 @@ function updateCartBadge() {
 
 // Функция показа корзины
 function showCart() {
+    // Переключаемся на экран корзины перед рендером содержимого
+    if (typeof showScreen === 'function') {
+        showScreen('cart-screen');
+    }
+
     const cartContent = document.getElementById('cart-content');
     const cartItems = Object.values(cart).filter(item => item.quantity > 0);
 
