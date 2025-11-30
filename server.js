@@ -48,9 +48,10 @@ const axios = require('axios');
 const cors = require('cors');
 const { initYooKassa, createYooKassaPayment: createYooKassaPaymentSvc, formatPhoneForYooKassa: formatPhoneForYooKassaSvc } = require('./services/yookassa');
 const config = require('./config');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, pool } = require('./database');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, PromoCodesDB, pool } = require('./database');
 const LoyaltyService = require('./services/loyalty');
 const { mapDbOrderToApi, mapDbOrderToList, isOrderCompletedOrPaid } = require('./services/order-utils');
+const PromoService = require('./services/promo');
 
 const app = express();
 const PORT = config.PORT;
@@ -3316,6 +3317,229 @@ app.get('/api/orders', (req, res) => {
     } catch (error) {
         logger.error('Ошибка получения заказов:', error.message);
         res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+function parseDateOrNull(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+app.get('/api/admin/promocodes', requireAdminAuth, async (req, res) => {
+    try {
+        const rows = await PromoCodesDB.listAll();
+        res.json({
+            ok: true,
+            supportedTypes: Array.from(PromoService.SUPPORTED_TYPES),
+            promocodes: rows.map(PromoService.mapPromoRow)
+        });
+    } catch (error) {
+        logger.error('❌ Ошибка получения промокодов:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось загрузить промокоды' });
+    }
+});
+
+app.post('/api/admin/promocodes', requireAdminAuth, async (req, res) => {
+    try {
+        const {
+            code,
+            discountType,
+            discountValue,
+            description,
+            isActive = false,
+            maxPerUser = 1,
+            startsAt,
+            expiresAt
+        } = req.body || {};
+
+        if (!code || typeof code !== 'string') {
+            return res.status(400).json({ ok: false, error: 'Укажите код промокода' });
+        }
+
+        const normalizedCode = PromoService.normalizeCode(code);
+
+        const type = typeof discountType === 'string' ? discountType.toLowerCase() : '';
+        if (!PromoService.SUPPORTED_TYPES.has(type)) {
+            return res.status(400).json({ ok: false, error: 'Неподдерживаемый тип скидки' });
+        }
+
+        let value = Number.parseInt(discountValue, 10);
+        if (type === 'free_delivery') {
+            value = 0;
+        } else if (!Number.isFinite(value) || value <= 0) {
+            return res.status(400).json({ ok: false, error: 'Укажите значение скидки больше нуля' });
+        } else if (type === 'percent' && (value <= 0 || value > 100)) {
+            return res.status(400).json({ ok: false, error: 'Процент скидки должен быть от 1 до 100' });
+        }
+
+        let perUser = Number.parseInt(maxPerUser, 10);
+        if (!Number.isFinite(perUser) || perUser <= 0) {
+            perUser = 1;
+        }
+
+        const startsAtDate = parseDateOrNull(startsAt);
+        const expiresAtDate = parseDateOrNull(expiresAt);
+        if (startsAt && !startsAtDate) {
+            return res.status(400).json({ ok: false, error: 'Некорректная дата начала действия' });
+        }
+        if (expiresAt && !expiresAtDate) {
+            return res.status(400).json({ ok: false, error: 'Некорректная дата окончания действия' });
+        }
+        if (startsAtDate && expiresAtDate && expiresAtDate < startsAtDate) {
+            return res.status(400).json({ ok: false, error: 'Дата окончания должна быть позже даты начала' });
+        }
+
+        const existing = await PromoCodesDB.getByCode(normalizedCode);
+        if (existing) {
+            return res.status(409).json({ ok: false, error: 'Промокод с таким кодом уже существует' });
+        }
+
+        const row = await PromoCodesDB.create({
+            code: normalizedCode,
+            discount_type: type,
+            discount_value: value,
+            description,
+            is_active: Boolean(isActive),
+            max_per_user: perUser,
+            starts_at: startsAtDate,
+            expires_at: expiresAtDate
+        });
+
+        res.status(201).json({ ok: true, promo: PromoService.mapPromoRow(row) });
+    } catch (error) {
+        logger.error('❌ Ошибка создания промокода:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось создать промокод' });
+    }
+});
+
+app.put('/api/admin/promocodes/:id', requireAdminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = await PromoCodesDB.getById(id);
+        if (!existing) {
+            return res.status(404).json({ ok: false, error: 'Промокод не найден' });
+        }
+
+        const updates = {};
+        const {
+            code,
+            discountType,
+            discountValue,
+            description,
+            isActive,
+            maxPerUser,
+            startsAt,
+            expiresAt
+        } = req.body || {};
+
+        if (code !== undefined) {
+            if (!code || typeof code !== 'string') {
+                return res.status(400).json({ ok: false, error: 'Некорректный код промокода' });
+            }
+            const normalizedCode = PromoService.normalizeCode(code);
+            const duplicate = await PromoCodesDB.getByCode(normalizedCode);
+            if (duplicate && duplicate.id !== existing.id) {
+                return res.status(409).json({ ok: false, error: 'Промокод с таким кодом уже существует' });
+            }
+            updates.code = normalizedCode;
+        }
+
+        if (discountType !== undefined) {
+            const type = typeof discountType === 'string' ? discountType.toLowerCase() : '';
+            if (!PromoService.SUPPORTED_TYPES.has(type)) {
+                return res.status(400).json({ ok: false, error: 'Неподдерживаемый тип скидки' });
+            }
+            updates.discount_type = type;
+            if (type === 'free_delivery') {
+                updates.discount_value = 0;
+            }
+        }
+
+        if (discountValue !== undefined) {
+            const value = Number.parseInt(discountValue, 10);
+            const type = updates.discount_type || existing.discount_type;
+            if (type !== 'free_delivery') {
+                if (!Number.isFinite(value) || value <= 0) {
+                    return res.status(400).json({ ok: false, error: 'Укажите значение скидки больше нуля' });
+                }
+                if (type === 'percent' && (value <= 0 || value > 100)) {
+                    return res.status(400).json({ ok: false, error: 'Процент скидки должен быть от 1 до 100' });
+                }
+                updates.discount_value = value;
+            }
+        }
+
+        if (description !== undefined) {
+            updates.description = description || null;
+        }
+
+        if (isActive !== undefined) {
+            updates.is_active = Boolean(isActive);
+        }
+
+        if (maxPerUser !== undefined) {
+            if (maxPerUser === null || maxPerUser === '') {
+                updates.max_per_user = 1;
+            } else {
+                const perUser = Number.parseInt(maxPerUser, 10);
+                if (!Number.isFinite(perUser) || perUser <= 0) {
+                    return res.status(400).json({ ok: false, error: 'Лимит на пользователя должен быть положительным числом' });
+                }
+                updates.max_per_user = perUser;
+            }
+        }
+
+        if (startsAt !== undefined) {
+            const startsAtDate = parseDateOrNull(startsAt);
+            if (startsAt && !startsAtDate) {
+                return res.status(400).json({ ok: false, error: 'Некорректная дата начала действия' });
+            }
+            updates.starts_at = startsAtDate;
+        }
+
+        if (expiresAt !== undefined) {
+            const expiresAtDate = parseDateOrNull(expiresAt);
+            if (expiresAt && !expiresAtDate) {
+                return res.status(400).json({ ok: false, error: 'Некорректная дата окончания действия' });
+            }
+            if ((updates.starts_at || existing.starts_at) && expiresAtDate) {
+                const startDate = updates.starts_at || existing.starts_at;
+                if (startDate && expiresAtDate < startDate) {
+                    return res.status(400).json({ ok: false, error: 'Дата окончания должна быть позже даты начала' });
+                }
+            }
+            updates.expires_at = expiresAtDate;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            const current = await PromoCodesDB.getById(id);
+            return res.json({ ok: true, promo: PromoService.mapPromoRow(current) });
+        }
+
+        const updated = await PromoCodesDB.update(id, updates);
+        res.json({ ok: true, promo: PromoService.mapPromoRow(updated) });
+    } catch (error) {
+        logger.error('❌ Ошибка обновления промокода:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось обновить промокод' });
+    }
+});
+
+app.patch('/api/admin/promocodes/:id/status', requireAdminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isActive } = req.body || {};
+        if (isActive === undefined) {
+            return res.status(400).json({ ok: false, error: 'Укажите статус isActive' });
+        }
+        const updated = await PromoCodesDB.setActive(id, Boolean(isActive));
+        if (!updated) {
+            return res.status(404).json({ ok: false, error: 'Промокод не найден' });
+        }
+        res.json({ ok: true, promo: PromoService.mapPromoRow(updated) });
+    } catch (error) {
+        logger.error('❌ Ошибка смены статуса промокода:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось обновить статус промокода' });
     }
 });
 
