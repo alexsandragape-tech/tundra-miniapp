@@ -90,6 +90,7 @@
             <div class="admin-tabs">
                 <button class="tab-btn active" onclick="showTab('products')">Товары</button>
                 <button class="tab-btn" onclick="showTab('categories')">Категории</button>
+                <button class="tab-btn" onclick="showTab('promocodes')">Промокоды</button>
             </div>
         </div>
 
@@ -105,6 +106,79 @@
             </div>
             <div class="categories-list" id="categories-list">
                 <!-- Список категорий будет загружен через JavaScript -->
+            </div>
+        </div>
+
+        <!-- Контейнер управления промокодами -->
+        <div class="promo-management" id="promo-management" style="display: none;">
+            <div class="management-header">
+                <h2>Промокоды</h2>
+                <p>Создавайте и управляйте промокодами для акций</p>
+            </div>
+            <div class="promo-layout">
+                <div class="promo-form-card">
+                    <h3 id="promo-form-title">Новый промокод</h3>
+                    <form id="promo-form">
+                        <input type="hidden" id="promo-id">
+                        <div class="form-group">
+                            <label for="promo-code">Код промокода</label>
+                            <input type="text" id="promo-code" maxlength="100" placeholder="НОВЫЙ2026ГОД" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="promo-type">Тип скидки</label>
+                                <select id="promo-type" required>
+                                    <option value="percent">Процент</option>
+                                    <option value="fixed">Фиксированная сумма</option>
+                                    <option value="free_delivery">Бесплатная доставка</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="promo-value-group">
+                                <label for="promo-value">Значение</label>
+                                <input type="number" id="promo-value" min="1" placeholder="Например, 10">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="promo-max-uses">Использований на пользователя</label>
+                                <input type="number" id="promo-max-uses" min="1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="promo-active">
+                                    <input type="checkbox" id="promo-active">
+                                    Активен
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="promo-starts-at">Старт</label>
+                                <input type="datetime-local" id="promo-starts-at">
+                            </div>
+                            <div class="form-group">
+                                <label for="promo-expires-at">Окончание</label>
+                                <input type="datetime-local" id="promo-expires-at">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="promo-description">Описание (необязательно)</label>
+                            <textarea id="promo-description" rows="2" placeholder="Описание акции или условий"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn secondary" onclick="resetPromoForm()">Очистить</button>
+                            <button type="submit" class="btn primary">Сохранить</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="promo-list-card">
+                    <div class="promo-list-header">
+                        <h3>Список промокодов</h3>
+                        <button class="btn secondary" onclick="resetPromoForm()">Новый промокод</button>
+                    </div>
+                    <div class="promo-list" id="promo-list">
+                        <!-- Список промокодов -->
+                    </div>
+                </div>
             </div>
         </div>
 
