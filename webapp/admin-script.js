@@ -84,6 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (promoTypeSelect) {
         promoTypeSelect.addEventListener('change', handlePromoTypeChange);
     }
+    const editPromoCheckbox = document.getElementById('edit-promo-enabled');
+    if (editPromoCheckbox) {
+        editPromoCheckbox.addEventListener('change', updateEditPromoState);
+        updateEditPromoState();
+    }
     
     // Обработчик закрытия модального окна при клике вне его
     window.onclick = function(event) {
@@ -1055,16 +1060,6 @@ function renderProductCard(categoryId, product) {
                 <div class="product-name">${product.name}</div>
                 ${priceHtml}
                 <div class="product-unit">${product.unit}</div>
-                <div class="promo-toggle">
-                    <label>
-                        <input type="checkbox" data-category="${safeCategoryId}" data-product="${safeProductId}" class="promo-checkbox" ${isPromo ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductPromo('${safeCategoryId}', '${safeProductId}', this.checked);">
-                        <span>Акция</span>
-                    </label>
-                    <div class="promo-price-input" style="display: ${isPromo ? 'block' : 'none'};">
-                        <label>Новая цена:</label>
-                        <input type="number" class="promo-new-price" data-category="${safeCategoryId}" data-product="${safeProductId}" value="${isPromo ? product.promo.newPrice : ''}" placeholder="0" onchange="event.stopPropagation(); handlePromoPriceChange('${safeCategoryId}', '${safeProductId}', this.value);" oninput="event.stopPropagation();">
-                    </div>
-                </div>
             </div>
             
             <div class="product-actions">
@@ -1143,72 +1138,6 @@ async function toggleProductAvailability(categoryId, productId) {
         console.log('Локальные данные не изменялись, откат не нужен');
     }
 }
-
-function findProduct(categoryId, productId) {
-    if (!products[categoryId]) return null;
-    return products[categoryId].find(p => p.id === productId) || null;
-}
-
-function toggleProductPromo(categoryId, productId, enabled) {
-    const product = findProduct(categoryId, productId);
-    if (!product) {
-        console.warn('toggleProductPromo: продукт не найден', categoryId, productId);
-        return;
-    }
-
-    const basePrice = Number(product.price) || 0;
-    if (!product.promo) {
-        product.promo = { enabled: false, newPrice: null };
-    }
-
-    if (enabled) {
-        let newPrice = Number(product.promo.newPrice);
-        if (!Number.isFinite(newPrice) || newPrice <= 0 || newPrice >= basePrice) {
-            newPrice = Math.max(1, basePrice - 1);
-        }
-        product.promo = { enabled: true, newPrice };
-    } else {
-        product.promo = { enabled: false, newPrice: null };
-    }
-
-    hasUnsavedChanges = true;
-    renderProducts();
-    updateStats();
-}
-
-function handlePromoPriceChange(categoryId, productId, value) {
-    const product = findProduct(categoryId, productId);
-    if (!product) {
-        console.warn('handlePromoPriceChange: продукт не найден', categoryId, productId);
-        return;
-    }
-    if (!product.promo || product.promo.enabled !== true) return;
-
-    const basePrice = Number(product.price) || 0;
-    let newPrice = Number(value);
-
-    if (!Number.isFinite(newPrice) || newPrice <= 0) {
-        showNotification('Введите корректную цену акции', 'warning');
-        const input = document.querySelector(`.promo-new-price[data-category="${categoryId}"][data-product="${productId}"]`);
-        if (input) input.value = product.promo.newPrice ?? '';
-        return;
-    }
-
-    if (newPrice >= basePrice) {
-        showNotification('Новая цена должна быть меньше базовой', 'warning');
-        const input = document.querySelector(`.promo-new-price[data-category="${categoryId}"][data-product="${productId}"]`);
-        if (input) input.value = product.promo.newPrice ?? '';
-        return;
-    }
-
-    product.promo.newPrice = newPrice;
-    hasUnsavedChanges = true;
-
-    const card = document.querySelector(`.product-card[data-category="${categoryId}"][data-product="${productId}"] .price-new`);
-    if (card) card.textContent = `${newPrice}₽`;
-    updateStats();
-}
-
 // Открытие модального окна редактирования
 function editProduct(categoryId, productId) {
     const product = products[categoryId].find(p => p.id === productId);
@@ -1227,9 +1156,26 @@ function editProduct(categoryId, productId) {
     document.getElementById('edit-nutrition').value = product.nutrition || '';
     document.getElementById('edit-storage').value = product.storage || '';
     document.getElementById('edit-available').checked = product.available !== false;
+    document.getElementById('edit-promo-enabled').checked = product.promo?.enabled === true;
+    document.getElementById('edit-promo-price').value = product.promo?.enabled ? product.promo.newPrice : '';
+    updateEditPromoState();
     
     // Показываем модальное окно
     document.getElementById('edit-modal').style.display = 'block';
+}
+
+function updateEditPromoState() {
+    const promoGroup = document.getElementById('edit-promo-group');
+    const promoCheckbox = document.getElementById('edit-promo-enabled');
+    const promoInput = document.getElementById('edit-promo-price');
+    const enabled = promoCheckbox ? promoCheckbox.checked : false;
+    
+    if (promoGroup) {
+        promoGroup.classList.toggle('active', enabled);
+    }
+    if (promoInput) {
+        promoInput.disabled = !enabled;
+    }
 }
 
 // Сохранение изменений товара
@@ -1253,6 +1199,38 @@ async function saveProduct() {
     product.nutrition = document.getElementById('edit-nutrition').value;
     product.storage = document.getElementById('edit-storage').value;
     product.available = document.getElementById('edit-available').checked;
+
+    const previousPromo = product.promo ? { ...product.promo } : { enabled: false, newPrice: null };
+    const promoCheckbox = document.getElementById('edit-promo-enabled');
+    const promoPriceInput = document.getElementById('edit-promo-price');
+    const promoEnabled = promoCheckbox ? promoCheckbox.checked : false;
+    const promoPriceRaw = promoPriceInput ? promoPriceInput.value : '';
+
+    if (promoEnabled) {
+        const promoPrice = Number(promoPriceRaw);
+        if (!Number.isFinite(promoPrice) || promoPrice <= 0) {
+            showNotification('Введите корректную новую цену акции', 'warning');
+            if (promoPriceInput) {
+                promoPriceInput.value = previousPromo.enabled ? (previousPromo.newPrice ?? '') : '';
+                promoPriceInput.focus();
+            }
+            product.promo = previousPromo;
+            return;
+        }
+        if (promoPrice >= product.price) {
+            showNotification('Новая цена акции должна быть меньше текущей цены', 'warning');
+            if (promoPriceInput) {
+                promoPriceInput.value = previousPromo.enabled ? (previousPromo.newPrice ?? '') : '';
+                promoPriceInput.focus();
+            }
+            product.promo = previousPromo;
+            return;
+        }
+        product.promo = { enabled: true, newPrice: promoPrice };
+    } else {
+        product.promo = { enabled: false, newPrice: null };
+        if (promoPriceInput) promoPriceInput.value = '';
+    }
     
     console.log('🔍 Товар обновлен:', product.name, 'цена:', product.price);
     
