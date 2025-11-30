@@ -306,6 +306,70 @@ body {
     color: #0b5c56;
     margin-bottom: 2px;
 }
+.product-price .price-old {
+    text-decoration: line-through;
+    color: #9aa0a6;
+    margin-right: 6px;
+    font-weight: 500;
+}
+.product-price .price-new {
+    color: #c62828;
+    font-weight: 700;
+}
+.product-card .product-badge.promo {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: 0 4px 10px rgba(255, 107, 107, 0.25);
+}
+.promo-toggle {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #e1e4e8;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.promo-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    cursor: pointer;
+    user-select: none;
+}
+.promo-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+.promo-price-input {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.promo-price-input label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6c757d;
+}
+.promo-price-input input {
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+.product-card.promo-active {
+    border-color: #ff8e53;
+    box-shadow: 0 4px 15px rgba(255, 142, 83, 0.15);
+}
 
 .product-unit {
     font-size: 12px;
