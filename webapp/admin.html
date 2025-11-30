@@ -275,6 +275,16 @@
                             <label>Цена:</label>
                             <input type="number" id="edit-price" required>
                         </div>
+                        <div class="form-group promo-group" id="edit-promo-group">
+                            <label class="promo-group-toggle">
+                                <input type="checkbox" id="edit-promo-enabled">
+                                <span>Акция</span>
+                            </label>
+                            <div class="promo-price-input" id="edit-promo-price-wrapper">
+                                <label for="edit-promo-price">Новая цена:</label>
+                                <input type="number" id="edit-promo-price" min="1" placeholder="0">
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label>Единица измерения:</label>
                             <input type="text" id="edit-unit" required>
