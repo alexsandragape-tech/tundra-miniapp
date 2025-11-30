@@ -10,6 +10,9 @@ let products = {};
 let originalProducts = {};
 // Карта видимости категорий из БД
 let categoryVisibility = {};
+let promoCodes = [];
+let promoSupportedTypes = [];
+let currentPromoId = null;
 
 // 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
 const categories = {
@@ -53,11 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.filterProducts = filterProducts;
     window.saveAllChanges = saveAllChanges;
     window.toggleMobileMenu = toggleMobileMenu;
+    window.editPromo = editPromo;
+    window.togglePromoStatus = togglePromoStatus;
+    window.resetPromoForm = resetPromoForm;
     
     console.log('✅ Глобальные функции экспортированы:', {
         toggleProductAvailability: typeof window.toggleProductAvailability,
         editProduct: typeof window.editProduct,
-        filterByStatus: typeof window.filterByStatus
+        filterByStatus: typeof window.filterByStatus,
+        editPromo: typeof window.editPromo
     });
     
     loadProducts();
@@ -68,6 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
+
+    const promoForm = document.getElementById('promo-form');
+    if (promoForm) {
+        promoForm.addEventListener('submit', handlePromoFormSubmit);
+    }
+    const promoTypeSelect = document.getElementById('promo-type');
+    if (promoTypeSelect) {
+        promoTypeSelect.addEventListener('change', handlePromoTypeChange);
+    }
     
     // Обработчик закрытия модального окна при клике вне его
     window.onclick = function(event) {
@@ -1925,13 +1941,25 @@ function showTab(tabName) {
     document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
     
     // Переключаем контент
-    if (tabName === 'products') {
-        document.getElementById('categories-container').style.display = 'block';
-        document.getElementById('categories-management').style.display = 'none';
-    } else if (tabName === 'categories') {
-        document.getElementById('categories-container').style.display = 'none';
-        document.getElementById('categories-management').style.display = 'block';
+    const categoriesContainer = document.getElementById('categories-container');
+    const categoriesManagement = document.getElementById('categories-management');
+    const promoManagement = document.getElementById('promo-management');
+
+    if (categoriesContainer) {
+        categoriesContainer.style.display = tabName === 'products' ? 'block' : 'none';
+    }
+    if (categoriesManagement) {
+        categoriesManagement.style.display = tabName === 'categories' ? 'block' : 'none';
+    }
+    if (promoManagement) {
+        promoManagement.style.display = tabName === 'promocodes' ? 'block' : 'none';
+    }
+
+    if (tabName === 'categories') {
         loadCategoriesManagement();
+    }
+    if (tabName === 'promocodes') {
+        loadPromoCodes();
     }
 }
 
@@ -2055,46 +2083,303 @@ async function toggleCategoryVisibility(categoryId) {
     }
 }
 
-// Показ уведомлений (если функция еще не существует)
-function showNotification(message, type = 'info') {
-    // Создаем элемент уведомления
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        border-radius: 8px;
-        color: white;
-        font-weight: 500;
-        z-index: 10000;
-        transition: all 0.3s ease;
-        max-width: 300px;
-    `;
-    
-    // Устанавливаем цвет в зависимости от типа
-    switch (type) {
-        case 'success':
-            notification.style.backgroundColor = '#4caf50';
-            break;
-        case 'error':
-            notification.style.backgroundColor = '#f44336';
-            break;
-        case 'warning':
-            notification.style.backgroundColor = '#ff9800';
-            break;
-        default:
-            notification.style.backgroundColor = '#2196f3';
-    }
-    
-    document.body.appendChild(notification);
-    
-    // Убираем через 3 секунды
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+// ===== УПРАВЛЕНИЕ ПРОМОКОДАМИ =====
+const PROMO_TYPE_LABELS = {
+    percent: 'Процентная скидка',
+    fixed: 'Фиксированная сумма',
+    free_delivery: 'Бесплатная доставка'
+};
+
+function promoTypeLabel(type) {
+    return PROMO_TYPE_LABELS[type] || type;
 }
+
+function promoDiscountDescription(promo) {
+    if (promo.discountType === 'percent') {
+        return `${promo.discountValue || 0}% на товары`;
+    }
+    if (promo.discountType === 'fixed') {
+        return `-${promo.discountValue || 0}₽ от суммы товаров`;
+    }
+    if (promo.discountType === 'free_delivery') {
+        return `Бесплатная доставка`;
+    }
+    return '';
+}
+
+function formatDateTime(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat('ru-RU', {
+        dateStyle: 'short',
+        timeStyle: 'short'
+    }).format(date);
+}
+
+function toInputDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function handlePromoTypeChange() {
+    const select = document.getElementById('promo-type');
+    const valueGroup = document.getElementById('promo-value-group');
+    const valueInput = document.getElementById('promo-value');
+    if (!select || !valueGroup || !valueInput) return;
+
+    if (select.value === 'free_delivery') {
+        valueGroup.style.display = 'none';
+        valueInput.value = '';
+    } else {
+        valueGroup.style.display = 'block';
+        valueInput.placeholder = select.value === 'percent'
+            ? 'Процент, например 10'
+            : 'Скидка в ₽, например 500';
+    }
+}
+
+function resetPromoForm() {
+    const form = document.getElementById('promo-form');
+    if (!form) return;
+    form.reset();
+    currentPromoId = null;
+    document.getElementById('promo-id').value = '';
+    document.getElementById('promo-form-title').textContent = 'Новый промокод';
+    document.getElementById('promo-max-uses').value = '1';
+    document.getElementById('promo-active').checked = false;
+    handlePromoTypeChange();
+}
+
+async function loadPromoCodes() {
+    const password = getAdminPassword();
+    if (!password) {
+        console.warn('Пароль администратора не указан, пропускаем загрузку промокодов');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/promocodes`, {
+            headers: { 'X-Admin-Password': password }
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Не удалось загрузить промокоды');
+        }
+        const data = await response.json();
+        promoSupportedTypes = Array.isArray(data.supportedTypes) ? data.supportedTypes : promoSupportedTypes;
+        promoCodes = Array.isArray(data.promocodes) ? data.promocodes.map(p => ({
+            ...p,
+            id: Number.parseInt(p.id, 10)
+        })) : [];
+        updatePromoTypeOptions();
+        renderPromoCodes();
+    } catch (error) {
+        console.error('Ошибка загрузки промокодов:', error);
+        const container = document.getElementById('promo-list');
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:32px;color:#c62828;">
+                    ❌ ${error.message}
+                </div>
+            `;
+        }
+        showNotification('Ошибка загрузки промокодов: ' + error.message, 'error');
+    }
+}
+
+function updatePromoTypeOptions() {
+    const select = document.getElementById('promo-type');
+    if (!select || !promoSupportedTypes || promoSupportedTypes.length === 0) return;
+    select.innerHTML = promoSupportedTypes.map(type => `
+        <option value="${type}">${promoTypeLabel(type)}</option>
+    `).join('');
+    handlePromoTypeChange();
+}
+
+function renderPromoCodes() {
+    const container = document.getElementById('promo-list');
+    if (!container) return;
+
+    if (!promoCodes || promoCodes.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:40px;color:#666;">
+                Пока нет промокодов. Создайте первый промокод, чтобы запустить акцию.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = promoCodes.map(promo => {
+        const statusClass = promo.isActive ? 'active' : 'inactive';
+        const statusText = promo.isActive ? 'Активен' : 'Отключен';
+        const usage = promo.usageCount || 0;
+        const perUser = promo.maxPerUser != null ? promo.maxPerUser : '—';
+        const periodStart = formatDateTime(promo.startsAt);
+        const periodEnd = formatDateTime(promo.expiresAt);
+        const periodInfo = promo.startsAt || promo.expiresAt
+            ? `<span>${promo.startsAt ? `Старт: ${periodStart}` : ''}${promo.startsAt && promo.expiresAt ? ' · ' : ''}${promo.expiresAt ? `Действует до: ${periodEnd}` : ''}</span>`
+            : '';
+        const description = promo.description ? `<span>${promo.description}</span>` : '';
+        return `
+            <div class="promo-item ${promo.isActive ? 'active' : ''}">
+                <div class="promo-item-header">
+                    <div>
+                        <div class="promo-code">${promo.code}</div>
+                        <div class="promo-details">
+                            <span>${promoTypeLabel(promo.discountType)} · ${promoDiscountDescription(promo)}</span>
+                            <span>На пользователя: ${perUser}</span>
+                            <span>Использований: ${usage}</span>
+                        </div>
+                    </div>
+                    <span class="promo-status ${statusClass}">${statusText}</span>
+                </div>
+                <div class="promo-details">
+                    ${periodInfo}
+                    ${description}
+                </div>
+                <div class="promo-controls">
+                    <button class="btn secondary" onclick="editPromo(${promo.id})">Редактировать</button>
+                    <button class="btn ${promo.isActive ? 'danger' : 'primary'}" onclick="togglePromoStatus(${promo.id}, ${promo.isActive ? 'false' : 'true'})">
+                        ${promo.isActive ? 'Отключить' : 'Включить'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function editPromo(id) {
+    const promo = promoCodes.find(item => item.id === Number(id));
+    if (!promo) {
+        showNotification('Промокод не найден', 'error');
+        return;
+    }
+    currentPromoId = promo.id;
+    const formTitle = document.getElementById('promo-form-title');
+    if (formTitle) {
+        formTitle.textContent = `Редактирование: ${promo.code}`;
+    }
+    document.getElementById('promo-id').value = promo.id;
+    document.getElementById('promo-code').value = promo.code;
+    document.getElementById('promo-type').value = promo.discountType;
+    document.getElementById('promo-value').value = promo.discountType === 'free_delivery' ? '' : promo.discountValue || '';
+    document.getElementById('promo-max-uses').value = promo.maxPerUser || 1;
+    document.getElementById('promo-active').checked = Boolean(promo.isActive);
+    document.getElementById('promo-starts-at').value = toInputDateTime(promo.startsAt);
+    document.getElementById('promo-expires-at').value = toInputDateTime(promo.expiresAt);
+    document.getElementById('promo-description').value = promo.description || '';
+    handlePromoTypeChange();
+    showNotification(`Редактируем промокод ${promo.code}`, 'info');
+}
+
+async function togglePromoStatus(id, nextState) {
+    const password = getAdminPassword();
+    if (!password) return;
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/promocodes/${id}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Password': password
+            },
+            body: JSON.stringify({ isActive: nextState === true || nextState === 'true' })
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Не удалось изменить статус');
+        }
+        const data = await response.json();
+        showNotification(data.promo?.isActive ? 'Промокод включен' : 'Промокод отключен', 'success');
+        await loadPromoCodes();
+    } catch (error) {
+        console.error('Ошибка смены статуса промокода:', error);
+        showNotification('Ошибка смены статуса: ' + error.message, 'error');
+    }
+}
+
+async function handlePromoFormSubmit(event) {
+    event.preventDefault();
+    const password = getAdminPassword();
+    if (!password) {
+        showNotification('Нет доступа: отсутствует пароль администратора', 'error');
+        return;
+    }
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Сохраняем...';
+    }
+    try {
+        const id = document.getElementById('promo-id').value;
+        const code = document.getElementById('promo-code').value.trim();
+        const discountType = document.getElementById('promo-type').value;
+        const discountValueInput = document.getElementById('promo-value').value;
+        const maxPerUser = document.getElementById('promo-max-uses').value;
+        const isActive = document.getElementById('promo-active').checked;
+        const startsAt = document.getElementById('promo-starts-at').value;
+        const expiresAt = document.getElementById('promo-expires-at').value;
+        const description = document.getElementById('promo-description').value.trim();
+
+        if (!code) {
+            throw new Error('Введите код промокода');
+        }
+        if (discountType !== 'free_delivery' && !discountValueInput) {
+            throw new Error('Укажите значение скидки');
+        }
+
+        const payload = {
+            code,
+            discountType,
+            discountValue: discountType === 'free_delivery' ? 0 : Number(discountValueInput),
+            maxPerUser: maxPerUser ? Number(maxPerUser) : 1,
+            isActive,
+            startsAt: startsAt || null,
+            expiresAt: expiresAt || null,
+            description: description || null
+        };
+
+        const url = id ? `${API_BASE}/api/admin/promocodes/${id}` : `${API_BASE}/api/admin/promocodes`;
+        const method = id ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Password': password
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Не удалось сохранить промокод');
+        }
+
+        const data = await response.json();
+        showNotification(id ? 'Промокод обновлен' : 'Промокод создан', 'success');
+        if (!id) {
+            resetPromoForm();
+        }
+        await loadPromoCodes();
+        if (data.promo) {
+            editPromo(data.promo.id);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения промокода:', error);
+        showNotification(error.message, 'error');
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Сохранить';
+        }
+    }
+}
+
+handlePromoTypeChange();
