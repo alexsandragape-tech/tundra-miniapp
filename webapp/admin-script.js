@@ -1030,22 +1030,41 @@ async function refreshCategoryVisibility() {
 function renderProductCard(categoryId, product) {
     const isHidden = product.available === false;
     const isModified = hasProductChanged(categoryId, product);
+    const isPromo = product.promo?.enabled === true;
+    const promoBadge = isPromo ? '<div class="product-badge promo">Акция</div>' : '';
+    const priceHtml = isPromo
+        ? `<div class="product-price">
+                <span class="price-old">${product.price}₽</span>
+                <span class="price-new">${product.promo.newPrice}₽</span>
+           </div>`
+        : `<div class="product-price">${product.price}₽</div>`;
     
     // Экранируем специальные символы для JavaScript
     const safeCategoryId = categoryId.replace(/'/g, "\\'");
     const safeProductId = product.id.replace(/'/g, "\\'");
     
     return `
-        <div class="product-card ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}" 
+        <div class="product-card ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''} ${isPromo ? 'promo-active' : ''}" 
              data-category="${categoryId}" 
              data-product="${product.id}"
              data-category-id="${categoryId}"
              data-product-id="${product.id}">
+            ${promoBadge}
             
             <div class="product-info" onclick="editProduct('${safeCategoryId}', '${safeProductId}')">
                 <div class="product-name">${product.name}</div>
-                <div class="product-price">${product.price}₽</div>
+                ${priceHtml}
                 <div class="product-unit">${product.unit}</div>
+                <div class="promo-toggle">
+                    <label>
+                        <input type="checkbox" data-category="${safeCategoryId}" data-product="${safeProductId}" class="promo-checkbox" ${isPromo ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductPromo('${safeCategoryId}', '${safeProductId}', this.checked);">
+                        <span>Акция</span>
+                    </label>
+                    <div class="promo-price-input" style="display: ${isPromo ? 'block' : 'none'};">
+                        <label>Новая цена:</label>
+                        <input type="number" class="promo-new-price" data-category="${safeCategoryId}" data-product="${safeProductId}" value="${isPromo ? product.promo.newPrice : ''}" placeholder="0" onchange="event.stopPropagation(); handlePromoPriceChange('${safeCategoryId}', '${safeProductId}', this.value);" oninput="event.stopPropagation();">
+                    </div>
+                </div>
             </div>
             
             <div class="product-actions">
@@ -1123,6 +1142,71 @@ async function toggleProductAvailability(categoryId, productId) {
         // НЕ откатываем изменения, так как мы их не делали локально
         console.log('Локальные данные не изменялись, откат не нужен');
     }
+}
+
+function findProduct(categoryId, productId) {
+    if (!products[categoryId]) return null;
+    return products[categoryId].find(p => p.id === productId) || null;
+}
+
+function toggleProductPromo(categoryId, productId, enabled) {
+    const product = findProduct(categoryId, productId);
+    if (!product) {
+        console.warn('toggleProductPromo: продукт не найден', categoryId, productId);
+        return;
+    }
+
+    const basePrice = Number(product.price) || 0;
+    if (!product.promo) {
+        product.promo = { enabled: false, newPrice: null };
+    }
+
+    if (enabled) {
+        let newPrice = Number(product.promo.newPrice);
+        if (!Number.isFinite(newPrice) || newPrice <= 0 || newPrice >= basePrice) {
+            newPrice = Math.max(1, basePrice - 1);
+        }
+        product.promo = { enabled: true, newPrice };
+    } else {
+        product.promo = { enabled: false, newPrice: null };
+    }
+
+    hasUnsavedChanges = true;
+    renderProducts();
+    updateStats();
+}
+
+function handlePromoPriceChange(categoryId, productId, value) {
+    const product = findProduct(categoryId, productId);
+    if (!product) {
+        console.warn('handlePromoPriceChange: продукт не найден', categoryId, productId);
+        return;
+    }
+    if (!product.promo || product.promo.enabled !== true) return;
+
+    const basePrice = Number(product.price) || 0;
+    let newPrice = Number(value);
+
+    if (!Number.isFinite(newPrice) || newPrice <= 0) {
+        showNotification('Введите корректную цену акции', 'warning');
+        const input = document.querySelector(`.promo-new-price[data-category="${categoryId}"][data-product="${productId}"]`);
+        if (input) input.value = product.promo.newPrice ?? '';
+        return;
+    }
+
+    if (newPrice >= basePrice) {
+        showNotification('Новая цена должна быть меньше базовой', 'warning');
+        const input = document.querySelector(`.promo-new-price[data-category="${categoryId}"][data-product="${productId}"]`);
+        if (input) input.value = product.promo.newPrice ?? '';
+        return;
+    }
+
+    product.promo.newPrice = newPrice;
+    hasUnsavedChanges = true;
+
+    const card = document.querySelector(`.product-card[data-category="${categoryId}"][data-product="${productId}"] .price-new`);
+    if (card) card.textContent = `${newPrice}₽`;
+    updateStats();
 }
 
 // Открытие модального окна редактирования
