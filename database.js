@@ -167,6 +167,37 @@ async function initializeDatabase() {
             )
         `);
         
+        // Создаем таблицу промокодов
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(100) UNIQUE NOT NULL,
+                discount_type VARCHAR(20) NOT NULL,
+                discount_value INTEGER NOT NULL,
+                description TEXT,
+                is_active BOOLEAN DEFAULT false,
+                max_per_user INTEGER DEFAULT 1,
+                starts_at TIMESTAMP,
+                expires_at TIMESTAMP,
+                usage_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Создаем таблицу использования промокодов пользователями
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS promo_code_usages (
+                id SERIAL PRIMARY KEY,
+                promo_code_id INTEGER NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+                user_id VARCHAR(100) NOT NULL,
+                usage_count INTEGER DEFAULT 0,
+                last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(promo_code_id, user_id)
+            )
+        `);
+
         // Добавляем отсутствующие колонки если их нет
         await pool.query(`
             DO $$ 
@@ -214,6 +245,8 @@ async function initializeDatabase() {
             CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
             CREATE INDEX IF NOT EXISTS idx_purchase_history_user_id ON purchase_history(user_id);
             CREATE INDEX IF NOT EXISTS idx_admin_products_category ON admin_products(category_id);
+            CREATE INDEX IF NOT EXISTS idx_promo_codes_active ON promo_codes(is_active);
+            CREATE INDEX IF NOT EXISTS idx_promo_code_usages_user ON promo_code_usages(user_id);
         `);
         
         
@@ -372,6 +405,23 @@ class OrdersDB {
     static async getByUserId(userId) {
         const query = 'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC';
         const result = await pool.query(query, [userId]);
+        return result.rows.map(order => {
+            // Безопасно парсим items
+            if (typeof order.items === 'string') {
+                try {
+                    order.items = JSON.parse(order.items);
+                } catch (e) {
+                    order.items = [];
+                }
+            }
+            return order;
+        });
+    }
+    
+    // Получить все заказы (для миграции)
+    static async getAll() {
+        const query = 'SELECT * FROM orders ORDER BY created_at DESC';
+        const result = await pool.query(query);
         return result.rows.map(order => {
             // Безопасно парсим items
             if (typeof order.items === 'string') {
@@ -636,6 +686,152 @@ class PurchaseHistoryDB {
         }
     }
 
+}
+
+// 🎟️ ФУНКЦИИ ДЛЯ ПРОМОКОДОВ
+class PromoCodesDB {
+    static async create(data) {
+        const {
+            code,
+            discount_type,
+            discount_value,
+            description = null,
+            is_active = false,
+            max_per_user = 1,
+            starts_at = null,
+            expires_at = null
+        } = data;
+
+        const query = `
+            INSERT INTO promo_codes (
+                code, discount_type, discount_value, description,
+                is_active, max_per_user, starts_at, expires_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *
+        `;
+
+        const values = [
+            code,
+            discount_type,
+            discount_value,
+            description,
+            is_active,
+            max_per_user,
+            starts_at,
+            expires_at
+        ];
+
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }
+
+    static async update(id, data = {}) {
+        const fields = [];
+        const values = [];
+        let counter = 1;
+
+        for (const [key, value] of Object.entries(data)) {
+            if (value === undefined) continue;
+            fields.push(`${key} = $${counter}`);
+            values.push(value);
+            counter++;
+        }
+
+        if (fields.length === 0) return this.getById(id);
+
+        fields.push(`updated_at = CURRENT_TIMESTAMP`);
+        const query = `
+            UPDATE promo_codes
+            SET ${fields.join(', ')}
+            WHERE id = $${counter}
+            RETURNING *
+        `;
+        values.push(id);
+
+        const result = await pool.query(query, values);
+        return result.rows[0] || null;
+    }
+
+    static async setActive(id, isActive) {
+        const query = `
+            UPDATE promo_codes
+            SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING *
+        `;
+        const result = await pool.query(query, [isActive, id]);
+        return result.rows[0] || null;
+    }
+
+    static async getById(id) {
+        const query = 'SELECT * FROM promo_codes WHERE id = $1';
+        const result = await pool.query(query, [id]);
+        return result.rows[0] || null;
+    }
+
+    static async getByCode(code) {
+        const query = 'SELECT * FROM promo_codes WHERE LOWER(code) = LOWER($1)';
+        const result = await pool.query(query, [code]);
+        return result.rows[0] || null;
+    }
+
+    static async listAll() {
+        const query = `
+            SELECT *
+            FROM promo_codes
+            ORDER BY created_at DESC
+        `;
+        const result = await pool.query(query);
+        return result.rows;
+    }
+
+    static async getUsage(promoCodeId, userId) {
+        const query = `
+            SELECT *
+            FROM promo_code_usages
+            WHERE promo_code_id = $1 AND user_id = $2
+        `;
+        const result = await pool.query(query, [promoCodeId, userId]);
+        return result.rows[0] || null;
+    }
+
+    static async incrementUsage(promoCodeId, userId, increment = 1) {
+        const query = `
+            INSERT INTO promo_code_usages (promo_code_id, user_id, usage_count, last_used_at)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (promo_code_id, user_id)
+            DO UPDATE SET
+                usage_count = promo_code_usages.usage_count + EXCLUDED.usage_count,
+                last_used_at = CURRENT_TIMESTAMP
+            RETURNING *
+        `;
+        const result = await pool.query(query, [promoCodeId, userId, increment]);
+
+        await pool.query(
+            `
+                UPDATE promo_codes
+                SET usage_count = usage_count + $1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+            `,
+            [increment, promoCodeId]
+        );
+
+        return result.rows[0];
+    }
+
+    static async resetUsage(promoCodeId, userId) {
+        const params = [promoCodeId];
+        let query = `
+            DELETE FROM promo_code_usages
+            WHERE promo_code_id = $1
+        `;
+        if (userId) {
+            query += ' AND user_id = $2';
+            params.push(userId);
+        }
+        await pool.query(query, params);
+    }
 }
 
 // 🔧 ФУНКЦИИ ДЛЯ ТОВАРОВ АДМИНКИ
@@ -906,5 +1102,6 @@ module.exports = {
     PurchaseHistoryDB,
     AdminProductsDB,
     CategoriesDB,
-    BotUsersDB
+    BotUsersDB,
+    PromoCodesDB
 };
