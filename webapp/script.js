@@ -156,6 +156,42 @@ const FORCE_DEMO_MODE = false; // Принудительный демо-режи
 let paymentStatusChecker = null;
 let promoState = { enabled: false, code: '', validation: null };
 
+function isProductPromoActive(product) {
+    if (!product || !product.promo || product.promo.enabled !== true) return false;
+    const basePrice = Number(product.price);
+    const promoPrice = Number(product.promo.newPrice);
+    return Number.isFinite(basePrice) && Number.isFinite(promoPrice) && promoPrice > 0 && promoPrice < basePrice;
+}
+
+function getProductActivePrice(product) {
+    const basePrice = Number(product?.price) || 0;
+    if (isProductPromoActive(product)) {
+        const promoPrice = Number(product.promo.newPrice);
+        return promoPrice;
+    }
+    return basePrice;
+}
+
+function formatPriceValue(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return value;
+    return numeric.toLocaleString('ru-RU');
+}
+
+Object.keys(cart).forEach(key => {
+    const item = cart[key];
+    if (!item) {
+        delete cart[key];
+        return;
+    }
+    item.basePrice = Number(item.basePrice != null ? item.basePrice : item.price);
+    item.price = Number(item.price);
+    if (!Number.isFinite(item.price) || item.price <= 0) {
+        item.price = item.basePrice;
+    }
+    item.promoApplied = Boolean(item.promoApplied && item.price < item.basePrice);
+});
+
 // Функция получения минимальной суммы заказа
 function getMinOrderAmount() {
     return TEST_MODE ? TEST_MIN_ORDER : PROD_MIN_ORDER;
@@ -1182,6 +1218,15 @@ async function showCategory(categoryId) {
             imageContent = '';
             emojiContent = `<div class="product-image-emoji">${product.image}</div>`;
         }
+        const promoActive = isProductPromoActive(product);
+        const promoBadge = promoActive ? '<div class="product-badge">Акция</div>' : '';
+        const activePrice = getProductActivePrice(product);
+        const priceHtml = promoActive
+            ? `<div class="product-price">
+                    <span class="price-new">${formatPriceValue(activePrice)}₽${product.unit}</span>
+                    <span class="price-old">${formatPriceValue(product.price)}₽${product.unit}</span>
+               </div>`
+            : `<div class="product-price">${formatPriceValue(product.price)}₽${product.unit}</div>`;
         
         // Получаем текущее количество товара в корзине
         const cartKey = `${categoryId}_${product.id}`;
@@ -1191,9 +1236,10 @@ async function showCategory(categoryId) {
             <div class="product-image">
                 ${imageContent}
                 ${emojiContent}
+                ${promoBadge}
             </div>
             <div class="product-name">${product.name}</div>
-            <div class="product-price">${product.price}₽${product.unit}</div>
+            ${priceHtml}
             <div class="product-actions">
                 <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
                     <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
@@ -1221,6 +1267,9 @@ function changeProductQuantity(categoryId, productId, delta) {
     if (!cart[cartKey]) {
         cart[cartKey] = { ...product, quantity: 0, categoryId, productId };
     }
+    cart[cartKey].price = getProductActivePrice(product);
+    cart[cartKey].basePrice = Number(product.price);
+    cart[cartKey].promoApplied = isProductPromoActive(product);
     
     const newQty = Math.max(0, Math.min(product.maxQty, cart[cartKey].quantity + delta));
     
@@ -1259,6 +1308,14 @@ function showProductDetail(categoryId, productId) {
         detailImageContent = '';
         detailEmojiContent = `<div class="detail-image-emoji">${product.image}</div>`;
     }
+    const promoActive = isProductPromoActive(product);
+    const detailPriceHtml = promoActive
+        ? `<div class="detail-price">
+                <span class="price-new">${formatPriceValue(getProductActivePrice(product))}₽${product.unit}</span>
+                <span class="price-old">${formatPriceValue(product.price)}₽${product.unit}</span>
+           </div>`
+        : `<div class="detail-price">${formatPriceValue(product.price)}₽${product.unit}</div>`;
+    const detailBadge = promoActive ? '<div class="detail-badge">Акция</div>' : '';
     
     document.getElementById('product-detail').innerHTML = `
         <div class="detail-image">
@@ -1266,7 +1323,8 @@ function showProductDetail(categoryId, productId) {
             ${detailEmojiContent}
         </div>
         <div class="detail-name">${product.name}</div>
-        <div class="detail-price">${product.price}₽${product.unit}</div>
+        ${detailPriceHtml}
+        ${detailBadge}
         
         <div class="detail-info">
             <h4>Состав:</h4>
@@ -1321,6 +1379,9 @@ function changeDetailQuantity(delta) {
     if (!cart[cartKey]) {
         cart[cartKey] = { ...product, quantity: 0, categoryId: currentProduct.categoryId, productId: currentProduct.productId };
     }
+    cart[cartKey].price = getProductActivePrice(product);
+    cart[cartKey].basePrice = Number(product.price);
+    cart[cartKey].promoApplied = isProductPromoActive(product);
     
     const newQty = Math.max(0, Math.min(product.maxQty, cart[cartKey].quantity + delta));
     
@@ -1385,7 +1446,9 @@ function addToCart(categoryId, productId, quantity) {
             categoryId,
             productId,
             name: product.name,
-            price: product.price,
+            price: getProductActivePrice(product),
+            basePrice: Number(product.price),
+            promoApplied: isProductPromoActive(product),
             unit: product.unit,
             image: product.image,
             imageUrl: product.imageUrl,
@@ -1393,6 +1456,10 @@ function addToCart(categoryId, productId, quantity) {
             quantity: 0
         };
     }
+    cart[cartKey].price = getProductActivePrice(product);
+    cart[cartKey].basePrice = Number(product.price);
+    cart[cartKey].promoApplied = isProductPromoActive(product);
+    cart[cartKey].unit = product.unit;
 
     const newQuantity = cart[cartKey].quantity + quantity;
     if (newQuantity > product.maxQty) {
@@ -1464,6 +1531,13 @@ function showCart() {
         if (item.imageUrl) {
             cartImageContent = `<img src="${item.imageUrl}" alt="${item.name}" class="cart-item-image-img" onerror="this.style.display='none';">`;
         }
+        const itemPriceHtml = item.promoApplied
+            ? `<div class="cart-item-price">
+                    <span class="price-new">${formatPriceValue(item.price)}₽${item.unit}</span>
+                    <span class="price-old">${formatPriceValue(item.basePrice)}₽${item.unit}</span>
+               </div>`
+            : `<div class="cart-item-price">${formatPriceValue(item.price)}₽${item.unit}</div>`;
+        const itemPromoBadge = item.promoApplied ? '<div class="cart-item-badge">Акция</div>' : '';
         
         cartHTML += `
             <div class="cart-item">
@@ -1473,7 +1547,8 @@ function showCart() {
                     </div>
                     <div class="cart-item-info">
                         <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-price">${item.price}₽${item.unit}</div>
+                        ${itemPriceHtml}
+                        ${itemPromoBadge}
                     </div>
                 </div>
                 <div class="cart-item-controls">
@@ -1482,7 +1557,7 @@ function showCart() {
                         <span class="qty-display">${item.quantity}</span>
                         <button class="cart-qty-btn" onclick="changeCartQuantity('${item.categoryId}_${item.productId}', 1)">+</button>
                     </div>
-                    <div class="cart-item-total">${item.price * item.quantity}₽</div>
+                    <div class="cart-item-total">${formatPriceValue(item.price * item.quantity)}₽</div>
                 </div>
             </div>
         `;
@@ -1507,7 +1582,7 @@ function showCart() {
         <div class="cart-summary">
             <div class="summary-row">
                 <span>Товары:</span>
-                <span>${rawSubtotal}₽</span>
+                <span>${formatPriceValue(rawSubtotal)}₽</span>
             </div>`;
     
     // Показываем скидку лояльности если она есть
@@ -1515,14 +1590,14 @@ function showCart() {
         cartHTML += `
             <div class="summary-row loyalty-discount">
                 <span>🔥 Скидка лояльности (${loyaltyPercent}%):</span>
-                <span>-${loyaltyDiscount}₽</span>
+                <span>-${formatPriceValue(loyaltyDiscount)}₽</span>
             </div>`;
     }
     if (hasPromoDiscount) {
         cartHTML += `
             <div class="summary-row promo-discount">
                 <span>🎟️ Промокод ${appliedPromoCode ? `(${appliedPromoCode})` : ''}:</span>
-                <span>-${promoDiscount}₽</span>
+                <span>-${formatPriceValue(promoDiscount)}₽</span>
             </div>`;
     } else if (promoFreeDelivery && promoState.enabled) {
         cartHTML += `
@@ -1535,11 +1610,11 @@ function showCart() {
     cartHTML += `
             <div class="summary-row">
                 <span>Доставка:</span>
-                <span>${delivery}₽</span>
+                <span>${formatPriceValue(delivery)}₽</span>
             </div>
             <div class="summary-row summary-total">
                 <span>Итого:</span>
-                <span>${total}₽</span>
+                <span>${formatPriceValue(total)}₽</span>
             </div>
             <div class="promo-block">
                 <label class="promo-toggle">
