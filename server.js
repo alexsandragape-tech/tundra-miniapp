@@ -4152,10 +4152,7 @@ async function handleGroupMessage(message) {
         logger.info(`РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
         
         // Формируем сообщение для рассылки
-        const broadcastPrefix = 'Уведомление от Tundra Gourmet';
-        const broadcastMessage = broadcastBody.length > 0
-            ? `${broadcastPrefix}\n\n${broadcastBody}`
-            : broadcastPrefix;
+        const broadcastMessage = broadcastBody.length > 0 ? broadcastBody : undefined;
         const mediaFileId = isPhoto
             ? message.photo[message.photo.length - 1]?.file_id
             : isImageDocument
@@ -4176,16 +4173,19 @@ async function handleGroupMessage(message) {
                             caption: broadcastMessage
                         });
                     } else {
-                        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+                        const photoPayload = {
                             chat_id: user.telegram_user_id,
-                            photo: mediaFileId,
-                            caption: broadcastMessage
-                        });
+                            photo: mediaFileId
+                        };
+                        if (broadcastMessage) {
+                            photoPayload.caption = broadcastMessage;
+                        }
+                        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, photoPayload);
                     }
                 } else {
                     await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         chat_id: user.telegram_user_id,
-                        text: broadcastMessage,
+                        text: broadcastMessage ?? '',
                         // Без parse_mode, чтобы исключить ошибки форматирования
                     });
                 }
