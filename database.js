@@ -61,6 +61,9 @@ async function initializeDatabase() {
                 payment_status VARCHAR(50) DEFAULT 'pending',
                 payment_id VARCHAR(100),
                 payment_url TEXT,
+                promo_code VARCHAR(100),
+                promo_discount INTEGER DEFAULT 0,
+                promo_data JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -238,6 +241,27 @@ async function initializeDatabase() {
                 END IF;
             END $$;
         `);
+
+        // Добавляем колонки промокодов в orders
+        await pool.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='orders' AND column_name='promo_code') THEN
+                    ALTER TABLE orders ADD COLUMN promo_code VARCHAR(100);
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='orders' AND column_name='promo_discount') THEN
+                    ALTER TABLE orders ADD COLUMN promo_discount INTEGER DEFAULT 0;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='orders' AND column_name='promo_data') THEN
+                    ALTER TABLE orders ADD COLUMN promo_data JSONB;
+                END IF;
+            END $$;
+        `);
         
         // Создаем индексы для производительности
         await pool.query(`
@@ -245,6 +269,7 @@ async function initializeDatabase() {
             CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
             CREATE INDEX IF NOT EXISTS idx_purchase_history_user_id ON purchase_history(user_id);
             CREATE INDEX IF NOT EXISTS idx_admin_products_category ON admin_products(category_id);
+                CREATE INDEX IF NOT EXISTS idx_orders_promo_code ON orders(promo_code);
             CREATE INDEX IF NOT EXISTS idx_promo_codes_active ON promo_codes(is_active);
             CREATE INDEX IF NOT EXISTS idx_promo_code_usages_user ON promo_code_usages(user_id);
         `);
@@ -264,8 +289,24 @@ class OrdersDB {
     static async create(orderData) {
         return await retryDbOperation(async () => {
             const query = `
-                INSERT INTO orders (order_id, user_id, user_name, phone, delivery_zone, address, items, total_amount, status, payment_status, payment_id, payment_url)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                INSERT INTO orders (
+                    order_id,
+                    user_id,
+                    user_name,
+                    phone,
+                    delivery_zone,
+                    address,
+                    items,
+                    total_amount,
+                    status,
+                    payment_status,
+                    payment_id,
+                    payment_url,
+                    promo_code,
+                    promo_discount,
+                    promo_data
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 RETURNING *
             `;
             const values = [
@@ -280,7 +321,10 @@ class OrdersDB {
                 orderData.status || 'pending',
                 orderData.paymentStatus || 'pending',
                 orderData.paymentId,
-                orderData.paymentUrl
+                orderData.paymentUrl,
+                orderData.promoCode || null,
+                orderData.promoDiscount || 0,
+                orderData.promoData ? JSON.stringify(orderData.promoData) : null
             ];
             
             const result = await pool.query(query, values);
@@ -310,6 +354,14 @@ class OrdersDB {
                 console.warn('⚠️ Ошибка парсинга address в getById:', e.message);
                 order.address = {};
             }
+
+            try {
+                order.promo_data = typeof order.promo_data === 'string' ? JSON.parse(order.promo_data) : (order.promo_data || null);
+            } catch (e) {
+                console.warn('⚠️ Ошибка парсинга promo_data в getById:', e.message);
+                order.promo_data = null;
+            }
+            order.appliedPromo = order.promo_data || null;
             
             return order;
         }
@@ -358,6 +410,15 @@ class OrdersDB {
                 fields.push(`payment_url = $${paramCounter}`);
             } else if (key === 'paymentStatus') {
                 fields.push(`payment_status = $${paramCounter}`);
+            } else if (key === 'promoCode') {
+                fields.push(`promo_code = $${paramCounter}`);
+            } else if (key === 'promoDiscount') {
+                fields.push(`promo_discount = $${paramCounter}`);
+            } else if (key === 'promoData') {
+                fields.push(`promo_data = $${paramCounter}`);
+                values.push(value ? JSON.stringify(value) : null);
+                paramCounter++;
+                continue;
             } else {
                 fields.push(`${key} = $${paramCounter}`);
             }
@@ -414,6 +475,23 @@ class OrdersDB {
                     order.items = [];
                 }
             }
+
+            if (typeof order.address === 'string') {
+                try {
+                    order.address = JSON.parse(order.address);
+                } catch (e) {
+                    order.address = {};
+                }
+            }
+
+            if (typeof order.promo_data === 'string') {
+                try {
+                    order.promo_data = JSON.parse(order.promo_data);
+                } catch (e) {
+                    order.promo_data = null;
+                }
+            }
+            order.appliedPromo = order.promo_data || null;
             return order;
         });
     }
@@ -431,6 +509,23 @@ class OrdersDB {
                     order.items = [];
                 }
             }
+
+            if (typeof order.address === 'string') {
+                try {
+                    order.address = JSON.parse(order.address);
+                } catch (e) {
+                    order.address = {};
+                }
+            }
+
+            if (typeof order.promo_data === 'string') {
+                try {
+                    order.promo_data = JSON.parse(order.promo_data);
+                } catch (e) {
+                    order.promo_data = null;
+                }
+            }
+            order.appliedPromo = order.promo_data || null;
             return order;
         });
     }
