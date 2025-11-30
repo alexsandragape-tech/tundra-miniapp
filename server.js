@@ -4118,6 +4118,8 @@ app.post('/api/test-webhook', (req, res) => {
 async function handleGroupMessage(message) {
     try {
         const messageText = message.text;
+        const messageCaption = message.caption;
+        const contentTextRaw = (messageCaption || messageText || '').trim();
         const senderName = message.from?.first_name || 'Администратор';
         
         logger.info(`РАССЫЛКА: Обрабатываем сообщение от ${senderName}: "${messageText}"`);
@@ -4125,6 +4127,17 @@ async function handleGroupMessage(message) {
         // Пропускаем команды бота и служебные сообщения
         if (messageText?.startsWith('/') || messageText?.startsWith('ID:') || messageText?.startsWith('Заказ')) {
             logger.info('РАССЫЛКА: Пропускаем служебное сообщение');
+            return;
+        }
+
+        const isPhoto = Array.isArray(message.photo) && message.photo.length > 0;
+        const isImageDocument = message.document && typeof message.document.mime_type === 'string'
+            && message.document.mime_type.startsWith('image/');
+        const hasMedia = isPhoto || isImageDocument;
+        const broadcastBody = contentTextRaw.length > 0 ? contentTextRaw : '';
+
+        if (!hasMedia && broadcastBody.length === 0) {
+            logger.info('РАССЫЛКА: Сообщение без текста и медиа пропущено');
             return;
         }
         
@@ -4139,7 +4152,15 @@ async function handleGroupMessage(message) {
         logger.info(`РАССЫЛКА: Найдено ${subscribedUsers.length} подписанных пользователей`);
         
         // Формируем сообщение для рассылки
-        const broadcastMessage = `Уведомление от Tundra Gourmet\n\n${messageText}`;
+        const broadcastPrefix = 'Уведомление от Tundra Gourmet';
+        const broadcastMessage = broadcastBody.length > 0
+            ? `${broadcastPrefix}\n\n${broadcastBody}`
+            : broadcastPrefix;
+        const mediaFileId = isPhoto
+            ? message.photo[message.photo.length - 1]?.file_id
+            : isImageDocument
+                ? message.document.file_id
+                : null;
         
         // Отправляем сообщение каждому подписчику
         let successCount = 0;
@@ -4147,11 +4168,27 @@ async function handleGroupMessage(message) {
         
         for (const user of subscribedUsers) {
             try {
-                await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: user.telegram_user_id,
-                    text: broadcastMessage,
-                    // Без parse_mode, чтобы исключить ошибки форматирования
-                });
+                if (hasMedia && mediaFileId) {
+                    if (isImageDocument) {
+                        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+                            chat_id: user.telegram_user_id,
+                            document: mediaFileId,
+                            caption: broadcastMessage
+                        });
+                    } else {
+                        await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+                            chat_id: user.telegram_user_id,
+                            photo: mediaFileId,
+                            caption: broadcastMessage
+                        });
+                    }
+                } else {
+                    await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        chat_id: user.telegram_user_id,
+                        text: broadcastMessage,
+                        // Без parse_mode, чтобы исключить ошибки форматирования
+                    });
+                }
                 successCount++;
                 logger.debug(`Сообщение отправлено пользователю ${user.telegram_user_id}`);
             } catch (error) {
@@ -4172,7 +4209,8 @@ async function handleGroupMessage(message) {
         
         // Отправляем отчет в админ-группу
         const reportMessage = `Отчет о рассылке\n\n` +
-            `Сообщение: "${messageText}"\n` +
+            `Тип: ${hasMedia ? (isImageDocument ? 'Изображение (документ)' : 'Изображение') : 'Текст'}\n` +
+            `Сообщение: "${broadcastBody}"\n` +
             `Успешно отправлено: ${successCount}\n` +
             `Ошибок: ${errorCount}\n` +
             `Всего подписчиков: ${subscribedUsers.length}`;
