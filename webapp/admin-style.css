@@ -662,6 +662,16 @@ input[type="checkbox"]:checked + .checkmark::after {
     transform: translateY(-2px);
 }
 
+.btn.danger {
+    background: #c62828;
+    color: white;
+}
+
+.btn.danger:hover {
+    background: #a91f1f;
+    transform: translateY(-2px);
+}
+
 /* Уведомления */
 .admin-notification {
     position: fixed;
@@ -1202,5 +1212,202 @@ input[type="checkbox"]:checked + .checkmark::after {
 .status-badge.hidden {
     background: #ffebee;
     color: #c62828;
+}
+
+/* Стили для управления промокодами */
+.promo-management {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.promo-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.promo-form-card,
+.promo-list-card {
+    background: #ffffff;
+    border: 2px solid #e1e8ed;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(26, 31, 46, 0.05);
+}
+
+.promo-form-card h3,
+.promo-list-card h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 20px;
+    color: #1a1f2e;
+}
+
+.promo-form-card .form-group {
+    margin-bottom: 16px;
+}
+
+.promo-form-card label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #3a4257;
+}
+
+.promo-form-card input[type="text"],
+.promo-form-card input[type="number"],
+.promo-form-card input[type="datetime-local"],
+.promo-form-card select,
+.promo-form-card textarea {
+    width: 100%;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: #fafbfd;
+    transition: border-color 0.2s ease;
+}
+
+.promo-form-card input:focus,
+.promo-form-card select:focus,
+.promo-form-card textarea:focus {
+    border-color: #0066cc;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.promo-form-card textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.promo-form-card .form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.promo-form-card .form-row .form-group {
+    flex: 1;
+}
+
+.promo-form-card .form-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+}
+
+.promo-form-card .form-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.promo-form-card .form-actions .btn {
+    flex: 1;
+}
+
+.promo-list-card {
+    min-height: 320px;
+}
+
+.promo-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.promo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.promo-item {
+    border: 1px solid #e1e8ed;
+    border-radius: 12px;
+    padding: 16px;
+    background: #fdfdfd;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.promo-item.active {
+    border-color: #2e7d32;
+    box-shadow: 0 6px 18px rgba(46, 125, 50, 0.12);
+}
+
+.promo-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.promo-code {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #1a1f2e;
+}
+
+.promo-status {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.promo-status.active {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.promo-status.inactive {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.promo-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-bottom: 12px;
+    color: #455065;
+    font-size: 14px;
+}
+
+.promo-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.promo-controls button {
+    flex: 1;
+}
+
+@media (max-width: 1024px) {
+    .promo-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .promo-form-card,
+    .promo-list-card {
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    .promo-form-card .form-row {
+        flex-direction: column;
+    }
+
+    .promo-form-card .form-actions {
+        flex-direction: column-reverse;
+    }
 }
 
