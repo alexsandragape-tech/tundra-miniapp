@@ -1805,6 +1805,16 @@ async function sendClientNotification(order, status, statusText, statusEmoji) {
             case 'completed':
                 // 🔥 ВАЖНО: При завершении заказа ОБНОВЛЯЕМ ЛОЯЛЬНОСТЬ
                 await updateClientLoyalty(order);
+                if (order.appliedPromo?.promoId && order.telegramUserId) {
+                    try {
+                        await PromoService.registerPromoUsage({
+                            promoId: order.appliedPromo.promoId,
+                            userId: order.telegramUserId
+                        });
+                    } catch (promoError) {
+                        logger.error('❌ Ошибка регистрации использования промокода:', promoError.message);
+                    }
+                }
                 
                 clientMessage = `✅ *Заказ доставлен!*\n\n` +
                     `📦 Заказ №${order.id}\n` +
@@ -2033,6 +2043,23 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     
     try {
         const orderData = req.body;
+        const cartItems = Array.isArray(orderData.cartItems) ? orderData.cartItems : [];
+        const deliveryZone = orderData.deliveryZone || 'moscow';
+        const userIdForLoyalty = orderData.telegramUser?.id?.toString?.() || orderData.userId || 'unknown';
+        const promoCodeFromRequest = orderData.promoCode || orderData.promo?.code || orderData.promo_code;
+
+        const pricing = await calculateOrderPricing({
+            cartItems,
+            deliveryZone,
+            promoCode: promoCodeFromRequest,
+            userId: userIdForLoyalty
+        });
+
+        orderData.cartItems = cartItems;
+        orderData.totals = pricing.totals;
+        orderData.appliedPromo = pricing.appliedPromo;
+        orderData.promoCode = pricing.promoCode;
+        orderData.promoDiscount = pricing.totals.promoDiscount;
         
         // Создаем заказ
         order = await createOrder(orderData);
@@ -2124,12 +2151,15 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             phone: order.phone,
             deliveryZone: orderData.deliveryZone || 'moscow',
             address: JSON.stringify(orderData.address),
-            items: JSON.stringify(orderData.cartItems),
+            items: orderData.cartItems,
             totalAmount: totalAmount,
             status: 'new',
             paymentStatus: 'pending',
             paymentId: order.paymentId,
-            paymentUrl: order.paymentUrl
+            paymentUrl: order.paymentUrl,
+            promoCode: order.appliedPromo?.code || null,
+            promoDiscount: order.totals?.promoDiscount || 0,
+            promoData: order.appliedPromo || null
         });
         
         logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
@@ -2144,11 +2174,20 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                 id: order.id,
                 status: order.status,
                 paymentUrl: order.paymentUrl,
-                totals: order.totals
+                totals: order.totals,
+                appliedPromo: order.appliedPromo
             }
         });
         
     } catch (error) {
+        if (error instanceof PromoValidationError) {
+            logger.warn('⚠️ Ошибка применения промокода при создании заказа:', error.reason);
+            return res.status(400).json({
+                ok: false,
+                error: error.clientMessage,
+                reason: error.reason
+            });
+        }
         logger.error('❌ Ошибка создания заказа:', error.message);
         
         // Если заказ был создан, но произошла ошибка, удаляем его
@@ -3326,6 +3365,141 @@ function parseDateOrNull(value) {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function mapPromoReasonToMessage(reason) {
+    switch (reason) {
+        case 'usage_limit_reached':
+            return 'Вы уже использовали этот промокод максимально возможное количество раз';
+        case 'not_found':
+        case 'inactive':
+        case 'expired':
+        case 'not_started':
+            return 'Промокод больше не действует';
+        case 'missing_user':
+            return 'Не удалось применить промокод для этого пользователя';
+        case 'unsupported_type':
+            return 'Тип промокода не поддерживается';
+        default:
+            return 'Промокод недействителен';
+    }
+}
+
+class PromoValidationError extends Error {
+    constructor(reason = 'invalid', meta = null) {
+        super(mapPromoReasonToMessage(reason));
+        this.name = 'PromoValidationError';
+        this.reason = reason;
+        this.clientMessage = mapPromoReasonToMessage(reason);
+        this.meta = meta;
+    }
+}
+
+async function calculateOrderPricing({ cartItems, deliveryZone, promoCode, userId }) {
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
+        throw new Error('Корзина пуста');
+    }
+
+    const normalizedItems = cartItems.map(item => {
+        const price = Number(item.price);
+        const quantity = Number(item.quantity);
+        if (!Number.isFinite(price) || price <= 0) {
+            throw new Error('Некорректная цена товара');
+        }
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Некорректное количество товара');
+        }
+        return { price, quantity };
+    });
+
+    const rawSubtotal = normalizedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    let loyaltyPercent = 0;
+    try {
+        if (userId) {
+            const stats = await LoyaltyService.getLoyaltyStats(userId);
+            if (stats) {
+                loyaltyPercent = typeof stats.currentDiscount === 'number'
+                    ? stats.currentDiscount
+                    : LoyaltyService.getDiscountPercent(stats.totalSpent || 0);
+            }
+        }
+    } catch (err) {
+        logger.warn('⚠️ Не удалось получить статистику лояльности пользователя:', err.message);
+        loyaltyPercent = 0;
+    }
+
+    const loyaltyDiscount = Math.round(rawSubtotal * (loyaltyPercent / 100));
+    let subtotalAfterLoyalty = Math.max(0, rawSubtotal - loyaltyDiscount);
+
+    let appliedPromo = null;
+    let promoDiscount = 0;
+    let normalizedPromoCode = null;
+
+    if (promoCode) {
+        if (!userId || userId === 'unknown') {
+            throw new PromoValidationError('missing_user');
+        }
+
+        normalizedPromoCode = PromoService.normalizeCode(promoCode);
+        const validation = await PromoService.validatePromoCode({
+            code: normalizedPromoCode,
+            userId,
+            subtotal: subtotalAfterLoyalty
+        });
+
+        if (!validation.ok) {
+            throw new PromoValidationError(validation.reason || 'invalid', validation);
+        }
+
+        const discountAmount = Math.min(subtotalAfterLoyalty, validation.discount?.amount || 0);
+        promoDiscount = discountAmount;
+        subtotalAfterLoyalty = Math.max(0, subtotalAfterLoyalty - discountAmount);
+        const appliesToDelivery = validation.discount?.appliesToDelivery === true;
+
+        appliedPromo = {
+            promoId: validation.promo.id,
+            code: validation.promo.code,
+            discountType: validation.promo.discountType,
+            discountValue: validation.promo.discountValue,
+            discountAmount,
+            appliesToDelivery,
+            remainingUses: validation.remainingUses
+        };
+    }
+
+    let delivery = 0;
+    if (appliedPromo?.appliesToDelivery) {
+        delivery = 0;
+    } else if (deliveryZone === 'moscow') {
+        delivery = subtotalAfterLoyalty >= 5000 ? 0 : 400;
+    } else if (deliveryZone === 'mo') {
+        delivery = 700;
+    }
+
+    const total = subtotalAfterLoyalty + delivery;
+
+    return {
+        totals: {
+            rawSubtotal,
+            loyaltyDiscount,
+            loyaltyPercent,
+            promoDiscount,
+            subtotal: subtotalAfterLoyalty,
+            delivery,
+            total
+        },
+        appliedPromo,
+        promoCode: normalizedPromoCode
+    };
+}
+
+function buildPromoErrorResponse(reason) {
+    return {
+        ok: false,
+        reason,
+        error: mapPromoReasonToMessage(reason)
+    };
+}
+
 app.get('/api/admin/promocodes', requireAdminAuth, async (req, res) => {
     try {
         const rows = await PromoCodesDB.listAll();
@@ -3540,6 +3714,60 @@ app.patch('/api/admin/promocodes/:id/status', requireAdminAuth, async (req, res)
     } catch (error) {
         logger.error('❌ Ошибка смены статуса промокода:', error.message);
         res.status(500).json({ ok: false, error: 'Не удалось обновить статус промокода' });
+    }
+});
+
+app.post('/api/promocodes/validate', async (req, res) => {
+    try {
+        const { code, userId, subtotal } = req.body || {};
+        if (!code || typeof code !== 'string') {
+            return res.status(400).json({ ok: false, error: 'Введите промокод' });
+        }
+        if (!userId) {
+            return res.status(400).json({ ok: false, error: mapPromoReasonToMessage('missing_user'), reason: 'missing_user' });
+        }
+        const subtotalNumber = Number(subtotal);
+        if (!Number.isFinite(subtotalNumber) || subtotalNumber < 0) {
+            return res.status(400).json({ ok: false, error: 'Некорректная сумма заказа' });
+        }
+
+        const normalizedCode = PromoService.normalizeCode(code);
+        const validation = await PromoService.validatePromoCode({
+            code: normalizedCode,
+            userId,
+            subtotal: subtotalNumber
+        });
+
+        if (!validation.ok) {
+            const reason = validation.reason || 'invalid';
+            return res.status(400).json({
+                ok: false,
+                reason,
+                error: mapPromoReasonToMessage(reason)
+            });
+        }
+
+        res.json({
+            ok: true,
+            promo: {
+                id: validation.promo.id,
+                code: validation.promo.code,
+                discountType: validation.promo.discountType,
+                discountValue: validation.promo.discountValue,
+                maxPerUser: validation.promo.maxPerUser,
+                isActive: validation.promo.isActive,
+                startsAt: validation.promo.startsAt,
+                expiresAt: validation.promo.expiresAt
+            },
+            discount: validation.discount,
+            usage: {
+                usageCount: validation.usageCount,
+                remainingUses: validation.remainingUses
+            }
+        });
+    } catch (error) {
+        logger.error('❌ Ошибка проверки промокода:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось проверить промокод' });
     }
 });
 
