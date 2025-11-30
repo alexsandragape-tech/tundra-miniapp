@@ -154,6 +154,7 @@ const TEST_MIN_ORDER = 1; // Минимальная сумма для тесто
 const PROD_MIN_ORDER = 1; // Минимальная сумма для продакшена (временно убрано ограничение)
 const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
 let paymentStatusChecker = null;
+let promoState = { enabled: false, code: '', validation: null };
 
 // Функция получения минимальной суммы заказа
 function getMinOrderAmount() {
@@ -1541,6 +1542,10 @@ function changeCartQuantity(cartKey, delta) {
 
     localStorage.setItem('tundra_cart', JSON.stringify(cart));
     updateCartBadge();
+    if (promoState.enabled) {
+        promoState.validation = null;
+        updatePromoHint('');
+    }
     showCart(); // Перерисовываем корзину
 }
 
@@ -1598,6 +1603,18 @@ function validatePhoneNumber(phone) {
     }
     
     return { valid: true, message: 'Номер телефона корректен' };
+}
+
+function updatePromoHint(text = '', type = null) {
+    const hint = document.getElementById('promo-hint');
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.classList.remove('promo-hint-success', 'promo-hint-error');
+    if (type === 'success') {
+        hint.classList.add('promo-hint-success');
+    } else if (type === 'error') {
+        hint.classList.add('promo-hint-error');
+    }
 }
 
 // Функция перехода к оформлению заказа
@@ -2160,6 +2177,39 @@ function startFromWelcome() {
 document.addEventListener('DOMContentLoaded', () => {
     const orderForm = document.getElementById('orderForm');
     if (orderForm) {
+        const promoCheckbox = document.getElementById('promo-toggle-checkbox');
+        const promoGroup = document.getElementById('promo-code-group');
+        const promoInput = document.getElementById('promo-code-input');
+
+        if (promoCheckbox) {
+            promoCheckbox.addEventListener('change', () => {
+                promoState.enabled = promoCheckbox.checked;
+                if (promoGroup) {
+                    promoGroup.style.display = promoCheckbox.checked ? 'block' : 'none';
+                }
+                if (!promoCheckbox.checked) {
+                    promoState.code = '';
+                    promoState.validation = null;
+                    if (promoInput) {
+                        promoInput.value = '';
+                    }
+                    updatePromoHint('');
+                } else if (promoInput) {
+                    promoInput.focus();
+                }
+            });
+        }
+
+        if (promoInput) {
+            promoInput.addEventListener('input', () => {
+                const value = promoInput.value.trim().toUpperCase();
+                promoInput.value = value;
+                promoState.code = value;
+                promoState.validation = null;
+                updatePromoHint('');
+            });
+        }
+
         // Добавляем валидацию номера телефона в реальном времени
         const phoneInput = document.getElementById('phone');
         if (phoneInput) {
@@ -2289,6 +2339,69 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = 'Отправляем заказ...';
             submitBtn.disabled = true;
             
+            let promoValidation = null;
+            if (promoState.enabled) {
+                const promoInputElement = document.getElementById('promo-code-input');
+                const promoCodeRaw = (promoState.code || promoInputElement?.value || '').trim().toUpperCase();
+                if (!promoCodeRaw) {
+                    showNotification('Введите промокод', 'warning');
+                    updatePromoHint('Введите промокод', 'error');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    window.isSubmittingOrder = false;
+                    return;
+                }
+
+                const subtotalForPromo = formData.totals?.subtotal ?? 0;
+
+                try {
+                    const promoResponse = await fetch(`${API_BASE}/api/promocodes/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            code: promoCodeRaw,
+                            userId,
+                            subtotal: subtotalForPromo
+                        })
+                    });
+                    const promoJson = await promoResponse.json();
+                    if (!promoResponse.ok || !promoJson.ok) {
+                        const message = promoJson?.error || 'Ваш промокод больше не действителен';
+                        showNotification(message, 'error');
+                        updatePromoHint(message, 'error');
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                        window.isSubmittingOrder = false;
+                        return;
+                    }
+                    promoValidation = promoJson;
+                    promoState.code = promoJson.promo?.code || promoCodeRaw;
+                    promoState.validation = promoJson;
+                    if (promoJson.discount?.appliesToDelivery) {
+                        updatePromoHint('Бесплатная доставка по промокоду', 'success');
+                    } else if (promoJson.discount?.amount) {
+                        updatePromoHint(`Скидка по промокоду: -${promoJson.discount.amount}₽`, 'success');
+                    } else {
+                        updatePromoHint('Промокод применён', 'success');
+                    }
+                    formData.promoCode = promoState.code;
+                } catch (promoError) {
+                    console.error('Ошибка проверки промокода:', promoError);
+                    showNotification('Не удалось проверить промокод', 'error');
+                    updatePromoHint('Не удалось проверить промокод', 'error');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    window.isSubmittingOrder = false;
+                    return;
+                }
+            } else {
+                promoState.validation = null;
+                updatePromoHint('');
+                if (formData.promoCode) {
+                    delete formData.promoCode;
+                }
+            }
+            
             try {
                 const response = await fetch(`${API_BASE}/api/orders`, {
                     method: 'POST',
@@ -2296,7 +2409,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify(formData)
                 });
 
-                if (!response.ok) throw new Error('HTTP ' + response.status);
+                if (!response.ok) {
+                    let errorMessage = 'Ошибка отправки заказа. Попробуйте еще раз.';
+                    try {
+                        const errorBody = await response.json();
+                        if (errorBody?.error) {
+                            errorMessage = errorBody.error;
+                        }
+                    } catch (_) {}
+                    throw new Error(errorMessage);
+                }
                 
                 const result = await response.json();
                 console.log('📥 Ответ от сервера:', result);
@@ -2308,16 +2430,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('tundra_order_counter', orderCounter.toString());
                     
                     // Сохраняем данные заказа для обновления профиля ПОСЛЕ оплаты
+                    const serverTotals = result.order.totals || calculateCartTotal();
                     const orderData = {
                         orderId: currentOrderId,
-                        cartTotal: calculateCartTotal(),
+                        cartTotal: serverTotals,
                         cartItems: Object.values(cart).filter(i => i.quantity > 0),
                         timestamp: Date.now(),
                         paymentId: result.order.paymentId,
                         paymentUrl: result.order.paymentUrl,
-                        amount: result.order.totals?.total
+                        amount: serverTotals?.total
                     };
                     localStorage.setItem('pending_order', JSON.stringify(orderData));
+                    promoState = { enabled: false, code: '', validation: null };
+                    const promoCheckboxElement = document.getElementById('promo-toggle-checkbox');
+                    const promoGroupElement = document.getElementById('promo-code-group');
+                    const promoInputElement = document.getElementById('promo-code-input');
+                    if (promoCheckboxElement) promoCheckboxElement.checked = false;
+                    if (promoGroupElement) promoGroupElement.style.display = 'none';
+                    if (promoInputElement) promoInputElement.value = '';
+                    updatePromoHint('');
                     
                     console.log(`💳 Заказ #${currentOrderId} создан, перенаправляем на оплату ЮKassa...`);
                     
@@ -2372,7 +2503,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (err) {
                 console.error('Ошибка отправки заказа:', err);
-                showNotification('Ошибка отправки заказа. Попробуйте еще раз.', 'error');
+                showNotification(err.message || 'Ошибка отправки заказа. Попробуйте еще раз.', 'error');
             } finally {
                 // Восстанавливаем кнопку
                 submitBtn.textContent = originalText;
