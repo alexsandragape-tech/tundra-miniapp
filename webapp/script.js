@@ -1442,6 +1442,7 @@ function showCart() {
     const cartItems = Object.values(cart).filter(item => item.quantity > 0);
 
     if (cartItems.length === 0) {
+        promoState = { enabled: false, code: '', validation: null };
         cartContent.innerHTML = `
             <div class="empty-cart">
                 <!-- Иконка скрыта по просьбе пользователя -->
@@ -1487,8 +1488,20 @@ function showCart() {
         `;
     });
 
-    const { rawSubtotal, loyaltyDiscount, subtotal, delivery, total } = calculateCartTotal();
-    const loyalty = calculateLoyalty(userProfile.totalSpent);
+    const totals = calculateCartTotal();
+    const {
+        rawSubtotal,
+        loyaltyDiscount,
+        loyaltyPercent,
+        promoDiscount,
+        promoFreeDelivery,
+        appliedPromoCode,
+        subtotal,
+        delivery,
+        total
+    } = totals;
+    const hasPromoDiscount = promoDiscount > 0;
+    const hasPromo = promoState.enabled && (hasPromoDiscount || promoFreeDelivery);
     
     cartHTML += `
         <div class="cart-summary">
@@ -1501,8 +1514,21 @@ function showCart() {
     if (loyaltyDiscount > 0) {
         cartHTML += `
             <div class="summary-row loyalty-discount">
-                <span>🔥 Скидка лояльности (${loyalty.discount}%):</span>
+                <span>🔥 Скидка лояльности (${loyaltyPercent}%):</span>
                 <span>-${loyaltyDiscount}₽</span>
+            </div>`;
+    }
+    if (hasPromoDiscount) {
+        cartHTML += `
+            <div class="summary-row promo-discount">
+                <span>🎟️ Промокод ${appliedPromoCode ? `(${appliedPromoCode})` : ''}:</span>
+                <span>-${promoDiscount}₽</span>
+            </div>`;
+    } else if (promoFreeDelivery && promoState.enabled) {
+        cartHTML += `
+            <div class="summary-row promo-discount">
+                <span>🎟️ Промокод ${appliedPromoCode ? `(${appliedPromoCode})` : ''}:</span>
+                <span>Бесплатная доставка</span>
             </div>`;
     }
     
@@ -1515,6 +1541,17 @@ function showCart() {
                 <span>Итого:</span>
                 <span>${total}₽</span>
             </div>
+            <div class="promo-block">
+                <label class="promo-toggle">
+                    <input type="checkbox" id="promo-toggle-checkbox" ${promoState.enabled ? 'checked' : ''}>
+                    <span>Использовать промокод</span>
+                </label>
+                <div class="promo-input-wrapper" id="promo-input-wrapper" style="display: ${promoState.enabled ? 'flex' : 'none'};">
+                    <input type="text" id="promo-code-input" class="form-input" placeholder="Введите промокод" value="${promoState.enabled ? promoState.code : ''}" ${promoState.enabled ? '' : 'disabled'}>
+                    <button type="button" class="promo-apply-btn" id="promo-apply-btn">${promoState.validation?.ok ? 'Применён' : 'Применить'}</button>
+                </div>
+                <div class="form-hint" id="promo-hint">${hasPromo ? (promoFreeDelivery ? 'Бесплатная доставка по промокоду' : hasPromoDiscount ? `Скидка по промокоду: -${promoDiscount}₽` : '') : ''}</div>
+            </div>
             <button class="checkout-btn" onclick="proceedToOrder()">
                 Оформить заказ
             </button>
@@ -1523,6 +1560,120 @@ function showCart() {
     </div>`;
 
     cartContent.innerHTML = cartHTML;
+    setupPromoControls();
+}
+
+function setupPromoControls() {
+    const checkbox = document.getElementById('promo-toggle-checkbox');
+    const wrapper = document.getElementById('promo-input-wrapper');
+    const input = document.getElementById('promo-code-input');
+    const applyBtn = document.getElementById('promo-apply-btn');
+
+    if (!checkbox || !wrapper || !input || !applyBtn) {
+        return;
+    }
+
+    checkbox.checked = promoState.enabled;
+    wrapper.style.display = promoState.enabled ? 'flex' : 'none';
+    input.disabled = !promoState.enabled;
+    input.value = promoState.enabled ? (promoState.code || '') : '';
+
+    checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+            promoState.enabled = true;
+            promoState.validation = null;
+            wrapper.style.display = 'flex';
+            input.disabled = false;
+            input.focus();
+            updatePromoHint('');
+        } else {
+            promoState = { enabled: false, code: '', validation: null };
+            showCart();
+        }
+    });
+
+    input.addEventListener('input', () => {
+        const value = input.value.trim().toUpperCase();
+        input.value = value;
+        promoState.code = value;
+        promoState.validation = null;
+        updatePromoHint('');
+    });
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applyPromoCode();
+        }
+    });
+
+    applyBtn.addEventListener('click', () => applyPromoCode());
+}
+
+async function applyPromoCode() {
+    const input = document.getElementById('promo-code-input');
+    const applyBtn = document.getElementById('promo-apply-btn');
+    const checkbox = document.getElementById('promo-toggle-checkbox');
+
+    if (!input || !applyBtn || !checkbox) return;
+
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
+        updatePromoHint('Введите промокод', 'error');
+        return;
+    }
+
+    promoState.enabled = true;
+    promoState.code = code;
+    promoState.validation = null;
+    checkbox.checked = true;
+    updatePromoHint('');
+
+    const originalText = applyBtn.textContent;
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Проверяем...';
+
+    try {
+        const totalsBeforePromo = calculateCartTotal();
+        const subtotalForPromo = totalsBeforePromo.subtotalAfterLoyalty ?? totalsBeforePromo.subtotal;
+        const response = await fetch(`${API_BASE}/api/promocodes/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code,
+                userId: getUserId(),
+                subtotal: subtotalForPromo
+            })
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            const message = data?.error || 'Ваш промокод больше не действителен';
+            updatePromoHint(message, 'error');
+            showNotification(message, 'error');
+            applyBtn.disabled = false;
+            applyBtn.textContent = originalText;
+            promoState.validation = null;
+            return;
+        }
+
+        promoState.validation = data;
+        updatePromoHint(
+            data.discount?.appliesToDelivery
+                ? 'Бесплатная доставка по промокоду'
+                : data.discount?.amount
+                    ? `Скидка по промокоду: -${data.discount.amount}₽`
+                    : 'Промокод применён',
+            'success'
+        );
+        showCart();
+    } catch (error) {
+        console.error('Ошибка проверки промокода:', error);
+        showNotification('Не удалось проверить промокод', 'error');
+        updatePromoHint('Не удалось проверить промокод', 'error');
+        applyBtn.disabled = false;
+        applyBtn.textContent = originalText;
+    }
 }
 
 // Функция изменения количества в корзине
@@ -1551,30 +1702,49 @@ function changeCartQuantity(cartKey, delta) {
 
 // Функция расчета итогов корзины
 function calculateCartTotal() {
-    const rawSubtotal = Object.values(cart).reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    // 🔥 ПРИМЕНЯЕМ СКИДКУ ЛОЯЛЬНОСТИ (используем локальные данные)
+    const cartItems = Object.values(cart);
+    const rawSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
     const loyalty = calculateLoyalty(userProfile.totalSpent);
     const loyaltyDiscount = Math.round(rawSubtotal * (loyalty.discount / 100));
-    const subtotal = rawSubtotal - loyaltyDiscount;
-    
+    let subtotalAfterLoyalty = Math.max(0, rawSubtotal - loyaltyDiscount);
+
+    let promoDiscount = 0;
+    let promoFreeDelivery = false;
+    let appliedPromoCode = null;
+
+    if (promoState.enabled && promoState.validation?.ok) {
+        const discountInfo = promoState.validation.discount || {};
+        promoDiscount = Math.min(subtotalAfterLoyalty, Math.max(0, discountInfo.amount || 0));
+        promoFreeDelivery = Boolean(discountInfo.appliesToDelivery);
+        appliedPromoCode = promoState.validation.promo?.code || promoState.code || null;
+    }
+
+    let subtotalAfterPromo = Math.max(0, subtotalAfterLoyalty - promoDiscount);
+
     const deliveryZone = document.getElementById('delivery-zone')?.value;
-    
     let delivery = 0;
-    if (deliveryZone === 'moscow') {
-        delivery = subtotal >= 5000 ? 0 : 400;
+    if (promoFreeDelivery) {
+        delivery = 0;
+    } else if (deliveryZone === 'moscow') {
+        delivery = subtotalAfterPromo >= 5000 ? 0 : 400;
     } else if (deliveryZone === 'mo') {
         delivery = 700;
     }
-    
-    const total = subtotal + delivery;
-    
-    return { 
-        rawSubtotal,        // Сумма без скидки
-        loyaltyDiscount,    // Размер скидки
-        subtotal,           // Сумма со скидкой  
-        delivery, 
-        total 
+
+    const total = subtotalAfterPromo + delivery;
+
+    return {
+        rawSubtotal,
+        loyaltyDiscount,
+        loyaltyPercent: loyalty.discount,
+        subtotalAfterLoyalty,
+        promoDiscount,
+        promoFreeDelivery,
+        appliedPromoCode,
+        subtotal: subtotalAfterPromo,
+        delivery,
+        total
     };
 }
 
@@ -2177,39 +2347,6 @@ function startFromWelcome() {
 document.addEventListener('DOMContentLoaded', () => {
     const orderForm = document.getElementById('orderForm');
     if (orderForm) {
-        const promoCheckbox = document.getElementById('promo-toggle-checkbox');
-        const promoGroup = document.getElementById('promo-code-group');
-        const promoInput = document.getElementById('promo-code-input');
-
-        if (promoCheckbox) {
-            promoCheckbox.addEventListener('change', () => {
-                promoState.enabled = promoCheckbox.checked;
-                if (promoGroup) {
-                    promoGroup.style.display = promoCheckbox.checked ? 'block' : 'none';
-                }
-                if (!promoCheckbox.checked) {
-                    promoState.code = '';
-                    promoState.validation = null;
-                    if (promoInput) {
-                        promoInput.value = '';
-                    }
-                    updatePromoHint('');
-                } else if (promoInput) {
-                    promoInput.focus();
-                }
-            });
-        }
-
-        if (promoInput) {
-            promoInput.addEventListener('input', () => {
-                const value = promoInput.value.trim().toUpperCase();
-                promoInput.value = value;
-                promoState.code = value;
-                promoState.validation = null;
-                updatePromoHint('');
-            });
-        }
-
         // Добавляем валидацию номера телефона в реальном времени
         const phoneInput = document.getElementById('phone');
         if (phoneInput) {
@@ -2339,7 +2476,6 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = 'Отправляем заказ...';
             submitBtn.disabled = true;
             
-            let promoValidation = null;
             if (promoState.enabled) {
                 const promoInputElement = document.getElementById('promo-code-input');
                 const promoCodeRaw = (promoState.code || promoInputElement?.value || '').trim().toUpperCase();
@@ -2374,7 +2510,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.isSubmittingOrder = false;
                         return;
                     }
-                    promoValidation = promoJson;
                     promoState.code = promoJson.promo?.code || promoCodeRaw;
                     promoState.validation = promoJson;
                     if (promoJson.discount?.appliesToDelivery) {
