@@ -2874,7 +2874,15 @@ async function updateLoyaltyCard(forceServerSync = false) {
         };
     }
 
+    const derivedLoyalty = calculateLoyalty(stats.totalSpent || 0);
+    stats.currentDiscount = derivedLoyalty.discount;
+    stats.nextLevelTarget = derivedLoyalty.nextLevel;
+    stats.nextLevelProgress = Math.max(0, Math.min(100, derivedLoyalty.progress ?? 0));
+    stats.levelName = derivedLoyalty.level;
+
     // Определяем следующую скидку
+    const amountToNextLevel = stats.nextLevelTarget ? Math.max(stats.nextLevelTarget - stats.totalSpent, 0) : 0;
+    const progressPercent = Math.max(0, Math.min(100, stats.nextLevelProgress ?? 0));
     const nextDiscount = stats.nextLevelTarget ? 
         (stats.currentDiscount === 0 ? 3 : 
          stats.currentDiscount === 3 ? 5 : 
@@ -2947,9 +2955,9 @@ async function updateLoyaltyCard(forceServerSync = false) {
                 </div>
             </div>
             <div class="loyalty-progress">
-                <div class="progress-text">До скидки ${nextDiscount} осталось: ${stats.nextLevelTarget ? (stats.nextLevelTarget - stats.totalSpent).toLocaleString() : '0'}₽</div>
+                <div class="progress-text">До скидки ${nextDiscount} осталось: ${amountToNextLevel.toLocaleString()}₽</div>
                 <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${stats.nextLevelProgress}%"></div>
+                    <div class="progress-fill" style="width: ${progressPercent}%"></div>
                 </div>
             </div>
             <div class="loyalty-tiers">
