@@ -32,6 +32,13 @@ async function getLoyaltyStats(userId) {
     return stats;
 }
 
+function getDiscountPercent(totalSpent = 0) {
+    if (totalSpent >= 50000) return 10;
+    if (totalSpent >= 25000) return 5;
+    if (totalSpent >= 10000) return 3;
+    return 0;
+}
+
 async function migrateOldOrdersToLoyalty(userId, logger) {
     const orders = userId ? await OrdersDB.getByUserId(userId) : await OrdersDB.getAll();
     const completedOrders = orders.filter(order =>
@@ -53,6 +60,7 @@ async function migrateOldOrdersToLoyalty(userId, logger) {
 module.exports = {
     updateClientLoyalty,
     getLoyaltyStats,
+    getDiscountPercent,
     migrateOldOrdersToLoyalty
 };
 
