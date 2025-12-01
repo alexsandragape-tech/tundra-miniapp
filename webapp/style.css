@@ -350,6 +350,38 @@ body {
     font-weight: 700;
     color: #0b5c56;
     margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+.product-price .price-new {
+    display: block;
+    color: #c62828;
+    font-size: 20px;
+    line-height: 1.2;
+}
+.product-price .price-old {
+    display: block;
+    font-size: 14px;
+    color: #9aa0a6;
+    font-weight: 500;
+    text-decoration-line: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(198, 40, 40, 0.6);
+    line-height: 1.2;
+}
+.product-image .product-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.35);
 }
 
 .product-actions {
@@ -500,6 +532,34 @@ body {
     font-weight: 700;
     color: #0b5c56;
     margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.detail-price .price-new {
+    color: #c62828;
+    font-size: 32px;
+    line-height: 1.2;
+}
+.detail-price .price-old {
+    font-size: 18px;
+    color: #9aa0a6;
+    font-weight: 500;
+    text-decoration-line: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(198, 40, 40, 0.6);
+    line-height: 1.2;
+}
+.detail-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+    color: white;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.25);
 }
 
 .detail-info {
@@ -626,6 +686,27 @@ body {
 .cart-item-price {
     font-size: 14px;
     color: #0b5c56;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cart-item-price .price-new {
+    color: #c62828;
+    font-weight: 700;
+}
+.cart-item-price .price-old {
+    color: #9aa0a6;
+    text-decoration: line-through;
+}
+.cart-item-badge {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #ffe6e0;
+    color: #d84315;
+    font-size: 11px;
     font-weight: 600;
 }
 
