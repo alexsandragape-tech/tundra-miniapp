@@ -25,12 +25,13 @@ test('mapDbOrderToList формирует компактный вид', () => {
   });
 });
 
-test('isOrderCompletedOrPaid покрывает все целевые статусы', () => {
+test('isOrderCompletedOrPaid учитывает только завершенные или оплаченные заказы', () => {
   assert.ok(isOrderCompletedOrPaid({ payment_status: 'paid' }));
   assert.ok(isOrderCompletedOrPaid({ status: 'completed' }));
   assert.ok(isOrderCompletedOrPaid({ status: 'delivered' }));
-  assert.ok(isOrderCompletedOrPaid({ status: 'accepted' }));
-  assert.ok(isOrderCompletedOrPaid({ payment_id: 'p1' }));
+  assert.ok(isOrderCompletedOrPaid({ status: 'accepted', payment_status: 'paid' }));
+  assert.ok(!isOrderCompletedOrPaid({ status: 'accepted', payment_status: 'pending' }));
+  assert.ok(!isOrderCompletedOrPaid({ payment_id: 'p1', payment_status: 'pending' }));
   assert.ok(!isOrderCompletedOrPaid({ status: 'new', payment_status: 'pending' }));
 });
 
