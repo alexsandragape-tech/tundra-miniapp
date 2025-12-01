@@ -2448,6 +2448,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             window.isSubmittingOrder = true;
+            const releaseSubmissionFlag = () => {
+                window.isSubmittingOrder = false;
+            };
             
             // Проверяем минимальный заказ в зависимости от зоны доставки
             const deliveryZone = document.getElementById('delivery-zone').value;
@@ -2455,12 +2458,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (deliveryZone === 'mo' && subtotal < 5000) {
                 showNotification('Для Московской области минимальный заказ: 5,000₽', 'warning');
+                releaseSubmissionFlag();
                 return;
             } else if (deliveryZone === 'moscow' && subtotal < getMinOrderAmount()) {
                 showNotification(`Для Москвы минимальный заказ: ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}`, 'warning');
+                releaseSubmissionFlag();
                 return;
             } else if (!deliveryZone) {
                 showNotification('Выберите зону доставки', 'warning');
+                releaseSubmissionFlag();
                 return;
             }
             
@@ -2471,6 +2477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!street || !house) {
                 showNotification('Заполните адрес доставки', 'warning');
+                releaseSubmissionFlag();
                 return;
             }
             
@@ -2490,6 +2497,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     nameInput.style.backgroundColor = '';
                 }, 3000);
                 
+                releaseSubmissionFlag();
                 return;
             }
             
@@ -2509,6 +2517,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     phoneInput.style.backgroundColor = '';
                 }, 3000);
                 
+                releaseSubmissionFlag();
                 return;
             }
             
@@ -2707,6 +2716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error('Ошибка отправки заказа:', err);
                 showNotification(err.message || 'Ошибка отправки заказа. Попробуйте еще раз.', 'error');
+                showCart();
             } finally {
                 // Восстанавливаем кнопку
                 submitBtn.textContent = originalText;
@@ -2715,21 +2725,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 🔄 СБРАСЫВАЕМ ФЛАГ МНОЖЕСТВЕННОЙ ОТПРАВКИ
                 window.isSubmittingOrder = false;
             }
-
-            // Fallback - если что-то пошло не так
-            showNotification('Заказ не был отправлен. Попробуйте еще раз.', 'error');
-
-            // ❌ НЕ ОБНОВЛЯЕМ ПРОФИЛЬ В FALLBACK! 
-            // Профиль обновляется ТОЛЬКО при реальной оплате!
-            
-            console.log('❌ Заказ не отправлен. Профиль НЕ обновлен.');
-            
-            // 🔄 СБРАСЫВАЕМ ФЛАГ МНОЖЕСТВЕННОЙ ОТПРАВКИ
-            window.isSubmittingOrder = false;
-            
-            // Возвращаемся к корзине для повторной попытки
-            showCart();
-            // Убираем уведомление "заказ отправлен ожидайте подтверждения"
         });
     }
 });
