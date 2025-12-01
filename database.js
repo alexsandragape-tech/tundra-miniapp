@@ -136,6 +136,7 @@ async function initializeDatabase() {
                 is_active BOOLEAN DEFAULT true
             )
         `);
+        await pool.query(`ALTER TABLE bot_users ADD COLUMN IF NOT EXISTS welcome_sent_at TIMESTAMP`);
         
         // Создаем таблицу товаров админки
         await pool.query(`
@@ -1121,10 +1122,16 @@ class BotUsersDB {
     static async upsert(userData) {
         const query = `
             INSERT INTO bot_users (
-                telegram_user_id, first_name, last_name, username, 
-                language_code, is_bot, last_interaction
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+                telegram_user_id,
+                first_name,
+                last_name,
+                username,
+                language_code,
+                is_bot,
+                last_interaction,
+                welcome_sent_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)
             ON CONFLICT (telegram_user_id) 
             DO UPDATE SET 
                 first_name = EXCLUDED.first_name,
@@ -1132,7 +1139,8 @@ class BotUsersDB {
                 username = EXCLUDED.username,
                 language_code = EXCLUDED.language_code,
                 last_interaction = CURRENT_TIMESTAMP,
-                is_active = true
+                is_active = true,
+                welcome_sent_at = COALESCE(bot_users.welcome_sent_at, EXCLUDED.welcome_sent_at)
             RETURNING *
         `;
         
@@ -1142,7 +1150,8 @@ class BotUsersDB {
             userData.last_name || null,
             userData.username || null,
             userData.language_code || null,
-            userData.is_bot || false
+            userData.is_bot || false,
+            userData.welcome_sent_at || null
         ];
         
         const result = await pool.query(query, values);
@@ -1162,6 +1171,29 @@ class BotUsersDB {
         
         const result = await pool.query(query);
         return result.rows;
+    }
+
+    static async getUsersWithoutWelcome(limit = 100) {
+        const query = `
+            SELECT telegram_user_id, first_name, last_name, username
+            FROM bot_users
+            WHERE is_active = true
+              AND (welcome_sent_at IS NULL OR welcome_sent_at = '1970-01-01')
+              AND telegram_user_id IS NOT NULL
+              AND telegram_user_id != ''
+            ORDER BY last_interaction DESC
+            LIMIT $1
+        `;
+        const result = await pool.query(query, [limit]);
+        return result.rows;
+    }
+
+    static async markWelcomeSent(telegramUserId) {
+        await pool.query(`
+            UPDATE bot_users
+            SET welcome_sent_at = NOW()
+            WHERE telegram_user_id = $1
+        `, [telegramUserId]);
     }
 
     // Пометить пользователя неактивным
