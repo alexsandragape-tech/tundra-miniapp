@@ -1015,6 +1015,23 @@ body {
     padding: 25px;
 }
 
+.about-text {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: #1A1F2E;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.about-text p {
+    margin: 0;
+}
+
+.about-text strong {
+    color: #0b5c56;
+}
+
 .work-hours-info {
     text-align: center;
 }
