@@ -2395,6 +2395,14 @@ app.all('/api/telegram/webhook', async (req, res) => {
                     try {
                         await BotUsersDB.upsert(msg.from);
                         logger.debug(`👤 Пользователь ${msg.from.id} сохранен/обновлен в БД`);
+                    const messageText = typeof msg.text === 'string' ? msg.text.trim() : '';
+                    if (messageText.toLowerCase().startsWith('/start')) {
+                        logger.info(`🔔 Welcome: /start от пользователя ${msg.from.id}`);
+                        const sent = await sendWelcomeMedia(msg.from.id);
+                        if (sent) {
+                            await BotUsersDB.markWelcomeSent(msg.from.id);
+                        }
+                    }
                     } catch (error) {
                         logger.warn(`⚠️ Ошибка сохранения пользователя ${msg.from.id}:`, error.message);
                     }
@@ -4238,6 +4246,49 @@ async function handleGroupMessage(message) {
     }
 }
 
+async function sendWelcomeMedia(chatId) {
+    if (!config.TELEGRAM_BOT_TOKEN) {
+        logger.warn('⚠️ Welcome media: TELEGRAM_BOT_TOKEN не задан, пропускаем отправку');
+        return false;
+    }
+    if (!config.WELCOME_IMAGE_URL) {
+        logger.warn('⚠️ Welcome media: WELCOME_IMAGE_URL не задан, пропускаем отправку');
+        return false;
+    }
+    try {
+        const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+            chat_id: chatId,
+            photo: config.WELCOME_IMAGE_URL,
+            caption: config.WELCOME_MESSAGE || 'Добро пожаловать в Tundra Gourmet!'
+        });
+        logger.info(`✅ Welcome media отправлено пользователю ${chatId}`, response.data?.ok);
+        return true;
+    } catch (error) {
+        const description = error.response?.data?.description || error.message;
+        logger.error(`❌ Welcome media: не удалось отправить изображение пользователю ${chatId}: ${description}`);
+        return false;
+    }
+}
+
+async function ensureWelcomeMedia() {
+    try {
+        const users = await BotUsersDB.getUsersWithoutWelcome(50);
+        if (!users.length) {
+            return;
+        }
+        logger.info(`🔔 Welcome media: найдено ${users.length} пользователей без приветственной картинки`);
+        for (const user of users) {
+            const delivered = await sendWelcomeMedia(user.telegram_user_id);
+            if (delivered) {
+                await BotUsersDB.markWelcomeSent(user.telegram_user_id);
+            }
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+    } catch (error) {
+        logger.error('❌ Welcome media: ошибка при обработке очереди приветствий:', error.message);
+    }
+}
+
 // 📋 ФУНКЦИЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ РАССЫЛКИ
 async function getSubscribedUsers() {
     try {
@@ -5139,6 +5190,13 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Запускаем сервер
 startServer();
+
+if (config.WELCOME_IMAGE_URL) {
+    ensureWelcomeMedia().catch(() => {});
+    setInterval(() => {
+        ensureWelcomeMedia();
+    }, 5 * 60 * 1000);
+}
 
 // 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
 process.on('uncaughtException', (error) => {
