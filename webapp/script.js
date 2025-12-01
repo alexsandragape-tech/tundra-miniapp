@@ -2,6 +2,16 @@
 let tg = window.Telegram?.WebApp;
 let currentUserId = null; // ID текущего пользователя для истории покупок
 
+// ⚙️ Удаляем случайные текстовые узлы вроде одиночной "M", если они появились до основного контента
+document.addEventListener('DOMContentLoaded', () => {
+    const strayTexts = ['M', 'М'];
+    Array.from(document.body.childNodes).forEach(node => {
+        if (node && node.nodeType === Node.TEXT_NODE && strayTexts.includes(node.textContent.trim())) {
+            node.remove();
+        }
+    });
+});
+
 // 🔑 Функция получения ID пользователя
 function getUserId() {
     if (currentUserId) return currentUserId;
