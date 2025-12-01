@@ -5191,13 +5191,6 @@ process.on('unhandledRejection', (reason, promise) => {
 // Запускаем сервер
 startServer();
 
-if (config.WELCOME_IMAGE_URL) {
-    ensureWelcomeMedia().catch(() => {});
-    setInterval(() => {
-        ensureWelcomeMedia();
-    }, 5 * 60 * 1000);
-}
-
 // 🛡️ ОБРАБОТКА НЕПЕРЕХВАЧЕННЫХ ОШИБОК
 process.on('uncaughtException', (error) => {
     console.error('💥 Неперехваченная ошибка:', error.message);
