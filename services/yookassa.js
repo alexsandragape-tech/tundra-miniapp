@@ -45,6 +45,49 @@ class YooKassaAPI {
 
 let checkout = null;
 
+const RETRYABLE_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRetryableError(error) {
+    if (!error) return false;
+    if (error.code === 'ECONNABORTED') return true;
+    if (!error.response) return true; // сетевые ошибки без ответа
+    return RETRYABLE_HTTP_STATUSES.has(error.response.status);
+}
+
+async function createPaymentWithRetry(paymentData, { attempts = 2, baseDelay = 1000 } = {}) {
+    const totalAttempts = Math.max(1, attempts);
+    let attempt = 0;
+    let lastError = null;
+
+    while (attempt < totalAttempts) {
+        try {
+            const idempotenceKey = crypto.randomUUID();
+            return await checkout.createPayment(paymentData, idempotenceKey);
+        } catch (error) {
+            lastError = error;
+            attempt += 1;
+            const canRetry = isRetryableError(error) && attempt < totalAttempts;
+            log.warn(`⚠️ Ошибка создания платежа (попытка ${attempt} из ${totalAttempts}): ${error.message}`);
+
+            if (!canRetry) {
+                throw error;
+            }
+
+            const waitMs = Math.max(0, baseDelay) * attempt;
+            if (waitMs > 0) {
+                log.info(`⏳ Повторная попытка создания платежа через ${waitMs} мс`);
+                await delay(waitMs);
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 function formatPhoneForYooKassa(phone) {
     if (!phone) return '+79000000000';
     const digits = phone.toString().replace(/\D/g, '');
@@ -89,15 +132,16 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         description,
         metadata: { orderId }
     };
-    const idempotenceKey = crypto.randomUUID();
     try {
-        const payment = await checkout.createPayment(fullPaymentData, idempotenceKey);
-        return payment;
+        return await createPaymentWithRetry(fullPaymentData, { attempts: 2, baseDelay: 1200 });
     } catch (error) {
-        // Автоматический дауншифт до минимального payload
         if (error.response && [400, 403].includes(error.response.status)) {
-            const payment = await checkout.createPayment(minimalPaymentData, crypto.randomUUID());
-            return payment;
+            log.warn(`⚠️ YooKassa отклонила расширенный чек (статус ${error.response.status}). Пробуем упрощённые данные.`);
+            return await createPaymentWithRetry(minimalPaymentData, { attempts: 1 });
+        }
+        if (isRetryableError(error)) {
+            log.warn(`⚠️ Ошибка сети/таймаут при создании платежа: ${error.message}. Пробуем упрощённый payload.`);
+            return await createPaymentWithRetry(minimalPaymentData, { attempts: 2, baseDelay: 1500 });
         }
         throw error;
     }
