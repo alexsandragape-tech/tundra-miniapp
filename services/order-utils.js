@@ -48,12 +48,15 @@ function mapDbOrderToList(dbOrder) {
 }
 
 function isOrderCompletedOrPaid(order) {
+    if (!order) return false;
+
+    const paidStatus = (order.payment_status || order.paymentStatus) === 'paid';
+    const lifecycleStatus = (order.status || '').toLowerCase();
+
     return (
-        order.payment_status === 'paid' ||
-        order.status === 'completed' ||
-        order.status === 'delivered' ||
-        order.status === 'accepted' ||
-        (order.payment_id && order.payment_id !== '')
+        paidStatus ||
+        lifecycleStatus === 'completed' ||
+        lifecycleStatus === 'delivered'
     );
 }
 
