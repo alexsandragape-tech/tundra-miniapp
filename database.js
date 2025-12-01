@@ -533,13 +533,43 @@ class OrdersDB {
     
     // Удалить старые заказы (например, старше 30 дней)
     static async cleanupOldOrders() {
-        const query = `
-            DELETE FROM orders 
-            WHERE created_at < NOW() - INTERVAL '30 days' 
-            AND status IN ('cancelled', 'expired')
-        `;
-        const result = await pool.query(query);
-        return result.rowCount;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            const candidatesResult = await client.query(`
+                SELECT order_id 
+                FROM orders 
+                WHERE created_at < NOW() - INTERVAL '30 days' 
+                AND status IN ('cancelled', 'expired')
+            `);
+            
+            const orderIds = candidatesResult.rows.map(row => row.order_id).filter(Boolean);
+            if (orderIds.length === 0) {
+                await client.query('COMMIT');
+                return 0;
+            }
+            
+            await client.query(
+                `DELETE FROM purchase_history WHERE order_id = ANY($1::text[])`,
+                [orderIds]
+            );
+            
+            const deleteOrdersResult = await client.query(
+                `DELETE FROM orders WHERE order_id = ANY($1::text[])`,
+                [orderIds]
+            );
+            
+            await client.query('COMMIT');
+            return deleteOrdersResult.rowCount;
+        } catch (error) {
+            try {
+                await client.query('ROLLBACK');
+            } catch (_) {}
+            throw error;
+        } finally {
+            client.release();
+        }
     }
     
     // Получить максимальный ID заказа
