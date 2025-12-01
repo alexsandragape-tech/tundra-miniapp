@@ -28,7 +28,7 @@ class YooKassaAPI {
             password: this.secretKey
         };
         const url = `${this.baseURL}/payments`;
-        const response = await axios.post(url, paymentData, { headers, auth, timeout: 10000 });
+        const response = await axios.post(url, paymentData, { headers, auth, timeout: 30000 });
         return response.data;
     }
 
@@ -38,7 +38,7 @@ class YooKassaAPI {
             password: this.secretKey
         };
         const url = `${this.baseURL}/payments/${paymentId}`;
-        const response = await axios.get(url, { auth, timeout: 10000 });
+        const response = await axios.get(url, { auth, timeout: 20000 });
         return response.data;
     }
 }
