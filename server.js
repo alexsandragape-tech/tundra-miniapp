@@ -2196,9 +2196,16 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             logger.info('🗑️ Заказ #' + order.id + ' удален из-за ошибки');
         }
         
-        res.status(500).json({
+        const isTimeoutError = (error && (error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '')));
+        const statusCode = isTimeoutError ? 504 : 500;
+        const userMessage = isTimeoutError
+            ? 'Не удалось связаться с платёжной системой. Попробуйте ещё раз.'
+            : (error.message || 'Ошибка создания заказа');
+        
+        res.status(statusCode).json({
             ok: false,
-            error: error.message
+            error: userMessage,
+            ...(process.env.NODE_ENV === 'development' ? { details: error.message } : {})
         });
     }
 });
