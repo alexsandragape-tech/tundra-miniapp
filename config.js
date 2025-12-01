@@ -23,6 +23,8 @@ module.exports = {
     TELEGRAM_BOT_TOKEN: getEnvVar('TELEGRAM_BOT_TOKEN'),
     TELEGRAM_ADMIN_CHAT_ID: getEnvVar('TELEGRAM_ADMIN_CHAT_ID'), // Для заказов админам
     TELEGRAM_BROADCAST_CHAT_ID: getEnvVar('TELEGRAM_BROADCAST_CHAT_ID'), // Для рассылки клиентам
+    WELCOME_IMAGE_URL: getEnvVar('WELCOME_IMAGE_URL'),
+    WELCOME_MESSAGE: getEnvVar('WELCOME_MESSAGE', 'Добро пожаловать в Tundra Gourmet!'),
     
     // 💳 YOOKASSA
     YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID || '',
