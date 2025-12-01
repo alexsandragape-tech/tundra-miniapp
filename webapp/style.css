@@ -114,12 +114,17 @@ body {
     background: #252B3A;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
     border-radius: 20px;
     font-size: 14px;
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .top-btn:hover {
@@ -167,6 +172,13 @@ body {
     gap: 15px;
     justify-content: space-between; /* Распределяем элементы по краям */
 }
+.top-icon,
+.top-btn-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    pointer-events: none;
+}
 
 .page-header .left-section {
     display: flex;
@@ -177,9 +189,13 @@ body {
 
 .page-header .cart-icon {
     position: relative;
-    font-size: 24px;
     cursor: pointer;
     transition: transform 0.2s ease;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .page-header .cart-icon:hover {
