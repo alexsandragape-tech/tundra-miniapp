@@ -41,7 +41,7 @@ module.exports = {
     
     // 📊 КОНСТАНТЫ ПРИЛОЖЕНИЯ
     ORDER_TIMEOUT_MINUTES: parseInt(process.env.ORDER_TIMEOUT_MINUTES) || 30,
-    MIN_ORDER_AMOUNT: parseInt(process.env.MIN_ORDER_AMOUNT) || 3500,
+    MIN_ORDER_AMOUNT: parseInt(process.env.MIN_ORDER_AMOUNT) || 3000,
     MAX_ITEM_QUANTITY: parseInt(process.env.MAX_ITEM_QUANTITY) || 50,
     
     // 🏆 ЛОЯЛЬНОСТЬ
