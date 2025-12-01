@@ -1,18 +1,16 @@
 @font-face {
-    font-family: 'Open Sans';
-    src: url('fonts/OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+    font-family: 'Playfair Display';
+    src: url('fonts/PlayfairDisplay-VariableFont_wght.ttf') format('truetype');
     font-display: swap;
     font-weight: 100 900;
-    font-stretch: 75% 125%;
     font-style: normal;
 }
 
 @font-face {
-    font-family: 'Open Sans';
-    src: url('fonts/OpenSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-family: 'Playfair Display';
+    src: url('fonts/PlayfairDisplay-Italic-VariableFont_wght.ttf') format('truetype');
     font-display: swap;
     font-weight: 100 900;
-    font-stretch: 75% 125%;
     font-style: italic;
 }
 
@@ -23,7 +21,7 @@
 }
 
 body {
-    font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Playfair Display', 'Times New Roman', serif;
     background-color: #f8f9fa;
     color: #2c3e50;
     line-height: 1.6;
