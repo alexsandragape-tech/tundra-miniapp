@@ -15,13 +15,15 @@
         <!-- Верхняя панель -->
         <div class="top-bar">
             <div class="work-hours" onclick="showWorkHours()">
-                <span>🕐</span>
+                <img src="assets/emojis/time-bot.png" alt="График работы" class="top-icon">
                 <span id="work-status">Работаем</span>
             </div>
             <div class="top-buttons">
-                <button class="top-btn" onclick="showProfile()">👤</button>
-                <button class="top-btn" onclick="showCart()">
-                    🛒
+                <button class="top-btn" onclick="showProfile()" aria-label="Профиль">
+                    <img src="assets/emojis/profil-bot.png" alt="" class="top-btn-icon">
+                </button>
+                <button class="top-btn" onclick="showCart()" aria-label="Корзина">
+                    <img src="assets/emojis/karzina-bot.png" alt="" class="top-btn-icon">
                     <span id="cart-badge" class="cart-badge">0</span>
                 </button>
             </div>
@@ -46,7 +48,7 @@
                 <div class="page-title" id="category-title">Категория</div>
         </div>
             <div class="cart-icon" onclick="showCart()">
-                🛒
+                <img src="assets/emojis/karzina-bot.png" alt="Корзина" class="top-btn-icon">
                 <span class="cart-badge" id="category-cart-badge">0</span>
             </div>
         </div>
