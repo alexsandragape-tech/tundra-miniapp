@@ -1,5 +1,21 @@
-/* Подключаем Google Fonts - Poppins */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+/* Подключаем локальный шрифт Open Sans */
+@font-face {
+    font-family: 'Open Sans';
+    src: url('fonts/OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+    font-display: swap;
+    font-weight: 100 900;
+    font-stretch: 75% 125%;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Open Sans';
+    src: url('fonts/OpenSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-display: swap;
+    font-weight: 100 900;
+    font-stretch: 75% 125%;
+    font-style: italic;
+}
 
 * {
     margin: 0;
@@ -8,7 +24,7 @@
 }
 
 body {
-    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     background-color: #f7f4f0;
     color: #2C3E50;
     line-height: 1.6;
@@ -462,7 +478,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: "Segoe UI", "Inter", "Roboto", system-ui, sans-serif; /* строже шрифт */
+    font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; /* единый шрифт */
     font-variant-numeric: tabular-nums; /* ровные цифры */
     line-height: 1;
 }
