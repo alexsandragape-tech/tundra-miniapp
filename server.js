@@ -44,7 +44,9 @@ logger.info('⏰ Время запуска:', new Date().toISOString());
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const axios = require('axios');
+const FormData = require('form-data');
 const cors = require('cors');
 const { initYooKassa, createYooKassaPayment: createYooKassaPaymentSvc, formatPhoneForYooKassa: formatPhoneForYooKassaSvc } = require('./services/yookassa');
 const config = require('./config');
@@ -4246,6 +4248,89 @@ async function handleGroupMessage(message) {
     }
 }
 
+function guessWelcomeMimeType(filename) {
+    if (!filename) return 'application/octet-stream';
+    const ext = path.extname(filename).toLowerCase();
+    switch (ext) {
+        case '.png':
+            return 'image/png';
+        case '.jpg':
+        case '.jpeg':
+            return 'image/jpeg';
+        case '.gif':
+            return 'image/gif';
+        case '.webp':
+            return 'image/webp';
+        default:
+            return 'application/octet-stream';
+    }
+}
+
+async function resolveWelcomeMediaPayload(source) {
+    const trimmedSource = (source || '').trim();
+    let downloadBuffer = null;
+    let filename = 'welcome.png';
+    let contentType = 'image/png';
+
+    if (trimmedSource && /^https?:\/\//i.test(trimmedSource)) {
+        try {
+            const urlObj = new URL(trimmedSource);
+            const response = await axios.get(urlObj.toString(), {
+                responseType: 'arraybuffer',
+                timeout: 15000,
+                validateStatus: status => status >= 200 && status < 400
+            });
+            const remoteType = (response.headers['content-type'] || '').toLowerCase();
+            if (!remoteType.startsWith('image/')) {
+                throw new Error(`Ожидался content-type image/*, получено "${remoteType || 'неизвестно'}"`);
+            }
+            downloadBuffer = Buffer.from(response.data);
+            filename = path.basename(urlObj.pathname) || filename;
+            contentType = remoteType.split(';')[0];
+            return { payload: downloadBuffer, filename, contentType };
+        } catch (remoteError) {
+            logger.warn(`⚠️ Welcome media: не удалось скачать изображение по URL "${trimmedSource}":`, remoteError.message);
+        }
+    }
+
+    const candidatePaths = [];
+    if (trimmedSource && !/^https?:\/\//i.test(trimmedSource)) {
+        const directPath = path.isAbsolute(trimmedSource)
+            ? trimmedSource
+            : path.join(__dirname, trimmedSource);
+        candidatePaths.push(directPath);
+    } else if (trimmedSource) {
+        try {
+            const urlObj = new URL(trimmedSource);
+            if (urlObj.pathname) {
+                const relativeFromUrl = urlObj.pathname.replace(/^\/+/, '');
+                if (relativeFromUrl) {
+                    candidatePaths.push(path.join(__dirname, relativeFromUrl));
+                    candidatePaths.push(path.join(__dirname, 'webapp', relativeFromUrl));
+                }
+            }
+        } catch (_) {}
+    }
+    candidatePaths.push(path.join(__dirname, 'webapp', 'assets', 'welcome', 'welcome.png'));
+    candidatePaths.push(path.join(__dirname, 'webapp', 'assets', 'welcome.png'));
+    candidatePaths.push(path.join(__dirname, 'assets', 'welcome', 'welcome.png'));
+
+    for (const candidate of candidatePaths) {
+        if (!candidate) continue;
+        try {
+            await fs.promises.access(candidate, fs.constants.R_OK);
+            const stream = fs.createReadStream(candidate);
+            const derivedName = path.basename(candidate);
+            const derivedType = guessWelcomeMimeType(derivedName);
+            return { payload: stream, filename: derivedName, contentType: derivedType };
+        } catch (_) {
+            continue;
+        }
+    }
+
+    throw new Error('Не удалось получить приветственное изображение: файл недоступен');
+}
+
 async function sendWelcomeMedia(chatId) {
     if (!config.TELEGRAM_BOT_TOKEN) {
         logger.warn('⚠️ Welcome media: TELEGRAM_BOT_TOKEN не задан, пропускаем отправку');
@@ -4256,10 +4341,24 @@ async function sendWelcomeMedia(chatId) {
         return false;
     }
     try {
-        const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-            chat_id: chatId,
-            photo: config.WELCOME_IMAGE_URL,
-            caption: config.WELCOME_MESSAGE || 'Добро пожаловать в Tundra Gourmet!'
+        const { payload, filename, contentType } = await resolveWelcomeMediaPayload(config.WELCOME_IMAGE_URL);
+        const form = new FormData();
+        form.append('chat_id', chatId);
+        const fileOptions = {};
+        if (filename) fileOptions.filename = filename;
+        if (contentType) fileOptions.contentType = contentType;
+        form.append('photo', payload, fileOptions);
+
+        const caption = (config.WELCOME_MESSAGE || '').trim();
+        if (caption.length > 0) {
+            form.append('caption', caption);
+        }
+
+        const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, form, {
+            headers: form.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+            timeout: 20000
         });
         logger.info(`✅ Welcome media отправлено пользователю ${chatId}`, response.data?.ok);
         return true;
