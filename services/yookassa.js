@@ -58,14 +58,14 @@ function isRetryableError(error) {
     return RETRYABLE_HTTP_STATUSES.has(error.response.status);
 }
 
-async function createPaymentWithRetry(paymentData, { attempts = 2, baseDelay = 1000 } = {}) {
+async function createPaymentWithRetry(paymentData, { attempts = 2, baseDelay = 1000, idempotenceKey: providedIdempotenceKey } = {}) {
     const totalAttempts = Math.max(1, attempts);
     let attempt = 0;
     let lastError = null;
+    const idempotenceKey = providedIdempotenceKey || crypto.randomUUID();
 
     while (attempt < totalAttempts) {
         try {
-            const idempotenceKey = crypto.randomUUID();
             return await checkout.createPayment(paymentData, idempotenceKey);
         } catch (error) {
             lastError = error;
