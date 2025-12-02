@@ -1,6 +1,8 @@
 // 💳 МОДУЛЬ YOOKASSA: инициализация и создание платежа (без изменения логики)
 const crypto = require('crypto');
 const axios = require('axios');
+const https = require('https');
+const dns = require('dns');
 const config = require('../config');
 
 // Логгер ожидается из глобальной области server.js. На случай прямого импорта используем консоль.
@@ -16,6 +18,16 @@ class YooKassaAPI {
         this.shopId = shopId;
         this.secretKey = secretKey;
         this.baseURL = 'https://api.yookassa.ru/v3';
+        this.agent = new https.Agent({
+            keepAlive: true,
+            lookup: (hostname, options, callback) => {
+                return dns.lookup(
+                    hostname,
+                    { ...options, family: 4, all: false },
+                    callback
+                );
+            }
+        });
         log.info('💳 YooKassa API инициализирована');
     }
     async createPayment(paymentData, idempotenceKey) {
@@ -28,7 +40,14 @@ class YooKassaAPI {
             password: this.secretKey
         };
         const url = `${this.baseURL}/payments`;
-        const response = await axios.post(url, paymentData, { headers, auth, timeout: 30000 });
+        const response = await axios.post(url, paymentData, {
+            headers,
+            auth,
+            timeout: 30000,
+            httpsAgent: this.agent,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
         return response.data;
     }
 
@@ -38,7 +57,11 @@ class YooKassaAPI {
             password: this.secretKey
         };
         const url = `${this.baseURL}/payments/${paymentId}`;
-        const response = await axios.get(url, { auth, timeout: 20000 });
+        const response = await axios.get(url, {
+            auth,
+            timeout: 20000,
+            httpsAgent: this.agent
+        });
         return response.data;
     }
 }
