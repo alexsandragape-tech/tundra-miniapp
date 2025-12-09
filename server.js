@@ -50,6 +50,7 @@ const FormData = require('form-data');
 const cors = require('cors');
 const { initYooKassa, createYooKassaPayment: createYooKassaPaymentSvc, formatPhoneForYooKassa: formatPhoneForYooKassaSvc } = require('./services/yookassa');
 const config = require('./config');
+const FRONTEND_BASE_URL = (config.FRONTEND_URL || process.env.FRONTEND_URL || 'https://tundragourmet.pro').replace(/\/$/, '');
 const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, PromoCodesDB, pool } = require('./database');
 const LoyaltyService = require('./services/loyalty');
 const { mapDbOrderToApi, mapDbOrderToList, isOrderCompletedOrPaid } = require('./services/order-utils');
@@ -2044,6 +2045,9 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         const userIdForLoyalty = orderData.telegramUser?.id?.toString?.() || orderData.userId || 'unknown';
         const promoCodeFromRequest = orderData.promoCode || orderData.promo?.code || orderData.promo_code;
 
+        const clientIpHeader = req.headers['x-forwarded-for'] || '';
+        const clientIp = (clientIpHeader || req.ip || '').split(',')[0].trim() || null;
+
         const pricing = await calculateOrderPricing({
             cartItems,
             deliveryZone,
@@ -2086,7 +2090,8 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         const customerInfo = {
             customerName: customerName,
             phone: order.phone || '',
-            telegramUsername: telegramUser?.username || null
+            telegramUsername: telegramUser?.username || null,
+            clientIp
         };
         
         // Добавляем данные клиента в заказ
@@ -2479,7 +2484,7 @@ app.get('/test-yookassa', async (req, res) => {
             },
             confirmation: {
                 type: "redirect",
-                return_url: "https://tundra-miniapp-production.up.railway.app"
+                return_url: FRONTEND_BASE_URL
             },
             description: "Тестовый платеж для проверки API",
             metadata: {
@@ -2783,7 +2788,7 @@ app.get('/payment/success', async (req, res) => {
             <script>
                 function goBack() {
                     // Возвращаемся в приложение с параметром order
-                    const appUrl = 'https://tundra-miniapp-production.up.railway.app/?order=${order || ''}';
+                    const appUrl = '${FRONTEND_BASE_URL}/?order=${order || ''}';
                     
                     // Проверяем, находимся ли мы в Telegram WebApp
                     if (window.Telegram && window.Telegram.WebApp) {
@@ -2808,7 +2813,7 @@ app.get('/test-webhook', (req, res) => {
     res.json({
         ok: true,
         message: 'Webhook доступен',
-        url: 'https://tundra-miniapp-production.up.railway.app/webhook/yookassa',
+        url: `${FRONTEND_BASE_URL}/webhook/yookassa`,
         timestamp: new Date().toISOString()
     });
 });
@@ -3932,7 +3937,7 @@ app.get('/api/debug/webhook-info', requireAdminAuth, async (req, res) => {
             ok: true,
             webhook: webhookInfoResponse.data.result,
             bot: botInfoResponse.data.result,
-            expected_webhook_url: 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook',
+            expected_webhook_url: `${FRONTEND_BASE_URL}/api/telegram/webhook`,
             broadcast_chat_id: config.TELEGRAM_BROADCAST_CHAT_ID
         });
         
@@ -4078,7 +4083,7 @@ app.get('/test-telegram-webhook', (req, res) => {
     res.json({
         ok: true,
         message: 'Telegram webhook доступен',
-        url: 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook',
+        url: `${FRONTEND_BASE_URL}/api/telegram/webhook`,
         timestamp: new Date().toISOString()
     });
 });
@@ -4090,7 +4095,7 @@ app.get('/setup-telegram-webhook', async (req, res) => {
             return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN не настроен' });
         }
         
-        const webhookUrl = 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook';
+        const webhookUrl = `${FRONTEND_BASE_URL}/api/telegram/webhook`;
         
         const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook`, {
             url: webhookUrl
@@ -5169,7 +5174,7 @@ async function startServer() {
         // 🔧 АВТОМАТИЧЕСКАЯ НАСТРОЙКА TELEGRAM WEBHOOK
         if (config.TELEGRAM_BOT_TOKEN) {
             try {
-                const webhookUrl = 'https://tundra-miniapp-production.up.railway.app/api/telegram/webhook';
+                const webhookUrl = `${FRONTEND_BASE_URL}/api/telegram/webhook`;
                 logger.info('🔧 Настраиваем Telegram webhook...');
                 
                 const response = await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook`, {
