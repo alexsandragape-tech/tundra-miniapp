@@ -138,9 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Базовый URL сервера (автоопределение)
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://localhost:3000' 
-    : 'https://tundra-miniapp-production.up.railway.app';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3000'
+    : window.location.origin;
 
 // Глобальные переменные
 let currentCategory = null;
@@ -159,7 +159,7 @@ let paymentTimeLeft = 10 * 60; // 10 минут в секундах
 let currentOrderId = null;
 
 // 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
-const TEST_MODE = false; // Установите false для продакшена
+const TEST_MODE = true; // Установите false для продакшена
 const TEST_MIN_ORDER = 1; // Минимальная сумма для тестов
 const PROD_MIN_ORDER = 3000; // Минимальная сумма для продакшена
 const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
@@ -2311,8 +2311,10 @@ function displayOrderDetails(order) {
     `;
 }
 
-// Функция проверки рабочих часов - включена
+// Функция проверки рабочих часов
 function isWorkingHours() {
+    // В тестовом режиме снимаем ограничение по времени, чтобы удобно гонять сценарии
+    if (TEST_MODE) return true;
     const now = new Date();
     const hour = now.getHours();
     return hour >= 10 && hour < 21;
