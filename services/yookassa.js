@@ -136,12 +136,14 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         const base = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
         returnUrl = `${base.replace(/\/$/, '')}/payment-success?orderId=${orderId}`;
     }
+    const clientIp = customerInfo?.clientIp || '95.31.18.119';
     const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
     const fullPaymentData = {
         amount: { value: amount.toFixed(2), currency: 'RUB' },
         confirmation: { type: 'redirect', return_url: returnUrl },
         capture: true,
         description,
+        client_ip: clientIp,
         receipt: {
             customer: { email: customerInfo.email || 'customer@example.com', phone: formattedPhone },
             items: [{ description, quantity: '1', amount: { value: amount.toFixed(2), currency: 'RUB' }, vat_code: 1, payment_mode: 'full_payment', payment_subject: 'commodity' }]
@@ -153,6 +155,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         confirmation: { type: 'redirect', return_url: returnUrl },
         capture: true,
         description,
+        client_ip: clientIp,
         metadata: { orderId }
     };
     try {
