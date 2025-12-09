@@ -136,14 +136,26 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         const base = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
         returnUrl = `${base.replace(/\/$/, '')}/payment-success?orderId=${orderId}`;
     }
-    const clientIp = customerInfo?.clientIp || '95.31.18.119';
+    // Нормализуем IP, иначе не отправляем его вовсе, чтобы избежать "Invalid IP"
+    const normalizeClientIp = (ip) => {
+        if (!ip) return null;
+        const str = String(ip).trim();
+        const parts = str.split('.');
+        if (parts.length !== 4) return null;
+        for (const part of parts) {
+            if (!/^\d+$/.test(part)) return null;
+            const num = Number(part);
+            if (num < 0 || num > 255) return null;
+        }
+        return parts.map(p => String(Number(p))).join('.');
+    };
+    const clientIp = normalizeClientIp(customerInfo?.clientIp) || normalizeClientIp('95.31.18.119');
     const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
     const fullPaymentData = {
         amount: { value: amount.toFixed(2), currency: 'RUB' },
         confirmation: { type: 'redirect', return_url: returnUrl },
         capture: true,
         description,
-        client_ip: clientIp,
         receipt: {
             customer: { email: customerInfo.email || 'customer@example.com', phone: formattedPhone },
             items: [{ description, quantity: '1', amount: { value: amount.toFixed(2), currency: 'RUB' }, vat_code: 1, payment_mode: 'full_payment', payment_subject: 'commodity' }]
@@ -155,9 +167,12 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         confirmation: { type: 'redirect', return_url: returnUrl },
         capture: true,
         description,
-        client_ip: clientIp,
         metadata: { orderId }
     };
+    if (clientIp) {
+        fullPaymentData.client_ip = clientIp;
+        minimalPaymentData.client_ip = clientIp;
+    }
     try {
         return await createPaymentWithRetry(fullPaymentData, { attempts: 2, baseDelay: 1200 });
     } catch (error) {
