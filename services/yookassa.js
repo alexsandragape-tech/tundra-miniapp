@@ -136,26 +136,13 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         const base = config.FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
         returnUrl = `${base.replace(/\/$/, '')}/payment-success?orderId=${orderId}`;
     }
-    // Нормализуем IP, иначе не отправляем его вовсе, чтобы избежать "Invalid IP"
-    const normalizeClientIp = (ip) => {
-        if (!ip) return null;
-        const str = String(ip).trim();
-        const parts = str.split('.');
-        if (parts.length !== 4) return null;
-        for (const part of parts) {
-            if (!/^\d+$/.test(part)) return null;
-            const num = Number(part);
-            if (num < 0 || num > 255) return null;
-        }
-        return parts.map(p => String(Number(p))).join('.');
-    };
-    // Временное отключение client_ip, чтобы не ловить Invalid IP от ЮKassa
-    const clientIp = null;
+    // Всегда отправляем корректный IPv4 для client_ip, чтобы не ловить ERR_INVALID_IP_ADDRESS
+    const clientIp = '95.31.18.119';
     const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
     // Логируем ключевые поля (без секретов)
     log.info('YK payload debug', {
         orderId,
-        clientIp: clientIp || '(omitted)',
+        clientIp,
         amount: amount.toFixed(2),
         description
     });
@@ -177,7 +164,9 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         description,
         metadata: { orderId }
     };
-    // client_ip временно не передаем (clientIp=null), чтобы избежать Invalid IP
+    // Явно передаём client_ip, так как YooKassa отвечает ERR_INVALID_IP_ADDRESS без него
+    fullPaymentData.client_ip = clientIp;
+    minimalPaymentData.client_ip = clientIp;
     try {
         return await createPaymentWithRetry(fullPaymentData, { attempts: 2, baseDelay: 1200 });
     } catch (error) {
@@ -198,3 +187,5 @@ module.exports = {
     createYooKassaPayment,
     formatPhoneForYooKassa,
 };
+
+
