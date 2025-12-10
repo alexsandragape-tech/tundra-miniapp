@@ -149,13 +149,13 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         }
         return parts.map(p => String(Number(p))).join('.');
     };
-    // Берём IP из запроса, если он валиден, иначе ставим дефолт
-    const clientIp = normalizeClientIp(customerInfo?.clientIp) || '95.31.18.119';
+    // Временное отключение client_ip, чтобы не ловить Invalid IP от ЮKassa
+    const clientIp = null;
     const formattedPhone = formatPhoneForYooKassa(customerInfo.phone);
     // Логируем ключевые поля (без секретов)
     log.info('YK payload debug', {
         orderId,
-        clientIp,
+        clientIp: clientIp || '(omitted)',
         amount: amount.toFixed(2),
         description
     });
@@ -177,10 +177,7 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
         description,
         metadata: { orderId }
     };
-    if (clientIp) {
-        fullPaymentData.client_ip = clientIp;
-        minimalPaymentData.client_ip = clientIp;
-    }
+    // client_ip временно не передаем (clientIp=null), чтобы избежать Invalid IP
     try {
         return await createPaymentWithRetry(fullPaymentData, { attempts: 2, baseDelay: 1200 });
     } catch (error) {
@@ -201,3 +198,5 @@ module.exports = {
     createYooKassaPayment,
     formatPhoneForYooKassa,
 };
+
+
