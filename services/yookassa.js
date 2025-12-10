@@ -167,6 +167,8 @@ async function createYooKassaPayment(orderId, amount, description, customerInfo,
     // Явно передаём client_ip, так как YooKassa отвечает ERR_INVALID_IP_ADDRESS без него
     fullPaymentData.client_ip = clientIp;
     minimalPaymentData.client_ip = clientIp;
+    // Дополнительно логируем, что реально пойдёт в запрос (без чувствительных данных)
+    log.info('YK client_ip set to:', fullPaymentData.client_ip);
     try {
         return await createPaymentWithRetry(fullPaymentData, { attempts: 2, baseDelay: 1200 });
     } catch (error) {
