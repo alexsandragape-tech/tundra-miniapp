@@ -198,5 +198,3 @@ module.exports = {
     createYooKassaPayment,
     formatPhoneForYooKassa,
 };
-
-
