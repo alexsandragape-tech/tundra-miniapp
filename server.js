@@ -2122,7 +2122,10 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         } catch (paymentError) {
             logger.error('❌ Создание платежа не удалось:', paymentError.message);
             if (paymentError.response) {
-                logger.error('📋 Детали ошибки YooKassa:', paymentError.response.data);
+                logger.error('📋 Detali oshibki YooKassa (status):', paymentError.response.status);
+                logger.error('📋 Detali oshibki YooKassa (data):', paymentError.response.data);
+            } else {
+                logger.error('📋 YooKassa error without response:', paymentError);
             }
             // Очищаем временно созданный заказ и таймер автоотмены
             try {
