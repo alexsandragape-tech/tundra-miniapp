@@ -1,4 +1,4 @@
-// 💳 МОДУЛЬ YOOKASSA: инициализация и создание платежа (без изменения логики)
+// 💳 МОДУЛЬ YOOKASSA: инициализация и создание платежа (версия из рабочего бэкапа)
 const crypto = require('crypto');
 const axios = require('axios');
 const config = require('../config');
@@ -108,4 +108,3 @@ module.exports = {
     createYooKassaPayment,
     formatPhoneForYooKassa,
 };
-
