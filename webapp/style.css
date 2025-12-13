@@ -380,16 +380,16 @@ body {
 
 /* Список товаров */
 .products-list {
-    padding: 6px;
+    padding: 4px;
     display: grid;
-    grid-template-columns: repeat(2, 1fr); /* 2 колонки как у категорий */
-    gap: 6px; /* Более плотный отступ */
+    grid-template-columns: repeat(2, minmax(0, 1fr)); /* 2 колонки, без переполнения */
+    gap: 6px; /* компактный отступ */
 }
 
 .product-card {
     background: white;
     border-radius: 18px;
-    padding: 6px;
+    padding: 4px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.05);
     border: 1px solid #eef2f5;
     transition: all 0.3s ease;
@@ -397,6 +397,7 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    min-width: 0; /* не раздвигаем колонки */
 }
 
 .product-card:hover {
@@ -407,7 +408,7 @@ body {
 .product-image {
     position: relative;
     width: 100%;
-    height: 200px; /* компактнее */
+    height: 190px; /* еще чуть ниже, чтобы визуально сузить */
     margin-bottom: 6px;
     border-radius: 16px;
     overflow: hidden;
@@ -440,7 +441,7 @@ body {
 }
 
 .product-name {
-    font-size: 9px; /* еще меньше, ~вдвое от изначального */
+    font-size: 6px; /* еще меньше, ~вдвое от изначального */
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 2px;
@@ -457,13 +458,13 @@ body {
     background: #e7f2ef;
     color: #0b5c56;
     border-radius: 18px;
-    padding: 4px 7px;
+    padding: 4px 6px;
     font-size: 10px;
     font-weight: 700;
     display: inline-flex;
     flex-direction: column;
     gap: 1px;
-    min-width: 96px;
+    min-width: 90px;
     box-sizing: border-box;
 }
 .product-price .price-new {
