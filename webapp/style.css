@@ -507,12 +507,14 @@ body {
 .price-control {
     display: inline-flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     background: #e7f2ef;
     border: 1px solid #d8e6e1;
     border-radius: 18px;
     padding: 6px 10px;
     min-height: 32px;
+    min-width: 128px;
     box-sizing: border-box;
 }
 
@@ -520,11 +522,19 @@ body {
     gap: 8px;
 }
 
+.price-control.pc-empty .pc-minus,
+.price-control.pc-empty .pc-qty {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .pc-price {
     font-size: 13px;
     font-weight: 700;
     color: #0b5c56;
     white-space: nowrap;
+    flex: 1;
+    text-align: center;
 }
 
 .pc-qty {
