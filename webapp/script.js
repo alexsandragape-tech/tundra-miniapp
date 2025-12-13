@@ -1252,8 +1252,8 @@ async function showCategory(categoryId) {
             <div class="product-name">${product.name}</div>
             ${unitText ? `<div class="product-unit">${unitText}</div>` : ''}
             <div class="product-footer">
-                ${priceHtml}
                 <div class="product-actions">
+                    ${priceHtml}
                     <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
                         <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
                         <div class="qty-display">${currentQty}</div>
