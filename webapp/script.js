@@ -1254,14 +1254,11 @@ async function showCategory(categoryId) {
             ${unitText ? `<div class="product-unit">${unitText}</div>` : ''}
             <div class="product-footer">
                 <div class="product-actions">
-                    <div class="price-control ${currentQty > 0 ? 'has-qty' : ''}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
-                        ${currentQty > 0
-                            ? `<button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
-                               <span class="pc-price">${priceLabel}</span>
-                               <div class="pc-qty">${currentQty}</div>
-                               <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>`
-                            : `<span class="pc-price">${priceLabel}</span>
-                               <button class="pc-btn" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)">+</button>`}
+                    <div class="price-control ${currentQty > 0 ? 'has-qty' : 'pc-empty'}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
+                        <button class="pc-btn pc-minus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
+                        <span class="pc-price">${priceLabel}</span>
+                        <div class="pc-qty">${currentQty > 0 ? currentQty : ''}</div>
+                        <button class="pc-btn pc-plus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
                     </div>
                 </div>
             </div>
@@ -1309,18 +1306,12 @@ function renderPriceControl(cartKey, qty) {
     
     if (qty > 0) {
         el.classList.add('has-qty');
-        el.innerHTML = `
-            <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${productId}', -1)">-</button>
-            <span class="pc-price">${price}</span>
-            <div class="pc-qty">${qty}</div>
-            <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${productId}', 1)">+</button>
-        `;
+        el.classList.remove('pc-empty');
+        el.querySelector('.pc-qty').textContent = qty;
     } else {
         el.classList.remove('has-qty');
-        el.innerHTML = `
-            <span class="pc-price">${price}</span>
-            <button class="pc-btn" onclick="event.stopPropagation(); addToCart('${categoryId}', '${productId}', 1)">+</button>
-        `;
+        el.classList.add('pc-empty');
+        el.querySelector('.pc-qty').textContent = '';
     }
 }
 
