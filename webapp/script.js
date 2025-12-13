@@ -1232,6 +1232,7 @@ async function showCategory(categoryId) {
         const promoBadge = promoActive ? '<div class="product-badge">Акция</div>' : '';
         const activePrice = getProductActivePrice(product);
         const unitText = product.unit ? String(product.unit) : '';
+        const priceLabel = `${formatPriceValue(activePrice)}₽${unitText}`;
         const priceHtml = promoActive
             ? `<div class="product-price">
                     <span class="price-new">${formatPriceValue(activePrice)}₽${unitText}</span>
@@ -1253,15 +1254,15 @@ async function showCategory(categoryId) {
             ${unitText ? `<div class="product-unit">${unitText}</div>` : ''}
             <div class="product-footer">
                 <div class="product-actions">
-                    ${priceHtml}
-                    <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
-                        <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
-                        <div class="qty-display">${currentQty}</div>
-                        <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
+                    <div class="price-control ${currentQty > 0 ? 'has-qty' : ''}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
+                        ${currentQty > 0
+                            ? `<button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
+                               <span class="pc-price">${priceLabel}</span>
+                               <div class="pc-qty">${currentQty}</div>
+                               <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>`
+                            : `<span class="pc-price">${priceLabel}</span>
+                               <button class="pc-btn" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)">+</button>`}
                     </div>
-                    <button class="add-to-cart-btn" id="add-btn-${cartKey}" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)" style="display: ${currentQty > 0 ? 'none' : 'flex'};">
-                        +
-                    </button>
                 </div>
             </div>
         `;
@@ -1289,22 +1290,38 @@ function changeProductQuantity(categoryId, productId, delta) {
     
     if (newQty === 0) {
         delete cart[cartKey];
-        // Скрываем счетчик, показываем кнопку
-        document.getElementById(`qty-${cartKey}`).style.display = 'none';
-        document.getElementById(`add-btn-${cartKey}`).style.display = 'block';
     } else {
         cart[cartKey].quantity = newQty;
-        // Обновляем отображение количества
-        const qtyDisplay = document.querySelector(`#qty-${cartKey} .qty-display`);
-        if (qtyDisplay) qtyDisplay.textContent = newQty;
-        
-        // Показываем счетчик, скрываем кнопку
-        document.getElementById(`qty-${cartKey}`).style.display = 'flex';
-        document.getElementById(`add-btn-${cartKey}`).style.display = 'none';
     }
     
+    renderPriceControl(cartKey, newQty);
     updateCartBadge();
     localStorage.setItem('tundra_cart', JSON.stringify(cart));
+}
+
+// Обновляем контрол цены/количества на карточке
+function renderPriceControl(cartKey, qty) {
+    const el = document.getElementById(`pc-${cartKey}`);
+    if (!el) return;
+    const price = el.dataset.price || '';
+    const categoryId = el.dataset.category;
+    const productId = el.dataset.product;
+    
+    if (qty > 0) {
+        el.classList.add('has-qty');
+        el.innerHTML = `
+            <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${productId}', -1)">-</button>
+            <span class="pc-price">${price}</span>
+            <div class="pc-qty">${qty}</div>
+            <button class="pc-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${productId}', 1)">+</button>
+        `;
+    } else {
+        el.classList.remove('has-qty');
+        el.innerHTML = `
+            <span class="pc-price">${price}</span>
+            <button class="pc-btn" onclick="event.stopPropagation(); addToCart('${categoryId}', '${productId}', 1)">+</button>
+        `;
+    }
 }
 
 function showProductDetail(categoryId, productId) {
@@ -1485,18 +1502,7 @@ function addToCart(categoryId, productId, quantity) {
     localStorage.setItem('tundra_cart', JSON.stringify(cart));
     updateCartBadge();
     
-    // Обновляем интерфейс карточки товара
-    const qtySelector = document.getElementById(`qty-${cartKey}`);
-    const addBtn = document.getElementById(`add-btn-${cartKey}`);
-    
-    if (qtySelector && addBtn) {
-        const qtyDisplay = qtySelector.querySelector('.qty-display');
-        if (qtyDisplay) qtyDisplay.textContent = newQuantity;
-        
-        // Показываем счетчик, скрываем кнопку
-        qtySelector.style.display = 'flex';
-        addBtn.style.display = 'none';
-    }
+    renderPriceControl(cartKey, newQuantity);
 }
 
 // Функция обновления счетчика корзины
