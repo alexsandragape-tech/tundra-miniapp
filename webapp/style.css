@@ -380,7 +380,7 @@ body {
 
 /* Список товаров */
 .products-list {
-    padding: 12px;
+    padding: 10px;
     display: grid;
     grid-template-columns: repeat(2, 1fr); /* 2 колонки как у категорий */
     gap: 12px; /* Такой же отступ как у категорий */
@@ -389,7 +389,7 @@ body {
 .product-card {
     background: white;
     border-radius: 20px;
-    padding: 10px;
+    padding: 8px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.06);
     border: 1px solid #eef2f5;
     transition: all 0.3s ease;
@@ -407,8 +407,8 @@ body {
 .product-image {
     position: relative;
     width: 100%;
-    height: 210px; /* крупное фото как в референсе */
-    margin-bottom: 10px;
+    height: 230px; /* ~80% высоты карточки при компактном тексте */
+    margin-bottom: 8px;
     border-radius: 18px;
     overflow: hidden;
     background: #f6f7f8;
@@ -440,15 +440,15 @@ body {
 }
 
 .product-name {
-    font-size: 14.5px;
+    font-size: 12px;
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 4px;
-    line-height: 1.25;
+    line-height: 1.2;
 }
 
 .product-unit {
-    font-size: 12px;
+    font-size: 10.5px;
     color: #95A5A6;
     margin-bottom: 8px;
 }
@@ -457,24 +457,24 @@ body {
     background: #e7f2ef;
     color: #0b5c56;
     border-radius: 14px;
-    padding: 8px 12px;
-    font-size: 15px;
+    padding: 6px 10px;
+    font-size: 13px;
     font-weight: 700;
     display: inline-flex;
     flex-direction: column;
-    gap: 2px;
-    min-width: 86px;
+    gap: 1px;
+    min-width: 74px;
     box-sizing: border-box;
 }
 .product-price .price-new {
     display: block;
     color: #0b5c56;
-    font-size: 15px;
+    font-size: 13px;
     line-height: 1.2;
 }
 .product-price .price-old {
     display: block;
-    font-size: 11px;
+    font-size: 10px;
     color: #7fa299;
     font-weight: 500;
     text-decoration-line: line-through;
@@ -500,19 +500,19 @@ body {
     display: flex;
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 8px;
 }
 
 .add-to-cart-btn {
-    width: 40px;
-    height: 40px;
+    width: 30px;
+    height: 30px;
     background: #0b5c56;
     color: white;
     border: none;
     padding: 0;
-    border-radius: 12px;
-    font-size: 18px;
+    border-radius: 10px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -521,7 +521,7 @@ body {
     justify-content: center;
     box-sizing: border-box;
     border: 1px solid transparent;
-    box-shadow: 0 5px 14px rgba(11,92,86,0.28);
+    box-shadow: 0 4px 12px rgba(11,92,86,0.25);
 }
 
 /* Счетчик количества на карточке товара */
@@ -529,10 +529,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 40px; /* одинаковая высота с кнопкой */
+    height: 36px; /* одинаковая высота с кнопкой */
     background: #e7f2ef;
     border-radius: 12px;
-    padding: 6px 8px;
+    padding: 5px 8px;
     border: 1px solid #cfe0db;
     box-sizing: border-box;
     gap: 8px;
@@ -545,13 +545,13 @@ body {
 }
 
 .qty-btn {
-    width: 24px; /* компактнее */
-    height: 24px;
+    width: 22px; /* компактнее */
+    height: 22px;
     border-radius: 50%;
     border: none;
     background: #0b5c56;
     color: white;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
@@ -568,10 +568,10 @@ body {
 }
 
 .qty-display {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #0b5c56;
-    min-width: 22px;
+    min-width: 20px;
     text-align: center;
     flex: 0;
     display: flex;
