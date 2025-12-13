@@ -501,15 +501,68 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
+    gap: 6px;
+}
+
+.price-control {
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
+    background: #e7f2ef;
+    border: 1px solid #d8e6e1;
+    border-radius: 18px;
+    padding: 6px 10px;
+    min-height: 32px;
+    box-sizing: border-box;
+}
+
+.price-control.has-qty {
+    gap: 8px;
+}
+
+.pc-price {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0b5c56;
+    white-space: nowrap;
+}
+
+.pc-qty {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0b5c56;
+    min-width: 18px;
+    text-align: center;
+}
+
+.pc-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #0b5c56;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.pc-btn:hover {
+    background: rgba(11,92,86,0.08);
+    transform: scale(1.05);
 }
 
 .add-to-cart-btn {
     width: 30px;
     height: 30px;
-    background: #0b5c56;
-    color: white;
-    border: none;
+    background: #e7f2ef;
+    color: #0b5c56;
+    border: 1px solid #d8e6e1;
     padding: 0;
     border-radius: 10px;
     font-size: 14px;
@@ -520,8 +573,7 @@ body {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    border: 1px solid transparent;
-    box-shadow: 0 4px 12px rgba(11,92,86,0.25);
+    box-shadow: none;
 }
 
 /* Счетчик количества на карточке товара */
@@ -529,13 +581,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 36px; /* одинаковая высота с кнопкой */
+    height: 30px; /* одинаковая высота с кнопкой */
     background: #e7f2ef;
     border-radius: 12px;
-    padding: 5px 8px;
-    border: 1px solid #cfe0db;
+    padding: 4px 8px;
+    border: 1px solid #d8e6e1;
     box-sizing: border-box;
-    gap: 8px;
+    gap: 6px;
 }
 
 /* Гарантируем одинаковое позиционирование внутри карточки */
@@ -545,12 +597,12 @@ body {
 }
 
 .qty-btn {
-    width: 22px; /* компактнее */
-    height: 22px;
+    width: 18px; /* компактнее */
+    height: 18px;
     border-radius: 50%;
     border: none;
-    background: #0b5c56;
-    color: white;
+    background: transparent;
+    color: #0b5c56;
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
@@ -559,12 +611,12 @@ body {
     justify-content: center;
     transition: all 0.2s ease;
     flex-shrink: 0; /* Не сжимаем кнопки */
-    box-shadow: 0 2px 8px rgba(11,92,86,0.25);
+    box-shadow: none;
 }
 
 .qty-btn:hover {
-    background: #2C5530;
-    transform: scale(1.1);
+    background: rgba(11,92,86,0.08);
+    transform: scale(1.05);
 }
 
 .qty-display {
