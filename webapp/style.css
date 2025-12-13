@@ -380,7 +380,7 @@ body {
 
 /* Список товаров */
 .products-list {
-    padding: 16px;
+    padding: 12px;
     display: grid;
     grid-template-columns: repeat(2, 1fr); /* 2 колонки как у категорий */
     gap: 12px; /* Такой же отступ как у категорий */
@@ -389,8 +389,8 @@ body {
 .product-card {
     background: white;
     border-radius: 20px;
-    padding: 14px;
-    box-shadow: 0 10px 28px rgba(0,0,0,0.08);
+    padding: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
     border: 1px solid #eef2f5;
     transition: all 0.3s ease;
     cursor: pointer;
@@ -401,18 +401,18 @@ body {
 
 .product-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 14px 32px rgba(0,0,0,0.12);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.1);
 }
 
 .product-image {
     position: relative;
     width: 100%;
-    height: 170px; /* Фиксированная высота вместо padding-bottom */
-    margin-bottom: 12px;
-    border-radius: 16px;
+    height: 210px; /* крупное фото как в референсе */
+    margin-bottom: 10px;
+    border-radius: 18px;
     overflow: hidden;
     background: #f6f7f8;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.07);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -440,7 +440,7 @@ body {
 }
 
 .product-name {
-    font-size: 17px;
+    font-size: 14.5px;
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 4px;
@@ -448,33 +448,33 @@ body {
 }
 
 .product-unit {
-    font-size: 13px;
+    font-size: 12px;
     color: #95A5A6;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .product-price {
     background: #e7f2ef;
     color: #0b5c56;
     border-radius: 14px;
-    padding: 10px 14px;
-    font-size: 17px;
+    padding: 8px 12px;
+    font-size: 15px;
     font-weight: 700;
     display: inline-flex;
     flex-direction: column;
     gap: 2px;
-    min-width: 92px;
+    min-width: 86px;
     box-sizing: border-box;
 }
 .product-price .price-new {
     display: block;
     color: #0b5c56;
-    font-size: 17px;
+    font-size: 15px;
     line-height: 1.2;
 }
 .product-price .price-old {
     display: block;
-    font-size: 12px;
+    font-size: 11px;
     color: #7fa299;
     font-weight: 500;
     text-decoration-line: line-through;
@@ -501,18 +501,18 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
 }
 
 .add-to-cart-btn {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     background: #0b5c56;
     color: white;
     border: none;
     padding: 0;
-    border-radius: 14px;
-    font-size: 22px;
+    border-radius: 12px;
+    font-size: 18px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -521,7 +521,7 @@ body {
     justify-content: center;
     box-sizing: border-box;
     border: 1px solid transparent;
-    box-shadow: 0 6px 16px rgba(11,92,86,0.35);
+    box-shadow: 0 5px 14px rgba(11,92,86,0.28);
 }
 
 /* Счетчик количества на карточке товара */
@@ -529,13 +529,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 46px; /* одинаковая высота с кнопкой */
+    height: 40px; /* одинаковая высота с кнопкой */
     background: #e7f2ef;
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 6px 8px;
     border: 1px solid #cfe0db;
     box-sizing: border-box;
-    gap: 10px;
+    gap: 8px;
 }
 
 /* Гарантируем одинаковое позиционирование внутри карточки */
@@ -545,13 +545,13 @@ body {
 }
 
 .qty-btn {
-    width: 28px; /* чуть крупнее для удобства */
-    height: 28px;
+    width: 24px; /* компактнее */
+    height: 24px;
     border-radius: 50%;
     border: none;
     background: #0b5c56;
     color: white;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
@@ -559,7 +559,7 @@ body {
     justify-content: center;
     transition: all 0.2s ease;
     flex-shrink: 0; /* Не сжимаем кнопки */
-    box-shadow: 0 3px 10px rgba(11,92,86,0.25);
+    box-shadow: 0 2px 8px rgba(11,92,86,0.25);
 }
 
 .qty-btn:hover {
@@ -568,10 +568,10 @@ body {
 }
 
 .qty-display {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     color: #0b5c56;
-    min-width: 24px;
+    min-width: 22px;
     text-align: center;
     flex: 0;
     display: flex;
