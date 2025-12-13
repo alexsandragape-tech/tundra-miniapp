@@ -1231,12 +1231,13 @@ async function showCategory(categoryId) {
         const promoActive = isProductPromoActive(product);
         const promoBadge = promoActive ? '<div class="product-badge">Акция</div>' : '';
         const activePrice = getProductActivePrice(product);
+        const unitText = product.unit ? String(product.unit) : '';
         const priceHtml = promoActive
             ? `<div class="product-price">
-                    <span class="price-new">${formatPriceValue(activePrice)}₽${product.unit}</span>
-                    <span class="price-old">${formatPriceValue(product.price)}₽${product.unit}</span>
+                    <span class="price-new">${formatPriceValue(activePrice)}₽${unitText}</span>
+                    <span class="price-old">${formatPriceValue(product.price)}₽${unitText}</span>
                </div>`
-            : `<div class="product-price">${formatPriceValue(product.price)}₽${product.unit}</div>`;
+            : `<div class="product-price"><span class="price-new">${formatPriceValue(product.price)}₽${unitText}</span></div>`;
         
         // Получаем текущее количество товара в корзине
         const cartKey = `${categoryId}_${product.id}`;
@@ -1249,16 +1250,19 @@ async function showCategory(categoryId) {
                 ${promoBadge}
             </div>
             <div class="product-name">${product.name}</div>
-            ${priceHtml}
-            <div class="product-actions">
-                <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
-                    <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
-                    <div class="qty-display">${currentQty}</div>
-                    <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
+            ${unitText ? `<div class="product-unit">${unitText}</div>` : ''}
+            <div class="product-footer">
+                ${priceHtml}
+                <div class="product-actions">
+                    <div class="quantity-selector" id="qty-${cartKey}" style="display: ${currentQty > 0 ? 'flex' : 'none'};">
+                        <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
+                        <div class="qty-display">${currentQty}</div>
+                        <button class="qty-btn" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
+                    </div>
+                    <button class="add-to-cart-btn" id="add-btn-${cartKey}" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)" style="display: ${currentQty > 0 ? 'none' : 'flex'};">
+                        +
+                    </button>
                 </div>
-                <button class="add-to-cart-btn" id="add-btn-${cartKey}" onclick="event.stopPropagation(); addToCart('${categoryId}', '${product.id}', 1)" style="display: ${currentQty > 0 ? 'none' : 'block'};">
-                    Добавить в корзину
-                </button>
             </div>
         `;
         
