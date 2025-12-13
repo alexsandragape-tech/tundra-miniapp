@@ -441,11 +441,11 @@ body {
 }
 
 .product-name {
-    font-size: 6px; /* еще меньше, ~вдвое от изначального */
+    font-size: 4px; /* максимально компактно */
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 2px;
-    line-height: 1.15;
+    line-height: 1.1;
 }
 
 .product-unit {
