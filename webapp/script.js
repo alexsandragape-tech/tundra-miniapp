@@ -1251,15 +1251,14 @@ async function showCategory(categoryId) {
                 ${promoBadge}
             </div>
             <div class="product-name">${product.name}</div>
-            ${unitText ? `<div class="product-unit">${unitText}</div>` : ''}
             <div class="product-footer">
-                <div class="product-actions">
+            <div class="product-actions">
                     <div class="price-control ${currentQty > 0 ? 'has-qty' : 'pc-empty'}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
                         <button class="pc-btn pc-minus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
                         <span class="pc-price">${priceLabel}</span>
                         <div class="pc-qty">${currentQty > 0 ? currentQty : ''}</div>
                         <button class="pc-btn pc-plus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
-                    </div>
+                </div>
                 </div>
             </div>
         `;
