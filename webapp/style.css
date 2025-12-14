@@ -1329,7 +1329,7 @@ body {
         max-height: calc(100% - 20px);
     }
     .product-name {
-        font-size: 14px;
+        font-size: 4px;
     }
     .product-price {
         font-size: 16px;
@@ -1395,7 +1395,7 @@ body {
         max-height: calc(100% - 16px);
     }
     .product-name {
-        font-size: 12px;
+        font-size: 4px;
     }
     .product-price {
         font-size: 14px;
