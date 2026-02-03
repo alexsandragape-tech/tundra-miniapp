@@ -1287,7 +1287,21 @@ app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
     }
 });
 
-// Добавление/обновление одного товара в категории (админ) - ПЕРЕД PUT /api/admin/products
+// 🔄 ВОССТАНОВЛЕНИЕ ТОВАРОВ ИЗ КОДА (должен быть ПЕРЕД /api/admin/products/:categoryId)
+app.post('/api/admin/products/restore', requireAdminAuth, async (req, res) => {
+    try {
+        logger.info('🔄 Восстановление товаров из кода...');
+        const fullProducts = await loadFullProductCatalog();
+        await AdminProductsDB.saveAll(fullProducts);
+        logger.info('✅ Товары восстановлены из кода');
+        res.json({ ok: true, message: 'Товары восстановлены', count: Object.keys(fullProducts).length });
+    } catch (error) {
+        logger.error('❌ Ошибка восстановления товаров:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Добавление/обновление одного товара в категории (админ) - ПОСЛЕ /api/admin/products/restore
 app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
     try {
         const { categoryId } = req.params;
@@ -1335,20 +1349,6 @@ app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) =
         res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
     } catch (error) {
         logger.error('Ошибка сохранения товара:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// 🔄 ВОССТАНОВЛЕНИЕ ТОВАРОВ ИЗ КОДА (временный endpoint для восстановления)
-app.post('/api/admin/products/restore', requireAdminAuth, async (req, res) => {
-    try {
-        logger.info('🔄 Восстановление товаров из кода...');
-        const fullProducts = await loadFullProductCatalog();
-        await AdminProductsDB.saveAll(fullProducts);
-        logger.info('✅ Товары восстановлены из кода');
-        res.json({ ok: true, message: 'Товары восстановлены', count: Object.keys(fullProducts).length });
-    } catch (error) {
-        logger.error('❌ Ошибка восстановления товаров:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
