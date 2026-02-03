@@ -13,6 +13,8 @@ let categoryVisibility = {};
 let promoCodes = [];
 let promoSupportedTypes = [];
 let currentPromoId = null;
+let banners = [];
+let currentBannerId = null;
 
 // 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
 const categories = {
@@ -58,6 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.editPromo = editPromo;
     window.togglePromoStatus = togglePromoStatus;
     window.resetPromoForm = resetPromoForm;
+    window.resetBannerForm = resetBannerForm;
+    window.editBanner = editBanner;
+    window.deleteBanner = deleteBanner;
     
     console.log('✅ Глобальные функции экспортированы:', {
         toggleProductAvailability: typeof window.toggleProductAvailability,
@@ -2003,6 +2008,7 @@ function showTab(tabName) {
     const categoriesContainer = document.getElementById('categories-container');
     const categoriesManagement = document.getElementById('categories-management');
     const promoManagement = document.getElementById('promo-management');
+    const bannersManagement = document.getElementById('banners-management');
 
     if (categoriesContainer) {
         categoriesContainer.style.display = tabName === 'products' ? 'block' : 'none';
@@ -2013,12 +2019,18 @@ function showTab(tabName) {
     if (promoManagement) {
         promoManagement.style.display = tabName === 'promocodes' ? 'block' : 'none';
     }
+    if (bannersManagement) {
+        bannersManagement.style.display = tabName === 'banners' ? 'block' : 'none';
+    }
 
     if (tabName === 'categories') {
         loadCategoriesManagement();
     }
     if (tabName === 'promocodes') {
         loadPromoCodes();
+    }
+    if (tabName === 'banners') {
+        loadBanners();
     }
 }
 
@@ -2442,3 +2454,194 @@ async function handlePromoFormSubmit(event) {
 }
 
 handlePromoTypeChange();
+
+// ===== УПРАВЛЕНИЕ БАННЕРАМИ =====
+
+// Загрузка баннеров
+async function loadBanners() {
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/banners`, {
+            headers: {
+                'X-Admin-Password': getAdminPassword()
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки баннеров');
+        }
+        
+        const data = await response.json();
+        banners = Array.isArray(data.banners) ? data.banners : [];
+        renderBannersList();
+    } catch (error) {
+        console.error('Ошибка загрузки баннеров:', error);
+        showNotification('Не удалось загрузить баннеры', 'error');
+    }
+}
+
+// Рендеринг списка баннеров
+function renderBannersList() {
+    const list = document.getElementById('banner-list');
+    if (!list) return;
+    
+    if (banners.length === 0) {
+        list.innerHTML = '<div class="empty-state">Баннеры не добавлены</div>';
+        return;
+    }
+    
+    list.innerHTML = banners.map(banner => `
+        <div class="banner-item" data-id="${banner.id}">
+            <div class="banner-item-preview">
+                <img src="${banner.image_url}" alt="Баннер ${banner.id}" onerror="this.style.display='none'">
+            </div>
+            <div class="banner-item-info">
+                <div class="banner-item-url">${banner.image_url}</div>
+                <div class="banner-item-link">${banner.link_url || 'Без ссылки'}</div>
+                <div class="banner-item-meta">
+                    <span class="banner-status ${banner.is_active ? 'active' : 'inactive'}">
+                        ${banner.is_active ? '✓ Активен' : '✗ Неактивен'}
+                    </span>
+                    <span class="banner-order">Порядок: ${banner.sort_order}</span>
+                    <span class="banner-rotate">Автопрокрутка: ${banner.auto_rotate_seconds}с</span>
+                </div>
+            </div>
+            <div class="banner-item-actions">
+                <button class="btn btn-small btn-primary" onclick="editBanner(${banner.id})">Редактировать</button>
+                <button class="btn btn-small btn-danger" onclick="deleteBanner(${banner.id})">Удалить</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Редактирование баннера
+function editBanner(id) {
+    const banner = banners.find(b => b.id === id);
+    if (!banner) return;
+    
+    currentBannerId = id;
+    document.getElementById('banner-id').value = id;
+    document.getElementById('banner-image-url').value = banner.image_url || '';
+    document.getElementById('banner-link-url').value = banner.link_url || '';
+    document.getElementById('banner-sort-order').value = banner.sort_order || 0;
+    document.getElementById('banner-auto-rotate').value = banner.auto_rotate_seconds || 5;
+    document.getElementById('banner-active').checked = banner.is_active !== false;
+    document.getElementById('banner-form-title').textContent = 'Редактировать баннер';
+    
+    // Прокручиваем к форме
+    document.getElementById('banner-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Удаление баннера
+async function deleteBanner(id) {
+    if (!confirm('Вы уверены, что хотите удалить этот баннер?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/banners/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Admin-Password': getAdminPassword()
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Не удалось удалить баннер');
+        }
+        
+        showNotification('Баннер удален', 'success');
+        await loadBanners();
+    } catch (error) {
+        console.error('Ошибка удаления баннера:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+// Сброс формы баннера
+function resetBannerForm() {
+    currentBannerId = null;
+    document.getElementById('banner-form').reset();
+    document.getElementById('banner-id').value = '';
+    document.getElementById('banner-active').checked = true;
+    document.getElementById('banner-form-title').textContent = 'Новый баннер';
+}
+
+// Обработчик отправки формы баннера
+document.addEventListener('DOMContentLoaded', () => {
+    const bannerForm = document.getElementById('banner-form');
+    if (bannerForm) {
+        bannerForm.addEventListener('submit', handleBannerFormSubmit);
+    }
+});
+
+async function handleBannerFormSubmit(e) {
+    e.preventDefault();
+    
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Сохранение...';
+    }
+    
+    try {
+        const password = getAdminPassword();
+        if (!password) {
+            throw new Error('Требуется авторизация');
+        }
+        
+        const id = currentBannerId;
+        const imageUrl = document.getElementById('banner-image-url').value.trim();
+        const linkUrl = document.getElementById('banner-link-url').value.trim();
+        const sortOrder = parseInt(document.getElementById('banner-sort-order').value) || 0;
+        const autoRotate = parseInt(document.getElementById('banner-auto-rotate').value) || 5;
+        const isActive = document.getElementById('banner-active').checked;
+        
+        if (!imageUrl) {
+            throw new Error('Укажите путь к изображению');
+        }
+        
+        const payload = {
+            image_url: imageUrl,
+            link_url: linkUrl || null,
+            sort_order: sortOrder,
+            auto_rotate_seconds: autoRotate,
+            is_active: isActive
+        };
+        
+        const url = id ? `${API_BASE}/api/admin/banners/${id}` : `${API_BASE}/api/admin/banners`;
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Password': password
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Не удалось сохранить баннер');
+        }
+        
+        const data = await response.json();
+        showNotification(id ? 'Баннер обновлен' : 'Баннер создан', 'success');
+        if (!id) {
+            resetBannerForm();
+        }
+        await loadBanners();
+        if (data.banner && id) {
+            editBanner(data.banner.id);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения баннера:', error);
+        showNotification(error.message, 'error');
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Сохранить';
+        }
+    }
+}
