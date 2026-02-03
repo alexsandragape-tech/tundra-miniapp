@@ -489,7 +489,7 @@ async function loadFullProductCatalog() {
                 available: true
             }
         ],
-        'zamorozhennye': [
+        'polufabrikaty': [
             {
                 id: 'pelmeni-severnye',
                 name: 'Пельмени «Северные» с трюфелем',
@@ -545,9 +545,7 @@ async function loadFullProductCatalog() {
                 calories: '220 ккал/921 кДж',
                 storage: '10 месяцев',
                 available: true
-            }
-        ],
-        'polufabrikaty': [
+            },
             {
                 id: 'okorok-olene',
                 name: 'Окорок оленя',
@@ -1286,6 +1284,72 @@ app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
             ok: false, 
             error: 'Ошибка сервера при сохранении категорий: ' + error.message 
         });
+    }
+});
+
+// Добавление/обновление одного товара в категории (админ) - ПЕРЕД PUT /api/admin/products
+app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { product } = req.body || {};
+
+        if (!categoryId || !product || typeof product !== 'object') {
+            return res.status(400).json({ ok: false, error: 'Некорректные данные товара' });
+        }
+        if (!product.id || typeof product.id !== 'string' || product.id.trim().length === 0) {
+            return res.status(400).json({ ok: false, error: 'Некорректный ID товара' });
+        }
+
+        // По умолчанию считаем товар доступным, если не указано обратное
+        const normalizedProduct = { ...product };
+        if (typeof normalizedProduct.available === 'undefined') {
+            normalizedProduct.available = true;
+        }
+
+        // 🔒 ВАЖНО: Загружаем ВСЕ товары из БД, чтобы сохранить товары из других категорий
+        const allProducts = await AdminProductsDB.loadAll();
+        const existingProducts = allProducts[categoryId] || [];
+        
+        // Проверяем, существует ли товар с таким ID
+        const existingIndex = existingProducts.findIndex(p => p.id === product.id);
+        
+        if (existingIndex >= 0) {
+            // Обновляем существующий товар
+            existingProducts[existingIndex] = normalizedProduct;
+        } else {
+            // Добавляем новый товар
+            existingProducts.push(normalizedProduct);
+        }
+        
+        // 🔒 КРИТИЧНО: Объединяем обновленную категорию с ВСЕМИ остальными категориями из БД
+        // Это гарантирует, что товары из других категорий не будут удалены
+        const productsToSave = {
+            ...allProducts,  // Все существующие категории из БД
+            [categoryId]: existingProducts  // Обновленная категория
+        };
+        
+        // Сохраняем все товары (включая обновленную категорию и все остальные)
+        await AdminProductsDB.saveAll(productsToSave);
+
+        logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
+        res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
+    } catch (error) {
+        logger.error('Ошибка сохранения товара:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 🔄 ВОССТАНОВЛЕНИЕ ТОВАРОВ ИЗ КОДА (временный endpoint для восстановления)
+app.post('/api/admin/products/restore', requireAdminAuth, async (req, res) => {
+    try {
+        logger.info('🔄 Восстановление товаров из кода...');
+        const fullProducts = await loadFullProductCatalog();
+        await AdminProductsDB.saveAll(fullProducts);
+        logger.info('✅ Товары восстановлены из кода');
+        res.json({ ok: true, message: 'Товары восстановлены', count: Object.keys(fullProducts).length });
+    } catch (error) {
+        logger.error('❌ Ошибка восстановления товаров:', error);
+        res.status(500).json({ ok: false, error: error.message });
     }
 });
 
@@ -5386,36 +5450,6 @@ function cleanup() {
     
     logger.info('✅ Ресурсы очищены');
 }
-
-// Добавление/обновление одного товара в категории (админ)
-app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
-    try {
-        const { categoryId } = req.params;
-        const { product } = req.body || {};
-
-        if (!categoryId || !product || typeof product !== 'object') {
-            return res.status(400).json({ ok: false, error: 'Некорректные данные товара' });
-        }
-        if (!product.id || typeof product.id !== 'string' || product.id.trim().length === 0) {
-            return res.status(400).json({ ok: false, error: 'Некорректный ID товара' });
-        }
-
-        // По умолчанию считаем товар доступным, если не указано обратное
-        const normalizedProduct = { ...product };
-        if (typeof normalizedProduct.available === 'undefined') {
-            normalizedProduct.available = true;
-        }
-
-        // Сохраняем один товар через обобщенный механизм
-        await AdminProductsDB.saveAll({ [categoryId]: [normalizedProduct] });
-
-        logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
-        res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
-    } catch (error) {
-        logger.error('Ошибка сохранения товара:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
 
 // Подключаем модульные роуты
 const ordersRouter = require('./routes/orders')(logger);
