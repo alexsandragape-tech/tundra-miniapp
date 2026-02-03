@@ -51,7 +51,7 @@ const cors = require('cors');
 const { initYooKassa, createYooKassaPayment: createYooKassaPaymentSvc, formatPhoneForYooKassa: formatPhoneForYooKassaSvc } = require('./services/yookassa');
 const config = require('./config');
 const FRONTEND_BASE_URL = (config.FRONTEND_URL || process.env.FRONTEND_URL || 'https://tundragourmet.pro').replace(/\/$/, '');
-const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, PromoCodesDB, pool } = require('./database');
+const { initializeDatabase, OrdersDB, PurchaseHistoryDB, AdminProductsDB, CategoriesDB, BotUsersDB, PromoCodesDB, BannersDB, pool } = require('./database');
 const LoyaltyService = require('./services/loyalty');
 const { mapDbOrderToApi, mapDbOrderToList, isOrderCompletedOrPaid } = require('./services/order-utils');
 const PromoService = require('./services/promo');
@@ -3779,6 +3779,202 @@ app.put('/api/admin/promocodes/:id', requireAdminAuth, async (req, res) => {
     } catch (error) {
         logger.error('❌ Ошибка обновления промокода:', error.message);
         res.status(500).json({ ok: false, error: 'Не удалось обновить промокод' });
+    }
+});
+
+// 🎨 API ДЛЯ БАННЕРОВ
+
+// Валидация существования файла изображения
+function validateImageFile(imageUrl) {
+    if (!imageUrl || typeof imageUrl !== 'string') {
+        return { valid: false, error: 'Путь к изображению не указан' };
+    }
+    
+    // Проверяем формат (должен быть JPG)
+    if (!imageUrl.toLowerCase().endsWith('.jpg') && !imageUrl.toLowerCase().endsWith('.jpeg')) {
+        return { valid: false, error: 'Изображение должно быть в формате JPG' };
+    }
+    
+    // Нормализуем путь: убираем начальный слеш, если есть
+    const normalizedPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+    
+    // Проверяем существование файла
+    const webRoot = path.join(__dirname, 'webapp');
+    const filePath = path.join(webRoot, normalizedPath);
+    
+    // Логируем для отладки
+    logger.debug('🔍 Проверка файла баннера:', {
+        imageUrl,
+        normalizedPath,
+        webRoot,
+        filePath,
+        exists: fs.existsSync(filePath)
+    });
+    
+    // Проверяем, что путь не выходит за пределы webapp
+    if (!filePath.startsWith(webRoot)) {
+        return { valid: false, error: 'Некорректный путь к файлу' };
+    }
+    
+    try {
+        if (!fs.existsSync(filePath)) {
+            return { valid: false, error: `Файл не найден: ${imageUrl}. Проверьте путь: ${normalizedPath}` };
+        }
+        
+        // Проверяем размер файла (максимум 5MB)
+        const stats = fs.statSync(filePath);
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (stats.size > maxSize) {
+            return { valid: false, error: 'Размер файла превышает 5MB' };
+        }
+        
+        return { valid: true };
+    } catch (error) {
+        logger.error('❌ Ошибка проверки файла баннера:', error);
+        return { valid: false, error: `Ошибка проверки файла: ${error.message}` };
+    }
+}
+
+// Получить все активные баннеры (публичный endpoint для фронтенда)
+app.get('/api/banners', async (req, res) => {
+    try {
+        const banners = await BannersDB.getActive();
+        res.json({ ok: true, banners });
+    } catch (error) {
+        logger.error('❌ Ошибка получения баннеров:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось загрузить баннеры' });
+    }
+});
+
+// Получить все баннеры (для админки)
+app.get('/api/admin/banners', requireAdminAuth, async (req, res) => {
+    try {
+        const banners = await BannersDB.getAll();
+        res.json({ ok: true, banners });
+    } catch (error) {
+        logger.error('❌ Ошибка получения баннеров:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось загрузить баннеры' });
+    }
+});
+
+// Создать баннер
+app.post('/api/admin/banners', requireAdminAuth, async (req, res) => {
+    try {
+        const { image_url, link_url, sort_order, is_active, auto_rotate_seconds } = req.body || {};
+        
+        if (!image_url || typeof image_url !== 'string') {
+            return res.status(400).json({ ok: false, error: 'Укажите путь к изображению' });
+        }
+        
+        // Валидация файла
+        const validation = validateImageFile(image_url);
+        if (!validation.valid) {
+            return res.status(400).json({ ok: false, error: validation.error });
+        }
+        
+        // Валидация ссылки (если указана)
+        if (link_url && typeof link_url !== 'string') {
+            return res.status(400).json({ ok: false, error: 'Некорректная ссылка' });
+        }
+        
+        // Валидация времени автопрокрутки
+        const rotateSeconds = auto_rotate_seconds !== undefined ? parseInt(auto_rotate_seconds, 10) : 5;
+        if (!Number.isFinite(rotateSeconds) || rotateSeconds < 1 || rotateSeconds > 60) {
+            return res.status(400).json({ ok: false, error: 'Время автопрокрутки должно быть от 1 до 60 секунд' });
+        }
+        
+        const banner = await BannersDB.create({
+            image_url,
+            link_url: link_url || null,
+            sort_order: sort_order || 0,
+            is_active: is_active !== undefined ? Boolean(is_active) : true,
+            auto_rotate_seconds: rotateSeconds
+        });
+        
+        res.status(201).json({ ok: true, banner });
+    } catch (error) {
+        logger.error('❌ Ошибка создания баннера:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось создать баннер' });
+    }
+});
+
+// Обновить баннер
+app.put('/api/admin/banners/:id', requireAdminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = await BannersDB.getById(id);
+        if (!existing) {
+            return res.status(404).json({ ok: false, error: 'Баннер не найден' });
+        }
+        
+        const { image_url, link_url, sort_order, is_active, auto_rotate_seconds } = req.body || {};
+        const updates = {};
+        
+        if (image_url !== undefined) {
+            if (!image_url || typeof image_url !== 'string') {
+                return res.status(400).json({ ok: false, error: 'Укажите путь к изображению' });
+            }
+            const validation = validateImageFile(image_url);
+            if (!validation.valid) {
+                return res.status(400).json({ ok: false, error: validation.error });
+            }
+            updates.image_url = image_url;
+        }
+        
+        if (link_url !== undefined) {
+            if (link_url && typeof link_url !== 'string') {
+                return res.status(400).json({ ok: false, error: 'Некорректная ссылка' });
+            }
+            updates.link_url = link_url || null;
+        }
+        
+        if (sort_order !== undefined) {
+            const order = parseInt(sort_order, 10);
+            if (!Number.isFinite(order)) {
+                return res.status(400).json({ ok: false, error: 'Некорректный порядок сортировки' });
+            }
+            updates.sort_order = order;
+        }
+        
+        if (is_active !== undefined) {
+            updates.is_active = Boolean(is_active);
+        }
+        
+        if (auto_rotate_seconds !== undefined) {
+            const rotateSeconds = parseInt(auto_rotate_seconds, 10);
+            if (!Number.isFinite(rotateSeconds) || rotateSeconds < 1 || rotateSeconds > 60) {
+                return res.status(400).json({ ok: false, error: 'Время автопрокрутки должно быть от 1 до 60 секунд' });
+            }
+            updates.auto_rotate_seconds = rotateSeconds;
+        }
+        
+        if (Object.keys(updates).length === 0) {
+            const current = await BannersDB.getById(id);
+            return res.json({ ok: true, banner: current });
+        }
+        
+        const updated = await BannersDB.update(id, updates);
+        res.json({ ok: true, banner: updated });
+    } catch (error) {
+        logger.error('❌ Ошибка обновления баннера:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось обновить баннер' });
+    }
+});
+
+// Удалить баннер
+app.delete('/api/admin/banners/:id', requireAdminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = await BannersDB.getById(id);
+        if (!existing) {
+            return res.status(404).json({ ok: false, error: 'Баннер не найден' });
+        }
+        
+        await BannersDB.delete(id);
+        res.json({ ok: true, message: 'Баннер удален' });
+    } catch (error) {
+        logger.error('❌ Ошибка удаления баннера:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось удалить баннер' });
     }
 });
 
