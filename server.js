@@ -5404,8 +5404,23 @@ app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) =
             normalizedProduct.available = true;
         }
 
-        // Сохраняем один товар через обобщенный механизм
-        await AdminProductsDB.saveAll({ [categoryId]: [normalizedProduct] });
+        // Загружаем все существующие товары категории, чтобы не удалить их
+        const allProducts = await AdminProductsDB.loadAll();
+        const existingProducts = allProducts[categoryId] || [];
+        
+        // Проверяем, существует ли товар с таким ID
+        const existingIndex = existingProducts.findIndex(p => p.id === product.id);
+        
+        if (existingIndex >= 0) {
+            // Обновляем существующий товар
+            existingProducts[existingIndex] = normalizedProduct;
+        } else {
+            // Добавляем новый товар
+            existingProducts.push(normalizedProduct);
+        }
+        
+        // Сохраняем все товары категории (включая новый/обновленный)
+        await AdminProductsDB.saveAll({ [categoryId]: existingProducts });
 
         logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
         res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
