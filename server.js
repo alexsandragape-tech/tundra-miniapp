@@ -3802,8 +3802,8 @@ function validateImageFile(imageUrl) {
     const webRoot = path.join(__dirname, 'webapp');
     const filePath = path.join(webRoot, normalizedPath);
     
-    // Логируем для отладки
-    logger.debug('🔍 Проверка файла баннера:', {
+    // Логируем для отладки (всегда, не только в debug режиме)
+    logger.info('🔍 Проверка файла баннера:', {
         imageUrl,
         normalizedPath,
         webRoot,
@@ -3860,17 +3860,22 @@ app.get('/api/admin/banners', requireAdminAuth, async (req, res) => {
 // Создать баннер
 app.post('/api/admin/banners', requireAdminAuth, async (req, res) => {
     try {
+        logger.info('📥 Запрос на создание баннера:', req.body);
         const { image_url, link_url, sort_order, is_active, auto_rotate_seconds } = req.body || {};
         
         if (!image_url || typeof image_url !== 'string') {
+            logger.warn('❌ Путь к изображению не указан');
             return res.status(400).json({ ok: false, error: 'Укажите путь к изображению' });
         }
         
+        logger.info('🔍 Начинаем валидацию файла:', image_url);
         // Валидация файла
         const validation = validateImageFile(image_url);
         if (!validation.valid) {
+            logger.warn('❌ Валидация файла не прошла:', validation.error);
             return res.status(400).json({ ok: false, error: validation.error });
         }
+        logger.info('✅ Валидация файла прошла успешно');
         
         // Валидация ссылки (если указана)
         if (link_url && typeof link_url !== 'string') {
@@ -3883,6 +3888,14 @@ app.post('/api/admin/banners', requireAdminAuth, async (req, res) => {
             return res.status(400).json({ ok: false, error: 'Время автопрокрутки должно быть от 1 до 60 секунд' });
         }
         
+        logger.info('💾 Сохраняем баннер в БД:', {
+            image_url,
+            link_url: link_url || null,
+            sort_order: sort_order || 0,
+            is_active: is_active !== undefined ? Boolean(is_active) : true,
+            auto_rotate_seconds: rotateSeconds
+        });
+        
         const banner = await BannersDB.create({
             image_url,
             link_url: link_url || null,
@@ -3891,10 +3904,22 @@ app.post('/api/admin/banners', requireAdminAuth, async (req, res) => {
             auto_rotate_seconds: rotateSeconds
         });
         
+        logger.info('✅ Баннер успешно создан:', banner);
         res.status(201).json({ ok: true, banner });
     } catch (error) {
-        logger.error('❌ Ошибка создания баннера:', error.message);
-        res.status(500).json({ ok: false, error: 'Не удалось создать баннер' });
+        logger.error('❌ Ошибка создания баннера:', error);
+        logger.error('❌ Детали ошибки:', {
+            message: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+        // Всегда возвращаем детали ошибки для отладки
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Не удалось создать баннер',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
