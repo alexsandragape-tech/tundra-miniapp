@@ -307,20 +307,12 @@ const categories = [
         count: 5
     },
     {
-        id: 'zamorozhennye',
-        name: 'Замороженные',
-        desc: 'Пельмени с олениной и трюфелем',
-        icon: '❄️',
-        imageUrl: 'images/categories/JLA_0991.jpg',
-        count: 4
-    },
-    {
         id: 'polufabrikaty',
         name: 'Полуфабрикаты',
-        desc: 'Мясо для приготовления',
+        desc: 'Мясо для приготовления и пельмени',
         icon: '🥓',
         imageUrl: 'images/categories/раздел полуфарикаты.jpg',
-        count: 7
+        count: 11
     },
     {
         id: 'pirogi-sytnye',
@@ -696,7 +688,7 @@ let products = {
             storage: '20 суток'
         }
     ],
-    'zamorozhennye': [
+    'polufabrikaty': [
         {
             id: 'pelmeni-severnye',
             name: 'Пельмени «Северные» с трюфелем',
@@ -748,9 +740,7 @@ let products = {
             nutrition: 'белки - 22 г, жиры - 6 г, углеводы - 28 г',
             calories: '220 ккал/921 кДж',
             storage: '10 месяцев'
-        }
-    ],
-    'polufabrikaty': [
+        },
         {
             id: 'okorok-olene',
             name: 'Окорок оленя',
