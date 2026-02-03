@@ -18,6 +18,14 @@
                 <img src="assets/emojis/time-bot.png" alt="График работы" class="top-icon">
                 <span id="work-status">Работаем</span>
             </div>
+            <div class="top-external-links">
+                <button class="top-btn" onclick="window.open('https://tundramarket.ru/', '_blank')" aria-label="Tundra Market">
+                    <span class="top-btn-emoji">@</span>
+                </button>
+                <button class="top-btn" onclick="window.open('https://gift.tundramarket.ru/', '_blank')" aria-label="Подарочные наборы">
+                    <span class="top-btn-emoji">🎁</span>
+                </button>
+            </div>
             <div class="top-buttons">
                 <button class="top-btn" onclick="showProfile()" aria-label="Профиль">
                     <img src="assets/emojis/profil-bot.png" alt="" class="top-btn-icon">
@@ -32,6 +40,16 @@
         <!-- Заголовок страницы -->
         <div class="page-header menu-header">
             <div class="page-title menu-title">MENU</div>
+        </div>
+
+        <!-- Карусель баннеров -->
+        <div id="banners-carousel" class="banners-carousel" style="display: none;">
+            <div class="banners-container" id="banners-container">
+                <!-- Баннеры будут добавлены через JavaScript -->
+            </div>
+            <div class="banners-indicators" id="banners-indicators">
+                <!-- Индикаторы будут добавлены через JavaScript -->
+            </div>
         </div>
 
         <!-- Сетка категорий -->
