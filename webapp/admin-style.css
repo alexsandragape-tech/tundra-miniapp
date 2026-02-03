@@ -1497,3 +1497,230 @@ input[type="checkbox"]:checked + .checkmark::after {
     }
 }
 
+/* Стили для управления баннерами */
+.banners-management {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.banners-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.banner-form-card,
+.banner-list-card {
+    background: #ffffff;
+    border: 2px solid #e1e8ed;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(26, 31, 46, 0.05);
+}
+
+.banner-form-card h3,
+.banner-list-card h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 20px;
+    color: #1a1f2e;
+}
+
+.banner-form-card .form-group {
+    margin-bottom: 16px;
+}
+
+.banner-form-card label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #3a4257;
+}
+
+.banner-form-card input[type="text"],
+.banner-form-card input[type="number"],
+.banner-form-card input[type="url"],
+.banner-form-card select {
+    width: 100%;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: #fafbfd;
+    transition: border-color 0.2s ease;
+}
+
+.banner-form-card input:focus,
+.banner-form-card select:focus {
+    border-color: #0066cc;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.banner-form-card .form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.banner-form-card .form-row .form-group {
+    flex: 1;
+}
+
+.banner-form-card .form-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+}
+
+.banner-form-card .form-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.banner-form-card .form-actions .btn {
+    flex: 1;
+}
+
+.banner-list-card {
+    min-height: 320px;
+}
+
+.banner-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.banner-list-header h3 {
+    margin: 0;
+}
+
+.banner-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.banner-item {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background: #f8f9fa;
+    border: 1px solid #e1e8ed;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.banner-item:hover {
+    border-color: #0066cc;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.1);
+}
+
+.banner-item-preview {
+    width: 120px;
+    height: 80px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #e1e8ed;
+}
+
+.banner-item-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.banner-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.banner-item-url {
+    font-weight: 600;
+    color: #1a1f2e;
+    font-size: 14px;
+    word-break: break-all;
+}
+
+.banner-item-link {
+    font-size: 13px;
+    color: #6a737d;
+}
+
+.banner-item-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: #6a737d;
+}
+
+.banner-status {
+    font-weight: 600;
+}
+
+.banner-status.active {
+    color: #28a745;
+}
+
+.banner-status.inactive {
+    color: #dc3545;
+}
+
+.banner-item-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-self: flex-start;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6a737d;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .banners-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .banner-item {
+        flex-direction: column;
+    }
+
+    .banner-item-preview {
+        width: 100%;
+        height: 200px;
+    }
+
+    .banner-item-actions {
+        flex-direction: row;
+        width: 100%;
+    }
+
+    .banner-item-actions .btn {
+        flex: 1;
+    }
+
+    .banner-form-card .form-row {
+        flex-direction: column;
+    }
+
+    .banner-form-card .form-actions {
+        flex-direction: column-reverse;
+    }
+}
