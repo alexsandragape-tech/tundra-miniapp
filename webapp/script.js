@@ -2733,6 +2733,175 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// 🎨 ФУНКЦИИ ДЛЯ РАБОТЫ С БАННЕРАМИ
+
+let bannersData = [];
+let currentBannerIndex = 0;
+let bannerAutoRotateTimer = null;
+let bannerAutoRotateSeconds = 5;
+
+// Загрузка баннеров с сервера
+async function loadBanners() {
+    try {
+        const response = await fetch('/api/banners');
+        const data = await response.json();
+        if (data.ok && data.banners && data.banners.length > 0) {
+            bannersData = data.banners;
+            // Используем время автопрокрутки из первого баннера (или по умолчанию 5 секунд)
+            bannerAutoRotateSeconds = bannersData[0]?.auto_rotate_seconds || 5;
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('❌ Ошибка загрузки баннеров:', error);
+        return false;
+    }
+}
+
+// Рендеринг карусели баннеров
+function renderBanners() {
+    const carousel = document.getElementById('banners-carousel');
+    const container = document.getElementById('banners-container');
+    const indicators = document.getElementById('banners-indicators');
+    
+    if (!carousel || !container || !indicators) {
+        console.error('❌ Элементы карусели баннеров не найдены');
+        return;
+    }
+    
+    if (bannersData.length === 0) {
+        carousel.style.display = 'none';
+        return;
+    }
+    
+    carousel.style.display = 'block';
+    container.innerHTML = '';
+    indicators.innerHTML = '';
+    
+    // Создаем слайды
+    bannersData.forEach((banner, index) => {
+        const slide = document.createElement('div');
+        slide.className = 'banner-slide' + (banner.link_url ? '' : ' no-link');
+        
+        const img = document.createElement('img');
+        img.src = banner.image_url;
+        img.alt = `Баннер ${index + 1}`;
+        img.className = 'banner-image';
+        
+        if (banner.link_url) {
+            slide.onclick = () => {
+                window.open(banner.link_url, '_blank');
+            };
+        }
+        
+        slide.appendChild(img);
+        container.appendChild(slide);
+        
+        // Создаем индикатор
+        const indicator = document.createElement('button');
+        indicator.className = 'banner-indicator' + (index === 0 ? ' active' : '');
+        indicator.setAttribute('aria-label', `Баннер ${index + 1}`);
+        indicator.onclick = () => goToBanner(index);
+        indicators.appendChild(indicator);
+    });
+    
+    // Устанавливаем начальную позицию
+    currentBannerIndex = 0;
+    updateBannerPosition();
+    
+    // Запускаем автопрокрутку
+    startBannerAutoRotate();
+    
+    // Добавляем обработчики свайпа
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    container.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    });
+    
+    container.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleBannerSwipe();
+    });
+    
+    function handleBannerSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0) {
+                // Свайп влево - следующий баннер
+                nextBanner();
+            } else {
+                // Свайп вправо - предыдущий баннер
+                prevBanner();
+            }
+        }
+    }
+}
+
+// Переход к конкретному баннеру
+function goToBanner(index) {
+    if (index < 0 || index >= bannersData.length) return;
+    currentBannerIndex = index;
+    updateBannerPosition();
+    startBannerAutoRotate();
+}
+
+// Следующий баннер
+function nextBanner() {
+    currentBannerIndex = (currentBannerIndex + 1) % bannersData.length;
+    updateBannerPosition();
+    startBannerAutoRotate();
+}
+
+// Предыдущий баннер
+function prevBanner() {
+    currentBannerIndex = (currentBannerIndex - 1 + bannersData.length) % bannersData.length;
+    updateBannerPosition();
+    startBannerAutoRotate();
+}
+
+// Обновление позиции карусели
+function updateBannerPosition() {
+    const container = document.getElementById('banners-container');
+    if (!container) return;
+    
+    container.style.transform = `translateX(-${currentBannerIndex * 100}%)`;
+    
+    // Обновляем индикаторы
+    const indicators = document.querySelectorAll('.banner-indicator');
+    indicators.forEach((indicator, index) => {
+        if (index === currentBannerIndex) {
+            indicator.classList.add('active');
+        } else {
+            indicator.classList.remove('active');
+        }
+    });
+}
+
+// Запуск автопрокрутки
+function startBannerAutoRotate() {
+    if (bannerAutoRotateTimer) {
+        clearInterval(bannerAutoRotateTimer);
+    }
+    
+    if (bannersData.length <= 1) return;
+    
+    bannerAutoRotateTimer = setInterval(() => {
+        nextBanner();
+    }, bannerAutoRotateSeconds * 1000);
+}
+
+// Остановка автопрокрутки (при наведении или взаимодействии)
+function stopBannerAutoRotate() {
+    if (bannerAutoRotateTimer) {
+        clearInterval(bannerAutoRotateTimer);
+        bannerAutoRotateTimer = null;
+    }
+}
+
 // Функция рендеринга категорий
 async function renderCategories() {
     console.log('РЕНДЕРИНГ КАТЕГОРИЙ: начинаем');
@@ -2808,6 +2977,12 @@ async function initApp() {
     // Показываем приветственный экран
     // Сразу показываем каталог
     showMain();
+
+    // Загружаем и рендерим баннеры
+    const hasBanners = await loadBanners();
+    if (hasBanners) {
+        renderBanners();
+    }
 
     // Рендерим категории
     await renderCategories();
