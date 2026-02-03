@@ -997,20 +997,30 @@ class AdminProductsDB {
                 }
             }
             
-            // Удаляем товары, которых нет в новых данных
-            const allProductIds = [];
+            // 🔒 ВАЖНО: Удаляем товары ТОЛЬКО из переданных категорий, которых нет в новых данных
+            // НЕ удаляем товары из категорий, которые НЕ переданы в запросе!
+            // Это защищает от случайного удаления товаров из других категорий
             for (const [categoryId, products] of Object.entries(productsData)) {
-                for (const product of products) {
-                    allProductIds.push(`('${categoryId}', '${product.id}')`);
+                const productIds = products.map(p => p.id);
+                
+                if (productIds.length > 0) {
+                    // Удаляем только товары из этой категории, которых нет в новых данных
+                    await client.query(`
+                        DELETE FROM admin_products 
+                        WHERE category_id = $1 
+                        AND product_id != ALL($2::text[])
+                    `, [categoryId, productIds]);
+                } else {
+                    // Если массив пустой - удаляем все товары из этой категории
+                    // НО ТОЛЬКО если категория была явно передана в запросе
+                    await client.query(`
+                        DELETE FROM admin_products 
+                        WHERE category_id = $1
+                    `, [categoryId]);
                 }
             }
             
-            if (allProductIds.length > 0) {
-                await client.query(`
-                    DELETE FROM admin_products 
-                    WHERE (category_id, product_id) NOT IN (${allProductIds.join(', ')})
-                `);
-            }
+            // ✅ Товары из категорий, которые НЕ были переданы в productsData, остаются нетронутыми
             
             await client.query('COMMIT');
             console.log(`✅ Товары сохранены: ${savedCount} шт.`);
