@@ -208,6 +208,7 @@ body {
     align-items: center;
     gap: 15px;
     justify-content: space-between; /* Распределяем элементы по краям */
+    margin-bottom: 0; /* Убираем отступ снизу */
 }
 .top-icon,
 .top-btn-icon {
@@ -379,8 +380,14 @@ body {
 }
 
 /* Список товаров */
+#category-screen {
+    padding: 0;
+    margin: 0;
+}
+
 .products-list {
     padding: 0;
+    margin: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr)); /* 2 колонки, без переполнения */
     gap: 0; /* Без зазоров - фото соприкасаются */
@@ -1286,8 +1293,8 @@ body {
         font-size: 16px; /* Возвращен к исходному размеру */
     }
     .products-list {
-        gap: 12px;
-        padding: 15px;
+        gap: 0;
+        padding: 0;
     }
     .product-card {
         padding: 0;
@@ -1320,8 +1327,8 @@ body {
         font-size: 14px; /* Возвращен к исходному размеру */
     }
     .products-list {
-        gap: 10px;
-        padding: 12px;
+        gap: 0;
+        padding: 0;
     }
     .product-card {
         padding: 0;
@@ -1386,8 +1393,8 @@ body {
         font-size: 12px; /* Возвращен к исходному размеру */
     }
     .products-list {
-        gap: 8px;
-        padding: 10px;
+        gap: 0;
+        padding: 0;
     }
     .product-card {
         padding: 0;
