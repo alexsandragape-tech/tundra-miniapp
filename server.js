@@ -3849,11 +3849,21 @@ app.get('/api/banners', async (req, res) => {
 // Получить все баннеры (для админки)
 app.get('/api/admin/banners', requireAdminAuth, async (req, res) => {
     try {
+        logger.info('📥 Запрос на получение всех баннеров');
         const banners = await BannersDB.getAll();
+        logger.info(`✅ Получено баннеров: ${banners.length}`);
         res.json({ ok: true, banners });
     } catch (error) {
-        logger.error('❌ Ошибка получения баннеров:', error.message);
-        res.status(500).json({ ok: false, error: 'Не удалось загрузить баннеры' });
+        logger.error('❌ Ошибка получения баннеров:', error);
+        logger.error('❌ Детали ошибки:', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ 
+            ok: false, 
+            error: 'Не удалось загрузить баннеры',
+            details: error.message
+        });
     }
 });
 
