@@ -1,7 +1,7 @@
 // Базовый URL API
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? 'http://localhost:3000' 
-    : 'https://tundra-miniapp-production.up.railway.app';
+    : 'https://tundragourmet.pro';
 
 console.log('🔍 admin-script.js загружен');
 
@@ -341,7 +341,7 @@ async function loadProductsFromClient() {
                 unit: '/85 гр.',
                 maxQty: 15,
                 image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-olene-griby.jpg',
+                imageUrl: 'images/products/pashtet/riyet-olene-griby1200.jpg',
                 composition: 'мясо северного оленя, грибы белые, трюфель черный 0,02%, жир олений, лук репчатый',
                 nutrition: 'белки - 17,8 г, жиры - 19,8 г, углеводы - 2,6 г',
                 calories: '259,8 ккал/1087 кДж',
@@ -355,7 +355,7 @@ async function loadProductsFromClient() {
                 unit: '/85 гр.',
                 maxQty: 15,
                 image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-serdtse.jpg',
+                imageUrl: 'images/products/pashtet/riyet-serdtse1200.jpg',
                 composition: 'мясо северного оленя, морковь, лук, вино белое сухое, соль морская, масло растительное, масло сливочное, соль, ягоды можжевельника, перец',
                 nutrition: 'белки - 12 г, жиры - 10 г, углеводы - 9 г',
                 calories: '182 ккал/762 кДж',
@@ -369,7 +369,7 @@ async function loadProductsFromClient() {
                 unit: '/85 гр.',
                 maxQty: 15,
                 image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-utka.jpg',
+                imageUrl: 'images/products/pashtet/riyet-utka1200.jpg',
                 composition: 'мясо утки, белые грибы, вино белое сухое, утиный жир, трюфель черный 0,02%, лук, соль морская, специи',
                 nutrition: 'белки - 13,3 г, жиры - 45,9 г, углеводы - 2,3 г',
                 calories: '496 ккал/2077 кДж',
@@ -383,7 +383,7 @@ async function loadProductsFromClient() {
                 unit: '/85 гр.',
                 maxQty: 15,
                 image: '🥫',
-                imageUrl: 'images/products/pashtet/riyet-yagnenok.jpg',
+                imageUrl: 'images/products/pashtet/riyet-yagnenok1200.jpg',
                 composition: 'мясо ягненка, масло растительное, лук, соль морская, специи',
                 nutrition: 'белки - 15,7 г, жиры - 15,4 г, углеводы - 5,5 г',
                 calories: '223,4 ккал/935 кДж',
