@@ -20,7 +20,6 @@ const categories = {
     'pashtet': 'Паштеты', 
     'delikatesy': 'Деликатесы',
     'gotovye': 'Готовые деликатесы',
-    'zamorozhennye': 'Замороженные',
     'polufabrikaty': 'Полуфабрикаты',
     'pirogi-sytnye': 'Пироги сытные',
     'pirogi-sladkie': 'Пироги сладкие',
@@ -549,7 +548,7 @@ async function loadProductsFromClient() {
                 available: true
             }
         ],
-        'zamorozhennye': [
+        'polufabrikaty': [
             {
                 id: 'pelmeni-severnye',
                 name: 'Пельмени «Северные» с трюфелем',
@@ -605,9 +604,7 @@ async function loadProductsFromClient() {
                 calories: '220 ккал/921 кДж',
                 storage: '10 месяцев',
                 available: true
-            }
-        ],
-        'polufabrikaty': [
+            },
             {
                 id: 'okorok-olene',
                 name: 'Окорок оленя',
