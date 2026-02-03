@@ -217,8 +217,8 @@ body {
 }
 .top-icon,
 .top-btn-icon {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     object-fit: contain;
     pointer-events: none;
 }
