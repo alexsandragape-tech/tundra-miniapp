@@ -142,6 +142,11 @@ body {
     cursor: pointer;
 }
 
+.top-external-links {
+    display: flex;
+    gap: 10px;
+}
+
 .top-buttons {
     display: flex;
     gap: 10px;
@@ -215,6 +220,15 @@ body {
     width: 22px;
     height: 22px;
     object-fit: contain;
+    pointer-events: none;
+}
+
+.top-btn-emoji {
+    font-size: 20px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
 }
 
@@ -292,6 +306,70 @@ body {
     width: 100%;
     margin: 0;
     line-height: 1.05;
+}
+
+/* Карусель баннеров */
+.banners-carousel {
+    position: relative;
+    width: 100%;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.banners-container {
+    display: flex;
+    transition: transform 0.5s ease;
+    will-change: transform;
+}
+
+.banner-slide {
+    min-width: 100%;
+    width: 100%;
+    position: relative;
+    cursor: pointer;
+}
+
+.banner-slide.no-link {
+    cursor: default;
+}
+
+.banner-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+    border-radius: 0;
+}
+
+.banners-indicators {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+    position: relative;
+    z-index: 10;
+}
+
+.banner-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(11, 92, 86, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    padding: 0;
+}
+
+.banner-indicator.active {
+    background: #0b5c56;
+    width: 24px;
+    border-radius: 4px;
+}
+
+.banner-indicator:hover {
+    background: rgba(11, 92, 86, 0.6);
 }
 
 /* Сетка категорий */
