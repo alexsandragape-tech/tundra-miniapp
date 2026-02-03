@@ -91,6 +91,7 @@
                 <button class="tab-btn active" onclick="showTab('products')">Товары</button>
                 <button class="tab-btn" onclick="showTab('categories')">Категории</button>
                 <button class="tab-btn" onclick="showTab('promocodes')">Промокоды</button>
+                <button class="tab-btn" onclick="showTab('banners')">Баннеры</button>
             </div>
         </div>
 
@@ -177,6 +178,61 @@
                     </div>
                     <div class="promo-list" id="promo-list">
                         <!-- Список промокодов -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Контейнер управления баннерами -->
+        <div class="banners-management" id="banners-management" style="display: none;">
+            <div class="management-header">
+                <h2>Баннеры</h2>
+                <p>Управляйте рекламными баннерами на главной странице</p>
+            </div>
+            <div class="banners-layout">
+                <div class="banner-form-card">
+                    <h3 id="banner-form-title">Новый баннер</h3>
+                    <form id="banner-form">
+                        <input type="hidden" id="banner-id">
+                        <div class="form-group">
+                            <label for="banner-image-url">Путь к изображению (JPG)</label>
+                            <input type="text" id="banner-image-url" placeholder="images/banners/banner1.jpg" required>
+                            <small>Файл должен быть загружен в webapp/images/banners/</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="banner-link-url">Ссылка (необязательно)</label>
+                            <input type="url" id="banner-link-url" placeholder="https://example.com">
+                            <small>Если указана, баннер будет кликабельным</small>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="banner-sort-order">Порядок сортировки</label>
+                                <input type="number" id="banner-sort-order" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="banner-auto-rotate">Время автопрокрутки (сек)</label>
+                                <input type="number" id="banner-auto-rotate" min="1" max="60" value="5">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="banner-active">
+                                <input type="checkbox" id="banner-active" checked>
+                                Активен
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                            <button type="button" class="btn btn-secondary" onclick="resetBannerForm()">Отмена</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="banner-list-card">
+                    <div class="banner-list-header">
+                        <h3>Список баннеров</h3>
+                        <button class="btn btn-primary" onclick="resetBannerForm()">+ Добавить баннер</button>
+                    </div>
+                    <div class="banner-list" id="banner-list">
+                        <!-- Список баннеров будет загружен через JavaScript -->
                     </div>
                 </div>
             </div>
