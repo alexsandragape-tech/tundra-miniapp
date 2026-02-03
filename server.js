@@ -1287,6 +1287,51 @@ app.put('/api/admin/categories', requireAdminAuth, async (req, res) => {
     }
 });
 
+// Добавление/обновление одного товара в категории (админ) - ПЕРЕД PUT /api/admin/products
+app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { product } = req.body || {};
+
+        if (!categoryId || !product || typeof product !== 'object') {
+            return res.status(400).json({ ok: false, error: 'Некорректные данные товара' });
+        }
+        if (!product.id || typeof product.id !== 'string' || product.id.trim().length === 0) {
+            return res.status(400).json({ ok: false, error: 'Некорректный ID товара' });
+        }
+
+        // По умолчанию считаем товар доступным, если не указано обратное
+        const normalizedProduct = { ...product };
+        if (typeof normalizedProduct.available === 'undefined') {
+            normalizedProduct.available = true;
+        }
+
+        // Загружаем все существующие товары категории, чтобы не удалить их
+        const allProducts = await AdminProductsDB.loadAll();
+        const existingProducts = allProducts[categoryId] || [];
+        
+        // Проверяем, существует ли товар с таким ID
+        const existingIndex = existingProducts.findIndex(p => p.id === product.id);
+        
+        if (existingIndex >= 0) {
+            // Обновляем существующий товар
+            existingProducts[existingIndex] = normalizedProduct;
+        } else {
+            // Добавляем новый товар
+            existingProducts.push(normalizedProduct);
+        }
+        
+        // Сохраняем все товары категории (включая новый/обновленный)
+        await AdminProductsDB.saveAll({ [categoryId]: existingProducts });
+
+        logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
+        res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
+    } catch (error) {
+        logger.error('Ошибка сохранения товара:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Обновление товаров через админ панель
 app.put('/api/admin/products', (req, res, next) => {
     console.log('🔍 API PUT /api/admin/products: МАРШРУТ ВЫЗВАН!');
@@ -5384,51 +5429,6 @@ function cleanup() {
     
     logger.info('✅ Ресурсы очищены');
 }
-
-// Добавление/обновление одного товара в категории (админ)
-app.post('/api/admin/products/:categoryId', requireAdminAuth, async (req, res) => {
-    try {
-        const { categoryId } = req.params;
-        const { product } = req.body || {};
-
-        if (!categoryId || !product || typeof product !== 'object') {
-            return res.status(400).json({ ok: false, error: 'Некорректные данные товара' });
-        }
-        if (!product.id || typeof product.id !== 'string' || product.id.trim().length === 0) {
-            return res.status(400).json({ ok: false, error: 'Некорректный ID товара' });
-        }
-
-        // По умолчанию считаем товар доступным, если не указано обратное
-        const normalizedProduct = { ...product };
-        if (typeof normalizedProduct.available === 'undefined') {
-            normalizedProduct.available = true;
-        }
-
-        // Загружаем все существующие товары категории, чтобы не удалить их
-        const allProducts = await AdminProductsDB.loadAll();
-        const existingProducts = allProducts[categoryId] || [];
-        
-        // Проверяем, существует ли товар с таким ID
-        const existingIndex = existingProducts.findIndex(p => p.id === product.id);
-        
-        if (existingIndex >= 0) {
-            // Обновляем существующий товар
-            existingProducts[existingIndex] = normalizedProduct;
-        } else {
-            // Добавляем новый товар
-            existingProducts.push(normalizedProduct);
-        }
-        
-        // Сохраняем все товары категории (включая новый/обновленный)
-        await AdminProductsDB.saveAll({ [categoryId]: existingProducts });
-
-        logger.info(`Товар ${categoryId}/${product.id} добавлен/обновлен`);
-        res.json({ ok: true, message: 'Товар сохранен', product: normalizedProduct });
-    } catch (error) {
-        logger.error('Ошибка сохранения товара:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
 
 // Подключаем модульные роуты
 const ordersRouter = require('./routes/orders')(logger);
