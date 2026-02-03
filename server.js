@@ -489,7 +489,7 @@ async function loadFullProductCatalog() {
                 available: true
             }
         ],
-        'zamorozhennye': [
+        'polufabrikaty': [
             {
                 id: 'pelmeni-severnye',
                 name: 'Пельмени «Северные» с трюфелем',
@@ -545,9 +545,7 @@ async function loadFullProductCatalog() {
                 calories: '220 ккал/921 кДж',
                 storage: '10 месяцев',
                 available: true
-            }
-        ],
-        'polufabrikaty': [
+            },
             {
                 id: 'okorok-olene',
                 name: 'Окорок оленя',
