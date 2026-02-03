@@ -380,18 +380,18 @@ body {
 
 /* Список товаров */
 .products-list {
-    padding: 4px;
+    padding: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr)); /* 2 колонки, без переполнения */
-    gap: 6px; /* компактный отступ */
+    gap: 0; /* Без зазоров - фото соприкасаются */
 }
 
 .product-card {
     background: white;
-    border-radius: 18px;
-    padding: 4px;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.05);
-    border: 1px solid #eef2f5;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    border: none;
     transition: all 0.3s ease;
     cursor: pointer;
     display: flex;
@@ -408,12 +408,12 @@ body {
 .product-image {
     position: relative;
     width: 100%;
-    height: 190px; /* еще чуть ниже, чтобы визуально сузить */
-    margin-bottom: 6px;
-    border-radius: 16px;
+    height: 250px; /* Увеличена высота для лучшей видимости */
+    margin-bottom: 8px;
+    border-radius: 0; /* Без скругления - до краев */
     overflow: hidden;
     background: #f6f7f8;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+    box-shadow: none;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -423,7 +423,7 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: 0; /* Без скругления - до краев */
     display: block;
 }
 
@@ -445,6 +445,8 @@ body {
     font-weight: 600;
     color: #1A1F2E;
     margin-bottom: 2px;
+    margin-left: 8px;
+    margin-right: 8px;
     line-height: 1.1;
 }
 
@@ -494,6 +496,10 @@ body {
     font-size: 12px;
     font-weight: 700;
     box-shadow: 0 4px 12px rgba(255, 107, 107, 0.35);
+}
+
+.product-footer {
+    padding: 0 8px 8px 8px;
 }
 
 .product-actions {
@@ -1285,11 +1291,11 @@ body {
         padding: 15px;
     }
     .product-card {
-        padding: 15px;
+        padding: 0;
         min-height: 280px;
     }
     .product-image {
-        height: 140px; /* Уменьшаем для планшетов */
+        height: 200px; /* Увеличена для планшетов */
     }
     .detail-image {
         height: 280px; /* Уменьшаем для планшетов */
@@ -1319,11 +1325,11 @@ body {
         padding: 12px;
     }
     .product-card {
-        padding: 12px;
+        padding: 0;
         min-height: 250px;
     }
     .product-image {
-        height: 120px; /* Уменьшаем для телефонов */
+        height: 220px; /* Увеличена для телефонов */
     }
     .detail-image {
         height: 250px; /* Уменьшаем для телефонов */
@@ -1385,11 +1391,11 @@ body {
         padding: 10px;
     }
     .product-card {
-        padding: 10px;
+        padding: 0;
         min-height: 220px;
     }
     .product-image {
-        height: 100px; /* Уменьшаем для малых экранов */
+        height: 200px; /* Увеличена для малых экранов */
     }
     .detail-image {
         height: 220px; /* Уменьшаем для малых экранов */
