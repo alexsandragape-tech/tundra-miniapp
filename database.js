@@ -264,6 +264,20 @@ async function initializeDatabase() {
             END $$;
         `);
         
+        // Создаем таблицу баннеров
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS banners (
+                id SERIAL PRIMARY KEY,
+                image_url TEXT NOT NULL,
+                link_url TEXT,
+                sort_order INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT true,
+                auto_rotate_seconds INTEGER DEFAULT 5,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
         // Создаем индексы для производительности
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -273,6 +287,8 @@ async function initializeDatabase() {
                 CREATE INDEX IF NOT EXISTS idx_orders_promo_code ON orders(promo_code);
             CREATE INDEX IF NOT EXISTS idx_promo_codes_active ON promo_codes(is_active);
             CREATE INDEX IF NOT EXISTS idx_promo_code_usages_user ON promo_code_usages(user_id);
+            CREATE INDEX IF NOT EXISTS idx_banners_active ON banners(is_active);
+            CREATE INDEX IF NOT EXISTS idx_banners_sort ON banners(sort_order);
         `);
         
         
@@ -1261,6 +1277,105 @@ class BotUsersDB {
     }
 }
 
+// 🎨 ФУНКЦИИ ДЛЯ РАБОТЫ С БАННЕРАМИ
+class BannersDB {
+    // Получить все активные баннеры (для фронтенда)
+    static async getActive() {
+        return await retryDbOperation(async () => {
+            const query = `
+                SELECT id, image_url, link_url, auto_rotate_seconds, sort_order
+                FROM banners
+                WHERE is_active = true
+                ORDER BY sort_order ASC, created_at ASC
+            `;
+            const result = await pool.query(query);
+            return result.rows;
+        });
+    }
+    
+    // Получить все баннеры (для админки)
+    static async getAll() {
+        return await retryDbOperation(async () => {
+            const query = `
+                SELECT id, image_url, link_url, sort_order, is_active, auto_rotate_seconds, created_at, updated_at
+                FROM banners
+                ORDER BY sort_order ASC, created_at ASC
+            `;
+            const result = await pool.query(query);
+            return result.rows;
+        });
+    }
+    
+    // Получить один баннер по ID
+    static async getById(id) {
+        return await retryDbOperation(async () => {
+            const query = `
+                SELECT id, image_url, link_url, sort_order, is_active, auto_rotate_seconds, created_at, updated_at
+                FROM banners
+                WHERE id = $1
+            `;
+            const result = await pool.query(query, [id]);
+            return result.rows[0] || null;
+        });
+    }
+    
+    // Создать баннер
+    static async create(bannerData) {
+        return await retryDbOperation(async () => {
+            const { image_url, link_url, sort_order, is_active, auto_rotate_seconds } = bannerData;
+            const query = `
+                INSERT INTO banners (image_url, link_url, sort_order, is_active, auto_rotate_seconds)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, image_url, link_url, sort_order, is_active, auto_rotate_seconds, created_at, updated_at
+            `;
+            const result = await pool.query(query, [
+                image_url,
+                link_url || null,
+                sort_order || 0,
+                is_active !== undefined ? is_active : true,
+                auto_rotate_seconds || 5
+            ]);
+            return result.rows[0];
+        });
+    }
+    
+    // Обновить баннер
+    static async update(id, bannerData) {
+        return await retryDbOperation(async () => {
+            const { image_url, link_url, sort_order, is_active, auto_rotate_seconds } = bannerData;
+            const query = `
+                UPDATE banners
+                SET image_url = COALESCE($1, image_url),
+                    link_url = COALESCE($2, link_url),
+                    sort_order = COALESCE($3, sort_order),
+                    is_active = COALESCE($4, is_active),
+                    auto_rotate_seconds = COALESCE($5, auto_rotate_seconds),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $6
+                RETURNING id, image_url, link_url, sort_order, is_active, auto_rotate_seconds, created_at, updated_at
+            `;
+            const result = await pool.query(query, [
+                image_url,
+                link_url !== undefined ? link_url : null,
+                sort_order,
+                is_active,
+                auto_rotate_seconds,
+                id
+            ]);
+            return result.rows[0] || null;
+        });
+    }
+    
+    // Удалить баннер
+    static async delete(id) {
+        return await retryDbOperation(async () => {
+            const query = `DELETE FROM banners WHERE id = $1 RETURNING id`;
+            const result = await pool.query(query, [id]);
+            return result.rows[0] || null;
+        });
+    }
+}
+
 // Экспортируем все функции
 module.exports = {
     pool,
@@ -1270,5 +1385,6 @@ module.exports = {
     AdminProductsDB,
     CategoriesDB,
     BotUsersDB,
-    PromoCodesDB
+    PromoCodesDB,
+    BannersDB
 };
