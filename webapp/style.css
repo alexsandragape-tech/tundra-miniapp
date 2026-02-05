@@ -780,7 +780,7 @@ body {
 .detail-image-img {
     width: 100%;
     height: 100%;
-    object-fit: cover; /* Заполняем весь контейнер */
+    object-fit: contain; /* Показываем изображение целиком без обрезки */
     object-position: center; /* Центрируем изображение */
     display: block;
     border-radius: 0;
