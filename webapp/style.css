@@ -490,6 +490,7 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    height: 100%;
     min-width: 0; /* не раздвигаем колонки */
 }
 
@@ -591,6 +592,7 @@ body {
 
 .product-footer {
     padding: 0 8px 8px 8px;
+    margin-top: auto;
 }
 
 .product-actions {
