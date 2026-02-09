@@ -19,6 +19,18 @@
     <link rel="stylesheet" href="admin-style.css">
 </head>
 <body>
+    <div class="admin-login-overlay hidden" id="admin-login">
+        <div class="admin-login-card">
+            <h2>Вход в админ-панель</h2>
+            <p class="admin-login-subtitle">Введите пароль администратора</p>
+            <form id="admin-login-form">
+                <label for="admin-password-input">Пароль</label>
+                <input type="password" id="admin-password-input" autocomplete="current-password" required>
+                <button type="submit" class="btn primary">Войти</button>
+                <div class="admin-login-error" id="admin-login-error"></div>
+            </form>
+        </div>
+    </div>
     <div class="admin-container">
         <!-- 📱 МОБИЛЬНЫЙ ХЕДЕР -->
         <div class="mobile-header">
