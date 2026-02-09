@@ -34,14 +34,79 @@ const categories = {
 let hasUnsavedChanges = false;
 let currentEditingProduct = null;
 let adminPassword = null;
+let adminInitialized = false;
 
-// Получаем пароль из URL
+const ADMIN_PASSWORD_STORAGE_KEY = 'tundra_admin_password';
+
+// Получаем пароль (localStorage -> memory)
 function getAdminPassword() {
     if (!adminPassword) {
-        const urlParams = new URLSearchParams(window.location.search);
-        adminPassword = urlParams.get('password');
+        adminPassword = localStorage.getItem(ADMIN_PASSWORD_STORAGE_KEY);
     }
     return adminPassword;
+}
+
+function setAdminPassword(password) {
+    adminPassword = password;
+    localStorage.setItem(ADMIN_PASSWORD_STORAGE_KEY, password);
+}
+
+function stripPasswordFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('password')) {
+        const password = urlParams.get('password');
+        if (password) {
+            setAdminPassword(password);
+        }
+        urlParams.delete('password');
+        const newQuery = urlParams.toString();
+        const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', newUrl);
+    }
+}
+
+function showLoginOverlay() {
+    const overlay = document.getElementById('admin-login');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+    }
+}
+
+function hideLoginOverlay() {
+    const overlay = document.getElementById('admin-login');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+}
+
+function handleAuthError() {
+    localStorage.removeItem(ADMIN_PASSWORD_STORAGE_KEY);
+    adminPassword = null;
+    adminInitialized = false;
+    showLoginOverlay();
+}
+
+async function validateAdminPassword(password) {
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/products`, {
+            headers: { 'X-Admin-Password': password }
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Ошибка проверки пароля:', error);
+        return false;
+    }
+}
+
+function startAdminPanel() {
+    if (adminInitialized) return;
+    adminInitialized = true;
+
+    loadProducts();
+    // Загрузим видимость категорий для корректных подписей кнопок
+    refreshCategoryVisibility().catch(() => {});
+    // Загрузим актуальные названия категорий из БД и применим к UI
+    loadCategoryNamesFromServer().catch(() => {});
 }
 
 // Инициализация админ панели
@@ -71,11 +136,42 @@ document.addEventListener('DOMContentLoaded', () => {
         editPromo: typeof window.editPromo
     });
     
-    loadProducts();
-    // Загрузим видимость категорий для корректных подписей кнопок
-    refreshCategoryVisibility().catch(() => {});
-    // Загрузим актуальные названия категорий из БД и применим к UI
-    loadCategoryNamesFromServer().catch(() => {});
+    stripPasswordFromUrl();
+
+    const loginForm = document.getElementById('admin-login-form');
+    const loginInput = document.getElementById('admin-password-input');
+    const loginError = document.getElementById('admin-login-error');
+
+    if (loginForm && loginInput) {
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const password = loginInput.value.trim();
+            if (!password) {
+                if (loginError) loginError.textContent = 'Введите пароль.';
+                return;
+            }
+            if (loginError) loginError.textContent = 'Проверяем пароль...';
+
+            const isValid = await validateAdminPassword(password);
+            if (!isValid) {
+                if (loginError) loginError.textContent = 'Неверный пароль. Попробуйте снова.';
+                return;
+            }
+
+            setAdminPassword(password);
+            hideLoginOverlay();
+            if (loginError) loginError.textContent = '';
+            loginInput.value = '';
+            startAdminPanel();
+        });
+    }
+
+    if (getAdminPassword()) {
+        hideLoginOverlay();
+        startAdminPanel();
+    } else {
+        showLoginOverlay();
+    }
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
@@ -140,6 +236,12 @@ async function loadProductsFromServer() {
         });
         
         console.log('🔍 Ответ сервера:', response.status, response.statusText);
+
+        if (response.status === 401 || response.status === 403) {
+            console.warn('⛔ Неверный пароль администратора');
+            handleAuthError();
+            throw new Error('Unauthorized');
+        }
         
         if (response.ok) {
             const result = await response.json();
@@ -2623,7 +2725,13 @@ async function handleBannerFormSubmit(e) {
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
-            throw new Error(error.error || 'Не удалось сохранить баннер');
+            const errorMessage = error.error || error.details || 'Не удалось сохранить баннер';
+            console.error('Ошибка ответа сервера:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: error
+            });
+            throw new Error(errorMessage);
         }
         
         const data = await response.json();
