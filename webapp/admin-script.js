@@ -34,121 +34,18 @@ const categories = {
 let hasUnsavedChanges = false;
 let currentEditingProduct = null;
 let adminPassword = null;
-let adminInitialized = false;
 
-const ADMIN_PASSWORD_STORAGE_KEY = 'tundra_admin_password';
-const ADMIN_PASSWORD_COOKIE = 'tundra_admin_password';
-
-function safeGetStorage(storage, key) {
-    try {
-        return storage.getItem(key);
-    } catch (_) {
-        return null;
-    }
-}
-
-function safeSetStorage(storage, key, value) {
-    try {
-        storage.setItem(key, value);
-    } catch (_) {}
-}
-
-function safeRemoveStorage(storage, key) {
-    try {
-        storage.removeItem(key);
-    } catch (_) {}
-}
-
-function getCookie(name) {
-    const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()[\\]\\/+^])/g, '\\$1')}=([^;]*)`));
-    return match ? decodeURIComponent(match[1]) : null;
-}
-
-function setCookie(name, value, days = 30) {
-    const maxAge = days * 24 * 60 * 60;
-    document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
-}
-
-function clearCookie(name) {
-    document.cookie = `${name}=; max-age=0; path=/; samesite=lax`;
-}
-
-// Получаем пароль (localStorage -> sessionStorage -> cookie -> memory)
+// Получаем пароль из URL
 function getAdminPassword() {
     if (!adminPassword) {
-        adminPassword =
-            safeGetStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY) ||
-            safeGetStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY) ||
-            getCookie(ADMIN_PASSWORD_COOKIE);
+        const urlParams = new URLSearchParams(window.location.search);
+        adminPassword = urlParams.get('password');
     }
     return adminPassword;
 }
 
-function setAdminPassword(password) {
-    adminPassword = password;
-    safeSetStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY, password);
-    safeSetStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY, password);
-    setCookie(ADMIN_PASSWORD_COOKIE, password, 30);
-}
-
-function stripPasswordFromUrl() {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('password')) {
-        const password = urlParams.get('password');
-        if (password) {
-            setAdminPassword(password);
-        }
-        urlParams.delete('password');
-        const newQuery = urlParams.toString();
-        const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}${window.location.hash}`;
-        window.history.replaceState({}, '', newUrl);
-    }
-}
-
-function showLoginOverlay() {
-    const overlay = document.getElementById('admin-login');
-    if (overlay) {
-        overlay.classList.remove('hidden');
-    }
-}
-
-function hideLoginOverlay() {
-    const overlay = document.getElementById('admin-login');
-    if (overlay) {
-        overlay.classList.add('hidden');
-    }
-}
-
 function handleAuthError() {
-    safeRemoveStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY);
-    safeRemoveStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY);
-    clearCookie(ADMIN_PASSWORD_COOKIE);
     adminPassword = null;
-    adminInitialized = false;
-    showLoginOverlay();
-}
-
-async function validateAdminPassword(password) {
-    try {
-        const response = await fetch(`${API_BASE}/api/admin/products`, {
-            headers: { 'X-Admin-Password': password }
-        });
-        return response.ok;
-    } catch (error) {
-        console.error('Ошибка проверки пароля:', error);
-        return false;
-    }
-}
-
-function startAdminPanel() {
-    if (adminInitialized) return;
-    adminInitialized = true;
-
-    loadProducts();
-    // Загрузим видимость категорий для корректных подписей кнопок
-    refreshCategoryVisibility().catch(() => {});
-    // Загрузим актуальные названия категорий из БД и применим к UI
-    loadCategoryNamesFromServer().catch(() => {});
 }
 
 // Инициализация админ панели
@@ -178,42 +75,11 @@ document.addEventListener('DOMContentLoaded', () => {
         editPromo: typeof window.editPromo
     });
     
-    stripPasswordFromUrl();
-
-    const loginForm = document.getElementById('admin-login-form');
-    const loginInput = document.getElementById('admin-password-input');
-    const loginError = document.getElementById('admin-login-error');
-
-    if (loginForm && loginInput) {
-        loginForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const password = loginInput.value.trim();
-            if (!password) {
-                if (loginError) loginError.textContent = 'Введите пароль.';
-                return;
-            }
-            if (loginError) loginError.textContent = 'Проверяем пароль...';
-
-            const isValid = await validateAdminPassword(password);
-            if (!isValid) {
-                if (loginError) loginError.textContent = 'Неверный пароль. Попробуйте снова.';
-                return;
-            }
-
-            setAdminPassword(password);
-            hideLoginOverlay();
-            if (loginError) loginError.textContent = '';
-            loginInput.value = '';
-            startAdminPanel();
-        });
-    }
-
-    if (getAdminPassword()) {
-        hideLoginOverlay();
-        startAdminPanel();
-    } else {
-        showLoginOverlay();
-    }
+    loadProducts();
+    // Загрузим видимость категорий для корректных подписей кнопок
+    refreshCategoryVisibility().catch(() => {});
+    // Загрузим актуальные названия категорий из БД и применим к UI
+    loadCategoryNamesFromServer().catch(() => {});
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
@@ -246,18 +112,14 @@ async function loadProducts() {
     try {
         showNotification('Загружаем товары...', 'info');
         
-        // Сначала показываем локальные товары, чтобы не было пустого экрана
+    // Пытаемся загрузить с сервера, fallback на локальные данные
+    const loadedFromServer = await loadProductsFromServer();
+    if (!loadedFromServer) {
         await loadProductsFromClient();
-        renderProducts();
-        updateStats();
+    }
 
-        // Затем пробуем заменить данными с сервера
-        const loadedFromServer = await loadProductsFromServer();
-        if (loadedFromServer) {
-            renderProducts();
-            updateStats();
-        }
-
+    renderProducts();
+    updateStats();
         showNotification('Товары загружены успешно!', 'success');
         
     } catch (error) {
