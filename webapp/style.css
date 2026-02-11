@@ -83,6 +83,10 @@ body {
     overflow-x: hidden;
 }
 
+body.modal-open {
+    overflow: hidden;
+}
+
 .screen {
     display: none;
     width: 100%;
@@ -352,27 +356,31 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
-    padding: 12px 0;
-    position: relative;
+    gap: 5px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
     z-index: 10;
+    pointer-events: none;
 }
 
 .banner-indicator {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: rgba(11, 92, 86, 0.3);
     cursor: pointer;
     transition: all 0.3s ease;
     border: none;
     padding: 0;
+    pointer-events: auto;
 }
 
 .banner-indicator.active {
     background: #0b5c56;
-    width: 24px;
-    border-radius: 4px;
+    width: 14px;
+    border-radius: 3px;
 }
 
 .banner-indicator:hover {
@@ -1258,6 +1266,8 @@ body {
     max-width: 400px;
     max-height: 80vh;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     animation: slideIn 0.3s ease-out;
 }
 
@@ -1298,6 +1308,10 @@ body {
 
 .modal-body {
     padding: 25px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    min-height: 0;
 }
 
 .about-text {
