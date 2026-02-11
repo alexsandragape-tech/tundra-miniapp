@@ -37,18 +37,58 @@ let adminPassword = null;
 let adminInitialized = false;
 
 const ADMIN_PASSWORD_STORAGE_KEY = 'tundra_admin_password';
+const ADMIN_PASSWORD_COOKIE = 'tundra_admin_password';
 
-// Получаем пароль (localStorage -> memory)
+function safeGetStorage(storage, key) {
+    try {
+        return storage.getItem(key);
+    } catch (_) {
+        return null;
+    }
+}
+
+function safeSetStorage(storage, key, value) {
+    try {
+        storage.setItem(key, value);
+    } catch (_) {}
+}
+
+function safeRemoveStorage(storage, key) {
+    try {
+        storage.removeItem(key);
+    } catch (_) {}
+}
+
+function getCookie(name) {
+    const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()[\\]\\/+^])/g, '\\$1')}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookie(name, value, days = 30) {
+    const maxAge = days * 24 * 60 * 60;
+    document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
+}
+
+function clearCookie(name) {
+    document.cookie = `${name}=; max-age=0; path=/; samesite=lax`;
+}
+
+// Получаем пароль (localStorage -> sessionStorage -> cookie -> memory)
 function getAdminPassword() {
     if (!adminPassword) {
-        adminPassword = localStorage.getItem(ADMIN_PASSWORD_STORAGE_KEY);
+        adminPassword =
+            safeGetStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY) ||
+            safeGetStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY) ||
+            getCookie(ADMIN_PASSWORD_COOKIE);
     }
     return adminPassword;
 }
 
 function setAdminPassword(password) {
     adminPassword = password;
-    localStorage.setItem(ADMIN_PASSWORD_STORAGE_KEY, password);
+    safeSetStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY, password);
+    safeSetStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY, password);
+    setCookie(ADMIN_PASSWORD_COOKIE, password, 30);
 }
 
 function stripPasswordFromUrl() {
@@ -80,7 +120,9 @@ function hideLoginOverlay() {
 }
 
 function handleAuthError() {
-    localStorage.removeItem(ADMIN_PASSWORD_STORAGE_KEY);
+    safeRemoveStorage(localStorage, ADMIN_PASSWORD_STORAGE_KEY);
+    safeRemoveStorage(sessionStorage, ADMIN_PASSWORD_STORAGE_KEY);
+    clearCookie(ADMIN_PASSWORD_COOKIE);
     adminPassword = null;
     adminInitialized = false;
     showLoginOverlay();
