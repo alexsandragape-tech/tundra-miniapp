@@ -246,20 +246,18 @@ async function loadProducts() {
     try {
         showNotification('Загружаем товары...', 'info');
         
-        // Пытаемся загрузить с сервера, fallback на локальные данные
-        const loadedFromServer = await loadProductsFromServer();
-        if (!loadedFromServer) {
-            await loadProductsFromClient();
-        }
-
-        // Дополнительная страховка на случай пустого ответа
-        if (!products || Object.keys(products).length === 0) {
-            console.warn('⚠️ Товары пустые после загрузки, используем локальные данные');
-            await loadProductsFromClient();
-        }
-        
+        // Сначала показываем локальные товары, чтобы не было пустого экрана
+        await loadProductsFromClient();
         renderProducts();
         updateStats();
+
+        // Затем пробуем заменить данными с сервера
+        const loadedFromServer = await loadProductsFromServer();
+        if (loadedFromServer) {
+            renderProducts();
+            updateStats();
+        }
+
         showNotification('Товары загружены успешно!', 'success');
         
     } catch (error) {
