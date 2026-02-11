@@ -511,7 +511,8 @@ body.modal-open {
 .product-image {
     position: relative;
     width: 100%;
-    height: 250px; /* Увеличена высота для лучшей видимости */
+    height: auto;
+    aspect-ratio: 1 / 1; /* Квадрат под 1:1 фото */
     margin: 0; /* Убраны все отступы */
     border-radius: 0; /* Без скругления - до краев */
     overflow: hidden;
@@ -525,7 +526,7 @@ body.modal-open {
 .product-image-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain; /* Показываем изображение целиком без обрезки */
     border-radius: 0; /* Без скругления - до краев */
     display: block;
 }
@@ -1404,7 +1405,8 @@ body.modal-open {
         min-height: 280px;
     }
     .product-image {
-        height: 200px; /* Увеличена для планшетов */
+        height: auto;
+        aspect-ratio: 1 / 1;
     }
     .detail-image {
         height: auto;
@@ -1439,7 +1441,8 @@ body.modal-open {
         min-height: 250px;
     }
     .product-image {
-        height: 220px; /* Увеличена для телефонов */
+        height: auto;
+        aspect-ratio: 1 / 1;
     }
     .detail-image {
         height: auto;
