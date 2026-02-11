@@ -1943,6 +1943,7 @@ function showAbout() {
     const modal = document.getElementById('about-modal');
     if (modal) {
         modal.classList.add('active');
+        document.body.classList.add('modal-open');
     }
 }
 
@@ -1950,6 +1951,7 @@ function hideAbout() {
     const modal = document.getElementById('about-modal');
     if (modal) {
         modal.classList.remove('active');
+        document.body.classList.remove('modal-open');
     }
 }
 
@@ -2814,22 +2816,38 @@ function renderBanners() {
     
     // Добавляем обработчики свайпа
     let touchStartX = 0;
+    let touchStartY = 0;
     let touchEndX = 0;
+    let touchEndY = 0;
     
     container.addEventListener('touchstart', (e) => {
         touchStartX = e.changedTouches[0].screenX;
-    });
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (!e.changedTouches || e.changedTouches.length === 0) return;
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        const diffX = Math.abs(touchStartX - touchEndX);
+        const diffY = Math.abs(touchStartY - touchEndY);
+        if (diffX > diffY && diffX > 10) {
+            e.preventDefault();
+        }
+    }, { passive: false });
     
     container.addEventListener('touchend', (e) => {
         touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
         handleBannerSwipe();
     });
     
     function handleBannerSwipe() {
         const swipeThreshold = 50;
         const diff = touchStartX - touchEndX;
+        const diffY = Math.abs(touchStartY - touchEndY);
         
-        if (Math.abs(diff) > swipeThreshold) {
+        if (Math.abs(diff) > swipeThreshold && Math.abs(diff) > diffY) {
             if (diff > 0) {
                 // Свайп влево - следующий баннер
                 nextBanner();
