@@ -2819,16 +2819,21 @@ function renderBanners() {
     let touchStartY = 0;
     let touchEndX = 0;
     let touchEndY = 0;
+    let isSwiping = false;
     
-    container.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
+    carousel.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        touchStartX = e.touches[0].screenX;
+        touchStartY = e.touches[0].screenY;
+        touchEndX = touchStartX;
+        touchEndY = touchStartY;
+        isSwiping = true;
     }, { passive: true });
 
-    container.addEventListener('touchmove', (e) => {
-        if (!e.changedTouches || e.changedTouches.length === 0) return;
-        touchEndX = e.changedTouches[0].screenX;
-        touchEndY = e.changedTouches[0].screenY;
+    carousel.addEventListener('touchmove', (e) => {
+        if (!isSwiping || !e.touches || e.touches.length === 0) return;
+        touchEndX = e.touches[0].screenX;
+        touchEndY = e.touches[0].screenY;
         const diffX = Math.abs(touchStartX - touchEndX);
         const diffY = Math.abs(touchStartY - touchEndY);
         if (diffX > diffY && diffX > 10) {
@@ -2836,10 +2841,14 @@ function renderBanners() {
         }
     }, { passive: false });
     
-    container.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        touchEndY = e.changedTouches[0].screenY;
+    carousel.addEventListener('touchend', (e) => {
+        if (!isSwiping) return;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+        }
         handleBannerSwipe();
+        isSwiping = false;
     });
     
     function handleBannerSwipe() {
