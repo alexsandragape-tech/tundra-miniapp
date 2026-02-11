@@ -289,7 +289,8 @@ async function loadProductsFromServer() {
             const result = await response.json();
             console.log('🔍 Данные с сервера:', result);
             
-            if (result.ok && result.products) {
+            const hasProducts = result.ok && result.products && Object.keys(result.products).length > 0;
+            if (hasProducts) {
                 console.log('✅ Товары загружены с сервера для админ панели');
                 products = result.products;
                 originalProducts = JSON.parse(JSON.stringify(products));
@@ -315,7 +316,7 @@ async function loadProductsFromServer() {
             }
         }
         
-        console.log('⚠️ Не удалось загрузить с сервера, используем локальные данные');
+        console.log('⚠️ Не удалось загрузить с сервера или товаров нет, используем локальные данные');
         return false;
     } catch (error) {
         console.error('❌ Ошибка загрузки с сервера:', error);
