@@ -251,6 +251,12 @@ async function loadProducts() {
         if (!loadedFromServer) {
             await loadProductsFromClient();
         }
+
+        // Дополнительная страховка на случай пустого ответа
+        if (!products || Object.keys(products).length === 0) {
+            console.warn('⚠️ Товары пустые после загрузки, используем локальные данные');
+            await loadProductsFromClient();
+        }
         
         renderProducts();
         updateStats();
