@@ -287,7 +287,7 @@ const categories = [
         name: 'Паштеты',
         desc: 'Рийеты с трюфелем и грибами',
         icon: '🥫',
-        imageUrl: 'images/categories/паштеты .png',
+        imageUrl: 'images/categories/pashtet.jpg',
         count: 4
     },
     {
