@@ -325,6 +325,7 @@ body.modal-open {
     width: 100%;
     margin-bottom: 10px;
     overflow: hidden;
+    touch-action: pan-y;
 }
 
 .banners-container {
