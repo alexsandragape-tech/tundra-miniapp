@@ -1304,6 +1304,42 @@ function renderPriceControl(cartKey, qty) {
     }
 }
 
+function parseMacroValue(text, pattern) {
+    if (!text) return null;
+    const match = text.match(pattern);
+    return match ? match[1].replace(',', '.') : null;
+}
+
+function getDetailWeight(unit) {
+    if (!unit) return '';
+    const match = unit.match(/(\d+(?:[.,]\d+)?)\s*(г|гр)/i);
+    if (!match) return '';
+    return `${match[1].replace(',', '.')} г`;
+}
+
+function getDetailNutrition(product) {
+    const nutritionText = product?.nutrition || '';
+    const caloriesText = product?.calories || '';
+    const kcal = parseMacroValue(caloriesText, /(\d+(?:[.,]\d+)?)\s*ккал/i);
+    const protein = parseMacroValue(nutritionText, /белк[аи]?\s*[-–]?\s*(\d+(?:[.,]\d+)?)/i);
+    const fat = parseMacroValue(nutritionText, /жир[ыа]?\s*[-–]?\s*(\d+(?:[.,]\d+)?)/i);
+    const carbs = parseMacroValue(nutritionText, /углевод[ыа]?\s*[-–]?\s*(\d+(?:[.,]\d+)?)/i);
+    return {
+        kcal: kcal || '—',
+        protein: protein || '—',
+        fat: fat || '—',
+        carbs: carbs || '—'
+    };
+}
+
+function closeProductDetail() {
+    if (currentProduct?.categoryId) {
+        showCategory(currentProduct.categoryId);
+    } else {
+        showMain();
+    }
+}
+
 function showProductDetail(categoryId, productId) {
     currentProduct = { categoryId, productId };
     const product = products[categoryId].find(p => p.id === productId);
@@ -1327,39 +1363,78 @@ function showProductDetail(categoryId, productId) {
            </div>`
         : `<div class="detail-price">${formatPriceValue(product.price)}₽${product.unit}</div>`;
     const detailBadge = promoActive ? '<div class="detail-badge">Акция</div>' : '';
+    const detailWeight = getDetailWeight(product.unit);
+    const nutrition = getDetailNutrition(product);
+    const bottomPriceHtml = promoActive
+        ? `<div class="detail-bottom-price">
+                <div class="current">${formatPriceValue(getProductActivePrice(product))}₽</div>
+                <div class="old">${formatPriceValue(product.price)}₽</div>
+           </div>`
+        : `<div class="detail-bottom-price">
+                <div class="current">${formatPriceValue(getProductActivePrice(product))}₽</div>
+           </div>`;
     
     document.getElementById('product-detail').innerHTML = `
         <div class="detail-image">
             ${detailImageContent}
             ${detailEmojiContent}
+            <button class="detail-close-btn" onclick="closeProductDetail()" aria-label="Закрыть">×</button>
         </div>
-        <div class="detail-name">${product.name}</div>
-        ${detailPriceHtml}
-        ${detailBadge}
-        
-        <div class="detail-info">
-            <h4>Состав:</h4>
-            <p>${product.composition}</p>
-            
-            <h4>Пищевая ценность:</h4>
-            <p>${product.nutrition}</p>
-            
-            <h4>Калорийность:</h4>
-            <p>${product.calories}</p>
-            
-            <h4>Срок хранения:</h4>
-            <p>${product.storage}</p>
-        </div>
-        
-        <div class="product-actions">
-            <div class="quantity-selector" id="detail-qty-selector" style="display: none;">
-                <button class="qty-btn" onclick="changeDetailQuantity(-1)" id="qty-minus">-</button>
-                <div class="qty-display" id="detail-quantity">1</div>
-                <button class="qty-btn" onclick="changeDetailQuantity(1)" id="qty-plus">+</button>
+        <div class="detail-scroll">
+            <div class="detail-name">
+                ${product.name}${detailWeight ? ` <span class="detail-weight">${detailWeight}</span>` : ''}
             </div>
-            <button class="add-to-cart-btn" id="detail-add-btn" onclick="addFromDetail()">
-                Добавить в корзину
-            </button>
+            ${detailPriceHtml}
+            ${detailBadge}
+
+            <div class="detail-divider"></div>
+            <div class="detail-nutrition">
+                <div class="detail-nutrition-title">На 100 г</div>
+                <div class="detail-nutrition-grid">
+                    <div class="detail-nutrition-item">
+                        <div class="value">${nutrition.kcal}</div>
+                        <div class="label">ккал</div>
+                    </div>
+                    <div class="detail-nutrition-item">
+                        <div class="value">${nutrition.protein}</div>
+                        <div class="label">белки</div>
+                    </div>
+                    <div class="detail-nutrition-item">
+                        <div class="value">${nutrition.fat}</div>
+                        <div class="label">жиры</div>
+                    </div>
+                    <div class="detail-nutrition-item">
+                        <div class="value">${nutrition.carbs}</div>
+                        <div class="label">углеводы</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-divider"></div>
+            <div class="detail-info">
+                <h4>Состав:</h4>
+                <p>${product.composition}</p>
+            </div>
+
+            <div class="detail-divider"></div>
+            <div class="detail-info">
+                <h4>Условия хранения:</h4>
+                <p>${product.storage}</p>
+            </div>
+        </div>
+
+        <div class="detail-bottom-bar">
+            ${bottomPriceHtml}
+            <div class="product-actions">
+                <div class="quantity-selector" id="detail-qty-selector" style="display: none;">
+                    <button class="qty-btn" onclick="changeDetailQuantity(-1)" id="qty-minus">-</button>
+                    <div class="qty-display" id="detail-quantity">1</div>
+                    <button class="qty-btn" onclick="changeDetailQuantity(1)" id="qty-plus">+</button>
+                </div>
+                <button class="add-to-cart-btn" id="detail-add-btn" onclick="addFromDetail()">
+                    В корзину
+                </button>
+            </div>
         </div>
     `;
 
