@@ -2348,20 +2348,20 @@ function displayOrderDetails(order) {
     
     content.innerHTML = `
         <div class="order-detail-section">
-            <div class="order-detail-title">📋 Информация о заказе</div>
+            <div class="order-detail-title">Информация о заказе</div>
             <div><strong>Дата:</strong> ${orderDate ? new Date(orderDate).toLocaleDateString('ru-RU') : 'Не указана'}</div>
             <div><strong>Время:</strong> ${orderDate ? new Date(orderDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Не указано'}</div>
             <div><strong>Сумма:</strong> ${orderAmount}₽</div>
         </div>
         
         <div class="order-detail-section">
-            <div class="order-detail-title">📍 Адрес доставки</div>
+            <div class="order-detail-title">Адрес доставки</div>
             <div>${fullAddress}</div>
             <div><strong>Зона:</strong> ${order.delivery_zone === 'moscow' ? 'Москва' : 'МО'}</div>
         </div>
         
         <div class="order-detail-section">
-            <div class="order-detail-title">🛍️ Состав заказа</div>
+            <div class="order-detail-title">Состав заказа</div>
             <ul class="order-items-list">
                 ${items.map(item => `
                     <li>
