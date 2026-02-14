@@ -111,7 +111,7 @@ body.modal-open {
 }
 
 #product-detail-screen {
-    background: #f5f6f7;
+    background: #eef0f2;
 }
 
 #product-detail-screen .page-header {
@@ -798,7 +798,7 @@ body.modal-open {
     flex-direction: column;
     overflow: hidden;
     margin-top: 8px;
-    border-radius: 18px 18px 0 0;
+    border-radius: 24px 24px 0 0;
 }
 
 .detail-image {
@@ -875,7 +875,7 @@ body.modal-open {
 }
 
 .detail-weight {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 600;
     color: #9aa0a6;
     margin-left: 8px;
@@ -993,7 +993,7 @@ body.modal-open {
 }
 
 .detail-bottom-price .current {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 700;
     color: #0b5c56;
 }
@@ -1009,6 +1009,7 @@ body.modal-open {
 .detail-bottom-bar .product-actions {
     margin: 0;
     width: auto;
+    align-items: center;
     justify-content: flex-end;
 }
 
@@ -1027,6 +1028,7 @@ body.modal-open {
     height: 44px;
     border-radius: 12px;
     padding: 4px 10px;
+    align-items: center;
 }
 
 .quantity-selector {
