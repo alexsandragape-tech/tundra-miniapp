@@ -243,6 +243,22 @@ body.modal-open {
     justify-content: space-between; /* Распределяем элементы по краям */
     margin-bottom: 0; /* Убираем отступ снизу */
 }
+
+.order-details-close {
+    background: #ffffff;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 22px;
+    line-height: 1;
+    color: #1A1F2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+}
 .top-icon,
 .top-btn-icon {
     width: 26px;
