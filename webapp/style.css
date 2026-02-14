@@ -65,12 +65,12 @@
     font-style: italic;
 }
 
-/* Подключаем локальный шрифт Commissioner Black */
+/* Подключаем локальный шрифт Commissioner Bold */
 @font-face {
     font-family: 'Commissioner';
-    src: url('fonts/Commissioner-Black.ttf') format('truetype');
+    src: url('fonts/Commissioner-Bold.ttf') format('truetype');
     font-display: swap;
-    font-weight: 900;
+    font-weight: 700;
     font-style: normal;
 }
 
