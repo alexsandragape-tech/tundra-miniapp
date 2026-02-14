@@ -1384,7 +1384,6 @@ function showProductDetail(categoryId, productId) {
             <div class="detail-name">
                 ${product.name}${detailWeight ? ` <span class="detail-weight">${detailWeight}</span>` : ''}
             </div>
-            ${detailPriceHtml}
             ${detailBadge}
 
             <div class="detail-divider"></div>
