@@ -1037,6 +1037,8 @@ body.modal-open {
 .detail-bottom-price {
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    height: 44px;
     gap: 2px;
 }
 
