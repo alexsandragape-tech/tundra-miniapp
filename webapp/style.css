@@ -1060,14 +1060,14 @@ body.modal-open {
 
 .detail-bottom-bar .product-actions {
     margin: 0;
-    width: auto;
+    width: 180px;
     align-items: center;
     justify-content: flex-end;
 }
 
 .detail-bottom-bar .add-to-cart-btn {
-    width: auto;
-    height: 44px;
+    width: 180px;
+    height: 48px;
     padding: 0 20px;
     border-radius: 12px;
     background: #0b5c56;
@@ -1078,13 +1078,19 @@ body.modal-open {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
+    font-weight: 300;
 }
 
 .detail-bottom-bar .quantity-selector {
-    height: 44px;
+    width: 180px;
+    height: 48px;
     border-radius: 12px;
-    padding: 4px 10px;
+    padding: 4px 12px;
     align-items: center;
+    justify-content: space-between;
+    font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
+    font-weight: 300;
 }
 
 .quantity-selector {
