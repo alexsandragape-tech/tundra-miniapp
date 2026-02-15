@@ -1047,7 +1047,7 @@ body.modal-open {
     font-weight: 700;
     color: #0b5c56;
     line-height: 1;
-    transform: translateY(-2px);
+    transform: translateY(-4px);
 }
 
 .detail-bottom-price .old {
