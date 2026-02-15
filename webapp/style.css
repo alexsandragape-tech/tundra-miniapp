@@ -101,6 +101,26 @@ body {
     overflow-x: hidden;
 }
 
+/* Цифры в легком начертании */
+.pc-price,
+.pc-qty,
+.qty-display,
+.detail-bottom-price .current,
+.detail-bottom-price .old,
+.detail-nutrition-item .value,
+.item-price,
+.order-amount,
+.order-amount-success,
+.order-number-success,
+.order-number,
+.order-date,
+.cart-badge,
+.menu-item-badge {
+    font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
+    font-weight: 300;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Заголовки на Commissioner Bold */
 .page-title,
 .menu-item-text,
