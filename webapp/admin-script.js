@@ -1167,6 +1167,7 @@ function editProduct(categoryId, productId) {
     document.getElementById('edit-imageUrl').value = product.imageUrl || '';
     document.getElementById('edit-composition').value = product.composition || '';
     document.getElementById('edit-nutrition').value = product.nutrition || '';
+    document.getElementById('edit-calories').value = product.calories || '';
     document.getElementById('edit-storage').value = product.storage || '';
     document.getElementById('edit-available').checked = product.available !== false;
     document.getElementById('edit-promo-enabled').checked = product.promo?.enabled === true;
@@ -1210,6 +1211,7 @@ async function saveProduct() {
     product.imageUrl = document.getElementById('edit-imageUrl').value;
     product.composition = document.getElementById('edit-composition').value;
     product.nutrition = document.getElementById('edit-nutrition').value;
+    product.calories = document.getElementById('edit-calories').value;
     product.storage = document.getElementById('edit-storage').value;
     product.available = document.getElementById('edit-available').checked;
 
