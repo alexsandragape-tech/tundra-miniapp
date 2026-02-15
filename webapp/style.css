@@ -65,7 +65,15 @@
     font-style: italic;
 }
 
-/* Подключаем локальный шрифт Commissioner Bold */
+/* Подключаем локальные шрифты Commissioner */
+@font-face {
+    font-family: 'Commissioner';
+    src: url('fonts/Commissioner-Light.ttf') format('truetype');
+    font-display: swap;
+    font-weight: 300;
+    font-style: normal;
+}
+
 @font-face {
     font-family: 'Commissioner';
     src: url('fonts/Commissioner-Bold.ttf') format('truetype');
@@ -86,10 +94,25 @@
 
 body {
     font-family: 'Commissioner', 'Montserrat', 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-weight: 300;
     background-color: #ffffff;
     color: #2C3E50;
     line-height: 1.6;
     overflow-x: hidden;
+}
+
+/* Заголовки на Commissioner Bold */
+.page-title,
+.menu-item-text,
+.menu-section-title,
+.loyalty-title,
+.category-name,
+.product-name,
+.detail-name,
+.detail-nutrition-title,
+.detail-info h4,
+.order-detail-title {
+    font-weight: 700;
 }
 
 body.modal-open {
@@ -1021,6 +1044,7 @@ body.modal-open {
     font-size: 16px;
     font-weight: 700;
     color: #0b5c56;
+    line-height: 1;
 }
 
 .detail-bottom-price .old {
@@ -1047,6 +1071,10 @@ body.modal-open {
     color: #ffffff;
     border: none;
     font-size: 16px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .detail-bottom-bar .quantity-selector {
