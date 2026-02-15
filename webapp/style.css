@@ -1070,6 +1070,16 @@ body.modal-open {
     transform: translateY(-6px);
 }
 
+.detail-bottom-bar .detail-bottom-price,
+.detail-bottom-bar .detail-bottom-price .current,
+.detail-bottom-bar .detail-bottom-price .old,
+.detail-bottom-bar .quantity-selector,
+.detail-bottom-bar .qty-display,
+.detail-bottom-bar .qty-btn {
+    font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif !important;
+    font-weight: 300 !important;
+}
+
 .detail-bottom-price .old {
     font-size: 14px;
     color: #9aa0a6;
