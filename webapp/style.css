@@ -1043,7 +1043,7 @@ body.modal-open {
 }
 
 .detail-bottom-price .current {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
     color: #0b5c56;
     line-height: 1;
@@ -2517,6 +2517,7 @@ body.modal-open {
     background: #c19660;
     transform: translateY(-2px);
 }
+
 
 
 
