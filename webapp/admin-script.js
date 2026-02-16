@@ -1120,7 +1120,7 @@ function hasProductChanged(categoryId, product) {
     return JSON.stringify(product) !== JSON.stringify(original);
 }
 
-function moveProduct(categoryId, productId, direction) {
+async function moveProduct(categoryId, productId, direction) {
     const list = products[categoryId];
     if (!Array.isArray(list)) return;
     const index = list.findIndex(p => p.id === productId);
@@ -1138,6 +1138,16 @@ function moveProduct(categoryId, productId, direction) {
     markAsChanged();
     renderProducts();
     updateStats();
+
+    try {
+        await saveProductsToServer();
+        originalProducts = JSON.parse(JSON.stringify(products));
+        hasUnsavedChanges = false;
+        showNotification('Порядок товаров сохранен', 'success');
+    } catch (error) {
+        console.error('Ошибка сохранения порядка:', error);
+        showNotification('Ошибка сохранения порядка', 'error');
+    }
 }
 
 // Переключение доступности товара
