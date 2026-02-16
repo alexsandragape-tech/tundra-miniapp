@@ -1115,6 +1115,7 @@ async function loadProductsFromServer() {
             if (result.ok && result.products) {
                 // Обновляем товары, если получили с сервера
                 const serverProducts = result.products;
+                sortProductsByOrder(serverProducts);
                 
                 // Проверяем, есть ли товары с сервера
                 const hasServerProducts = Object.keys(serverProducts).some(
@@ -1142,6 +1143,20 @@ function updateCategoryCounts() {
         const categoryProducts = products[category.id] || [];
         category.count = categoryProducts.length;
     });
+}
+
+function sortProductsByOrder(productsData) {
+    for (const [categoryId, categoryProducts] of Object.entries(productsData || {})) {
+        if (!Array.isArray(categoryProducts)) continue;
+        categoryProducts.sort((a, b) => {
+            const aOrder = Number.isFinite(Number(a.sortOrder)) ? Number(a.sortOrder) : Number.MAX_SAFE_INTEGER;
+            const bOrder = Number.isFinite(Number(b.sortOrder)) ? Number(b.sortOrder) : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            const nameCompare = String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+            if (nameCompare !== 0) return nameCompare;
+            return String(a.id || '').localeCompare(String(b.id || ''), 'ru');
+        });
+    }
 }
 
 // Функции навигации
