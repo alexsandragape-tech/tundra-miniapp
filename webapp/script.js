@@ -1222,7 +1222,7 @@ async function showCategory(categoryId) {
         const promoBadge = promoActive ? '<div class="product-badge">Акция</div>' : '';
         const activePrice = getProductActivePrice(product);
         const unitText = product.unit ? String(product.unit) : '';
-        const priceLabel = `${formatPriceValue(activePrice)}₽${unitText}`;
+        const priceLabel = `${formatPriceValue(activePrice)}₽`;
         const weightText = formatUnitWeight(unitText);
         
         // Получаем текущее количество товара в корзине
@@ -1239,9 +1239,9 @@ async function showCategory(categoryId) {
             ${weightText ? `<div class="product-weight">${weightText}</div>` : ''}
             <div class="product-footer">
             <div class="product-actions">
-                    <div class="product-price-inline">${priceLabel}</div>
                     <div class="price-control ${currentQty > 0 ? 'has-qty' : 'pc-empty'}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
                         <button class="pc-btn pc-minus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
+                        <span class="pc-price">${priceLabel}</span>
                         <div class="pc-qty">${currentQty > 0 ? currentQty : ''}</div>
                         <button class="pc-btn pc-plus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
                     </div>
