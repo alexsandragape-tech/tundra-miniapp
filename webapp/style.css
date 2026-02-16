@@ -165,6 +165,7 @@ body.modal-open {
 
 #product-detail-screen {
     background: #eef0f2;
+    padding-bottom: 0;
 }
 
 #product-detail-screen .page-header {
@@ -933,7 +934,7 @@ body.modal-open {
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 110px;
+    padding-bottom: 72px;
 }
 
 .detail-name {
@@ -1094,7 +1095,7 @@ body.modal-open {
 
 .detail-bottom-bar .product-actions {
     margin: 0;
-    width: 180px;
+    width: 220px;
     height: 48px;
     align-items: center;
     justify-content: flex-end;
