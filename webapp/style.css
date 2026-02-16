@@ -84,6 +84,7 @@
 
 :root {
     --font-script: 'Dancing Script', cursive;
+    --top-bar-height: 74px;
 }
 
 * {
@@ -142,7 +143,7 @@ body.modal-open {
 .screen {
     display: none;
     width: 100%;
-    padding: 0;
+    padding: 0 0 var(--top-bar-height) 0;
 }
 
 /* Все экраны с прокруткой */
@@ -179,10 +180,13 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    position: sticky;
-    top: 0;
+    position: fixed;
+    bottom: 0;
+    top: auto;
+    left: 0;
+    right: 0;
     z-index: 100;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 /* Скрываем любые красные элементы в верхней панели */
@@ -1091,13 +1095,14 @@ body.modal-open {
 .detail-bottom-bar .product-actions {
     margin: 0;
     width: 180px;
+    height: 48px;
     align-items: center;
     justify-content: flex-end;
 }
 
 .detail-bottom-bar .add-to-cart-btn {
-    width: 180px;
-    height: 48px;
+    width: 100%;
+    height: 100%;
     padding: 0 20px;
     border-radius: 12px;
     background: #0b5c56;
@@ -1110,17 +1115,19 @@ body.modal-open {
     justify-content: center;
     font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
     font-weight: 300;
+    box-sizing: border-box;
 }
 
 .detail-bottom-bar .quantity-selector {
-    width: 180px;
-    height: 48px;
+    width: 100%;
+    height: 100%;
     border-radius: 12px;
     padding: 4px 12px;
     align-items: center;
     justify-content: space-between;
     font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
     font-weight: 300;
+    box-sizing: border-box;
 }
 
 .quantity-selector {
