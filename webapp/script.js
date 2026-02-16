@@ -1223,12 +1223,7 @@ async function showCategory(categoryId) {
         const activePrice = getProductActivePrice(product);
         const unitText = product.unit ? String(product.unit) : '';
         const priceLabel = `${formatPriceValue(activePrice)}₽${unitText}`;
-        const priceHtml = promoActive
-            ? `<div class="product-price">
-                    <span class="price-new">${formatPriceValue(activePrice)}₽${unitText}</span>
-                    <span class="price-old">${formatPriceValue(product.price)}₽${unitText}</span>
-               </div>`
-            : `<div class="product-price"><span class="price-new">${formatPriceValue(product.price)}₽${unitText}</span></div>`;
+        const weightText = formatUnitWeight(unitText);
         
         // Получаем текущее количество товара в корзине
         const cartKey = `${categoryId}_${product.id}`;
@@ -1241,14 +1236,15 @@ async function showCategory(categoryId) {
                 ${promoBadge}
             </div>
             <div class="product-name">${product.name}</div>
+            ${weightText ? `<div class="product-weight">${weightText}</div>` : ''}
             <div class="product-footer">
             <div class="product-actions">
+                    <div class="product-price-inline">${priceLabel}</div>
                     <div class="price-control ${currentQty > 0 ? 'has-qty' : 'pc-empty'}" id="pc-${cartKey}" data-price="${priceLabel}" data-category="${categoryId}" data-product="${product.id}">
                         <button class="pc-btn pc-minus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', -1)">-</button>
-                        <span class="pc-price">${priceLabel}</span>
                         <div class="pc-qty">${currentQty > 0 ? currentQty : ''}</div>
                         <button class="pc-btn pc-plus" onclick="event.stopPropagation(); changeProductQuantity('${categoryId}', '${product.id}', 1)">+</button>
-                </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1308,6 +1304,14 @@ function parseMacroValue(text, pattern) {
     if (!text) return null;
     const match = text.match(pattern);
     return match ? match[1].replace(',', '.') : null;
+}
+
+function formatUnitWeight(unitText) {
+    if (!unitText) return '';
+    const cleaned = unitText.replace('/', '').trim();
+    const match = cleaned.match(/(\d+(?:[.,]\d+)?)\s*(г|гр)/i);
+    if (!match) return cleaned;
+    return `${match[1].replace(',', '.')} г`;
 }
 
 function getDetailWeight(unit) {
