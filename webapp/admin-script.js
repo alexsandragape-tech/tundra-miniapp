@@ -35,6 +35,22 @@ let hasUnsavedChanges = false;
 let currentEditingProduct = null;
 let adminPassword = null;
 
+function applyDefaultSortOrders(productsData) {
+    for (const [categoryId, categoryProducts] of Object.entries(productsData || {})) {
+        let needsUpdate = false;
+        categoryProducts.forEach((product, index) => {
+            if (!Number.isFinite(Number(product.sortOrder))) {
+                product.sortOrder = index;
+                needsUpdate = true;
+            }
+        });
+        if (needsUpdate) {
+            // Оставляем порядок как есть, просто фиксируем sortOrder
+            productsData[categoryId] = categoryProducts;
+        }
+    }
+}
+
 // Получаем пароль из URL
 function getAdminPassword() {
     if (!adminPassword) {
@@ -67,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.resetBannerForm = resetBannerForm;
     window.editBanner = editBanner;
     window.deleteBanner = deleteBanner;
+    window.moveProduct = moveProduct;
     
     console.log('✅ Глобальные функции экспортированы:', {
         toggleProductAvailability: typeof window.toggleProductAvailability,
@@ -158,6 +175,7 @@ async function loadProductsFromServer() {
             const hasProducts = result.ok && result.products && Object.keys(result.products).length > 0;
             if (hasProducts) {
                 console.log('✅ Товары загружены с сервера для админ панели');
+                applyDefaultSortOrders(result.products);
                 products = result.products;
                 originalProducts = JSON.parse(JSON.stringify(products));
                 // Сохраняем базовую копию названий категорий для отслеживания изменений
@@ -942,6 +960,8 @@ async function loadProductsFromClient() {
         'konditerka': []
     };
     
+    applyDefaultSortOrders(products);
+
     // 🎯 ВСЕ 60 ТОВАРОВ ДОБАВЛЕНЫ! (49+11) + 4 НОВЫЕ КАТЕГОРИИ
     // Создаем копию для отслеживания изменений
     originalProducts = JSON.parse(JSON.stringify(products));
@@ -1082,6 +1102,8 @@ function renderProductCard(categoryId, product) {
                         onclick="event.stopPropagation(); toggleProductAvailability('${safeCategoryId}', '${safeProductId}');">
                     ${isHidden ? 'Показать' : 'Скрыть'}
                 </button>
+                <button class="btn secondary btn-small" onclick="event.stopPropagation(); moveProduct('${safeCategoryId}', '${safeProductId}', -1)">↑</button>
+                <button class="btn secondary btn-small" onclick="event.stopPropagation(); moveProduct('${safeCategoryId}', '${safeProductId}', 1)">↓</button>
                 <div class="status-indicator ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
                     ${isHidden ? 'Скрыто' : isModified ? 'Изменено' : 'В наличии'}
                 </div>
@@ -1096,6 +1118,26 @@ function hasProductChanged(categoryId, product) {
     if (!original) return false;
     
     return JSON.stringify(product) !== JSON.stringify(original);
+}
+
+function moveProduct(categoryId, productId, direction) {
+    const list = products[categoryId];
+    if (!Array.isArray(list)) return;
+    const index = list.findIndex(p => p.id === productId);
+    if (index === -1) return;
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= list.length) return;
+
+    const [item] = list.splice(index, 1);
+    list.splice(newIndex, 0, item);
+
+    list.forEach((product, idx) => {
+        product.sortOrder = idx;
+    });
+
+    markAsChanged();
+    renderProducts();
+    updateStats();
 }
 
 // Переключение доступности товара
