@@ -161,7 +161,7 @@ let currentOrderId = null;
 // 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
 const TEST_MODE = false; // Установите false для продакшена
 const TEST_MIN_ORDER = 1; // Минимальная сумма для тестов
-const PROD_MIN_ORDER = 3000; // Минимальная сумма для продакшена
+const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
 const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
 let paymentStatusChecker = null;
 let promoState = { enabled: false, code: '', validation: null };
@@ -1878,7 +1878,7 @@ function calculateCartTotal() {
     } else if (deliveryZone === 'moscow') {
         delivery = subtotalAfterPromo >= 5000 ? 0 : 400;
     } else if (deliveryZone === 'mo') {
-        delivery = 700;
+        delivery = 1000;
     }
 
     const total = subtotalAfterPromo + delivery;
@@ -2457,7 +2457,7 @@ function updateDeliveryInfo() {
             <h4>Информация о доставке</h4>
             <div class="delivery-rules">
                 <div class="delivery-rule">
-                    <strong>Московская область:</strong> доставка 700₽
+                    <strong>Московская область:</strong> доставка 1000₽
                 </div>
                 <div class="delivery-rule">
                     <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}
@@ -2472,7 +2472,7 @@ function updateDeliveryInfo() {
                     <strong>Москва (МКАД):</strong> 400₽, бесплатно от 5000₽
                 </div>
                 <div class="delivery-rule">
-                    <strong>МО:</strong> доставка 700₽
+                    <strong>МО:</strong> доставка 1000₽
                 </div>
                 <div class="delivery-rule">
                     <strong>Минимальный заказ:</strong> ${getMinOrderAmount()}₽${TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : ''}
