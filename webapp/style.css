@@ -650,13 +650,6 @@ body.modal-open {
     margin: 0 8px 6px 8px;
 }
 
-.product-price-inline {
-    font-size: 12px;
-    font-weight: 600;
-    color: #0b5c56;
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-}
 
 .product-unit {
     font-size: 6px;
@@ -729,13 +722,13 @@ body.modal-open {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 8px;
     background: #e7f2ef;
     border: 1px solid #d8e6e1;
-    border-radius: 16px;
-    padding: 2px 6px;
-    min-height: 28px;
-    min-width: 28px;
+    border-radius: 999px;
+    padding: 6px 10px;
+    min-height: 32px;
+    min-width: 110px;
     box-sizing: border-box;
 }
 
@@ -745,14 +738,11 @@ body.modal-open {
 
 .price-control.pc-empty .pc-minus,
 .price-control.pc-empty .pc-qty {
-    visibility: hidden;
-    pointer-events: none;
+    display: none;
 }
 
-.price-control.pc-empty {
-    width: 28px;
-    justify-content: center;
-    padding: 0;
+.price-control.has-qty .pc-price {
+    display: none;
 }
 
 .pc-price {
@@ -764,8 +754,16 @@ body.modal-open {
     text-align: center;
 }
 
+.pc-price {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0b5c56;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 .pc-qty {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: #0b5c56;
     min-width: 18px;
@@ -773,8 +771,8 @@ body.modal-open {
 }
 
 .pc-btn {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: none;
     background: #0b5c56;
