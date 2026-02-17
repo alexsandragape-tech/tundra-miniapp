@@ -1253,6 +1253,7 @@ function editProduct(categoryId, productId) {
     document.getElementById('edit-price').value = product.price || '';
     document.getElementById('edit-unit').value = product.unit || '';
     document.getElementById('edit-maxQty').value = product.maxQty || '';
+    document.getElementById('edit-weightBased').checked = product.weightBased === true;
     document.getElementById('edit-image').value = product.image || '';
     document.getElementById('edit-imageUrl').value = product.imageUrl || '';
     document.getElementById('edit-composition').value = product.composition || '';
@@ -1297,6 +1298,7 @@ async function saveProduct() {
     product.price = parseFloat(document.getElementById('edit-price').value);
     product.unit = document.getElementById('edit-unit').value;
     product.maxQty = parseInt(document.getElementById('edit-maxQty').value);
+    product.weightBased = document.getElementById('edit-weightBased').checked;
     product.image = document.getElementById('edit-image').value;
     product.imageUrl = document.getElementById('edit-imageUrl').value;
     product.composition = document.getElementById('edit-composition').value;
@@ -1547,6 +1549,7 @@ function clearAddForm() {
     document.getElementById('add-price').value = '';
     document.getElementById('add-unit').value = '';
     document.getElementById('add-maxQty').value = '10';
+    document.getElementById('add-weightBased').checked = false;
     document.getElementById('add-image').value = '';
     document.getElementById('add-imageUrl').value = '';
     document.getElementById('add-composition').value = '';
@@ -1565,6 +1568,7 @@ function addNewProduct() {
         const price = parseFloat(document.getElementById('add-price').value);
         const unit = document.getElementById('add-unit').value.trim();
         const maxQty = parseInt(document.getElementById('add-maxQty').value);
+        const weightBased = document.getElementById('add-weightBased').checked;
         const image = document.getElementById('add-image').value.trim();
         const imageUrl = document.getElementById('add-imageUrl').value.trim();
         const composition = document.getElementById('add-composition').value.trim();
@@ -1586,6 +1590,7 @@ function addNewProduct() {
             price,
             unit,
             maxQty,
+            weightBased,
             image: image || '',
             imageUrl: imageUrl || `images/products/${categoryId}/${productId}.jpg`,
             composition,
