@@ -16,6 +16,7 @@ let currentPromoId = null;
 let banners = [];
 let currentBannerId = null;
 let currentCategoryId = null;
+let currentOrdersStatus = 'new';
 
 // 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
 const categories = {
@@ -103,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 📱 ИНИЦИАЛИЗАЦИЯ МОБИЛЬНОГО ИНТЕРФЕЙСА
     initMobileInterface();
+    initOrdersTabs();
+    showTab('orders');
 
     const promoForm = document.getElementById('promo-form');
     if (promoForm) {
@@ -2117,6 +2120,7 @@ function showTab(tabName) {
     const categoriesContainer = document.getElementById('categories-container');
     const promoManagement = document.getElementById('promo-management');
     const bannersManagement = document.getElementById('banners-management');
+    const ordersManagement = document.getElementById('orders-management');
     const adminEmpty = document.getElementById('admin-empty');
 
     if (categoriesContainer) {
@@ -2128,6 +2132,9 @@ function showTab(tabName) {
     if (bannersManagement) {
         bannersManagement.style.display = tabName === 'banners' ? 'block' : 'none';
     }
+    if (ordersManagement) {
+        ordersManagement.style.display = tabName === 'orders' ? 'block' : 'none';
+    }
     if (adminEmpty) {
         adminEmpty.style.display = tabName ? 'none' : 'block';
     }
@@ -2136,11 +2143,162 @@ function showTab(tabName) {
         currentCategoryId = null;
     }
 
+    if (tabName === 'orders') {
+        loadOrders(currentOrdersStatus);
+    }
     if (tabName === 'promocodes') {
         loadPromoCodes();
     }
     if (tabName === 'banners') {
         loadBanners();
+    }
+}
+
+function initOrdersTabs() {
+    const tabs = document.querySelectorAll('.orders-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentOrdersStatus = tab.dataset.status || 'new';
+            loadOrders(currentOrdersStatus);
+        });
+    });
+}
+
+async function loadOrders(status) {
+    const list = document.getElementById('orders-list');
+    if (!list) return;
+    list.innerHTML = 'Загрузка...';
+    try {
+        const response = await fetch(`/api/admin/orders?status=${encodeURIComponent(status || '')}`, {
+            headers: {
+                'X-Admin-Password': getAdminPassword()
+            }
+        });
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки заказов');
+        }
+        const data = await response.json();
+        renderOrders(data.orders || []);
+    } catch (error) {
+        list.innerHTML = `Ошибка загрузки: ${error.message}`;
+    }
+}
+
+function renderOrders(ordersList) {
+    const list = document.getElementById('orders-list');
+    if (!list) return;
+    if (!ordersList.length) {
+        list.innerHTML = 'Заказы не найдены';
+        return;
+    }
+
+    list.innerHTML = ordersList.map(order => {
+        const createdAt = order.created_at || order.createdAt;
+        const dateText = createdAt ? new Date(createdAt).toLocaleString('ru-RU') : '';
+        const address = (() => {
+            const addr = order.address || {};
+            return [addr.street, addr.house, addr.apartment && `кв. ${addr.apartment}`, addr.floor && `эт. ${addr.floor}`]
+                .filter(Boolean)
+                .join(', ');
+        })();
+        const items = Array.isArray(order.items) ? order.items : [];
+        const weightItems = Array.isArray(order.weight_items) ? order.weight_items : [];
+        const weightMap = new Map(weightItems.map(item => [item.productId, item]));
+        const weightSet = new Set(weightItems.map(item => item.productId));
+
+        const isEditable = order.payment_status === 'pending_weight';
+        const itemsHtml = items.map(item => {
+            const isWeight = weightSet.has(item.productId);
+            const weightInfo = weightMap.get(item.productId);
+            if (isWeight) {
+                return `
+                    <div class="order-item">
+                        <div>
+                            <div class="order-item-name">${item.name}</div>
+                            <div class="order-item-price">Весовой товар</div>
+                            <div class="weight-inputs">
+                                <input type="number" placeholder="Вес (гр)" data-order="${order.order_id}" data-product="${item.productId}" data-field="weight" value="${weightInfo?.weightGrams ?? ''}" ${isEditable ? '' : 'readonly'}>
+                                <input type="number" placeholder="Цена" data-order="${order.order_id}" data-product="${item.productId}" data-field="price" value="${weightInfo?.finalPrice ?? ''}" ${isEditable ? '' : 'readonly'}>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            return `
+                <div class="order-item">
+                    <div>
+                        <div class="order-item-name">${item.name} x${item.quantity}</div>
+                        <div class="order-item-price">${item.price}₽</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const paymentUrl = order.payment_url || order.paymentUrl;
+        const totalAmount = order.total_amount || order.totalAmount || '—';
+        const expiresAt = order.payment_expires_at || order.paymentExpiresAt;
+        const expiresText = expiresAt ? new Date(expiresAt).toLocaleString('ru-RU') : '';
+        const actionButton = (order.payment_status === 'pending_weight')
+            ? `<button class="btn primary" onclick="submitWeightOrder('${order.order_id}')">Сформировать</button>`
+            : '';
+
+        const extraInfo = (order.payment_status === 'payment_pending')
+            ? `Ссылка: <a href="${paymentUrl}" target="_blank">${paymentUrl || ''}</a><br>Оплатить до: ${expiresText || '—'}`
+            : '';
+
+        return `
+            <div class="order-card">
+                <div class="order-header">
+                    <div class="order-id">Заказ #${order.order_id}</div>
+                    <div class="order-status">${dateText}</div>
+                </div>
+                <div class="order-meta">${order.user_name || 'Клиент'} • ${order.phone || ''}</div>
+                <div class="order-address">${address || ''}</div>
+                <div class="order-items">${itemsHtml}</div>
+                <div class="order-meta">Итого: ${totalAmount}₽</div>
+                ${extraInfo ? `<div class="order-meta">${extraInfo}</div>` : ''}
+                <div class="order-actions">${actionButton}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function submitWeightOrder(orderId) {
+    const inputs = document.querySelectorAll(`input[data-order="${orderId}"]`);
+    const weightItemsMap = new Map();
+    inputs.forEach(input => {
+        const productId = input.dataset.product;
+        if (!weightItemsMap.has(productId)) {
+            weightItemsMap.set(productId, { productId });
+        }
+        const item = weightItemsMap.get(productId);
+        if (input.dataset.field === 'weight') {
+            item.weightGrams = Number(input.value);
+        }
+        if (input.dataset.field === 'price') {
+            item.finalPrice = Number(input.value);
+        }
+    });
+
+    try {
+        const response = await fetch(`/api/admin/orders/${orderId}/weight`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Password': getAdminPassword()
+            },
+            body: JSON.stringify({ weightItems: Array.from(weightItemsMap.values()) })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+            throw new Error(result.error || 'Ошибка формирования счета');
+        }
+        showNotification('Счет сформирован и отправлен клиенту', 'success');
+        loadOrders(currentOrdersStatus);
+    } catch (error) {
+        showNotification(error.message, 'error');
     }
 }
 
