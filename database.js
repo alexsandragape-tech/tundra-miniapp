@@ -64,6 +64,9 @@ async function initializeDatabase() {
                 promo_code VARCHAR(100),
                 promo_discount INTEGER DEFAULT 0,
                 promo_data JSONB,
+                has_weight_items BOOLEAN DEFAULT false,
+                weight_items JSONB,
+                payment_expires_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -78,6 +81,42 @@ async function initializeDatabase() {
                     WHERE table_name = 'orders' AND column_name = 'payment_status'
                 ) THEN
                     ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'pending';
+                END IF;
+            END $$;
+        `);
+
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'orders' AND column_name = 'has_weight_items'
+                ) THEN
+                    ALTER TABLE orders ADD COLUMN has_weight_items BOOLEAN DEFAULT false;
+                END IF;
+            END $$;
+        `);
+
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'orders' AND column_name = 'weight_items'
+                ) THEN
+                    ALTER TABLE orders ADD COLUMN weight_items JSONB;
+                END IF;
+            END $$;
+        `);
+
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'orders' AND column_name = 'payment_expires_at'
+                ) THEN
+                    ALTER TABLE orders ADD COLUMN payment_expires_at TIMESTAMP;
                 END IF;
             END $$;
         `);
@@ -321,9 +360,12 @@ class OrdersDB {
                     payment_url,
                     promo_code,
                     promo_discount,
-                    promo_data
+                    promo_data,
+                    has_weight_items,
+                    weight_items,
+                    payment_expires_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 RETURNING *
             `;
             const values = [
@@ -341,7 +383,10 @@ class OrdersDB {
                 orderData.paymentUrl,
                 orderData.promoCode || null,
                 orderData.promoDiscount || 0,
-                orderData.promoData ? JSON.stringify(orderData.promoData) : null
+                orderData.promoData ? JSON.stringify(orderData.promoData) : null,
+                orderData.hasWeightItems === true,
+                orderData.weightItems ? JSON.stringify(orderData.weightItems) : null,
+                orderData.paymentExpiresAt || null
             ];
             
             const result = await pool.query(query, values);
@@ -379,6 +424,13 @@ class OrdersDB {
                 order.promo_data = null;
             }
             order.appliedPromo = order.promo_data || null;
+
+            try {
+                order.weight_items = typeof order.weight_items === 'string' ? JSON.parse(order.weight_items) : (order.weight_items || null);
+            } catch (e) {
+                console.warn('⚠️ Ошибка парсинга weight_items в getById:', e.message);
+                order.weight_items = null;
+            }
             
             return order;
         }
@@ -427,12 +479,19 @@ class OrdersDB {
                 fields.push(`payment_url = $${paramCounter}`);
             } else if (key === 'paymentStatus') {
                 fields.push(`payment_status = $${paramCounter}`);
+            } else if (key === 'paymentExpiresAt') {
+                fields.push(`payment_expires_at = $${paramCounter}`);
             } else if (key === 'promoCode') {
                 fields.push(`promo_code = $${paramCounter}`);
             } else if (key === 'promoDiscount') {
                 fields.push(`promo_discount = $${paramCounter}`);
             } else if (key === 'promoData') {
                 fields.push(`promo_data = $${paramCounter}`);
+                values.push(value ? JSON.stringify(value) : null);
+                paramCounter++;
+                continue;
+            } else if (key === 'weightItems') {
+                fields.push(`weight_items = $${paramCounter}`);
                 values.push(value ? JSON.stringify(value) : null);
                 paramCounter++;
                 continue;
@@ -509,6 +568,14 @@ class OrdersDB {
                 }
             }
             order.appliedPromo = order.promo_data || null;
+
+            if (typeof order.weight_items === 'string') {
+                try {
+                    order.weight_items = JSON.parse(order.weight_items);
+                } catch (e) {
+                    order.weight_items = null;
+                }
+            }
             return order;
         });
     }
@@ -543,6 +610,14 @@ class OrdersDB {
                 }
             }
             order.appliedPromo = order.promo_data || null;
+
+            if (typeof order.weight_items === 'string') {
+                try {
+                    order.weight_items = JSON.parse(order.weight_items);
+                } catch (e) {
+                    order.weight_items = null;
+                }
+            }
             return order;
         });
     }
