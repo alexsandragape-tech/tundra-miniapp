@@ -1014,6 +1014,13 @@ body.modal-open {
     text-decoration-color: rgba(198, 40, 40, 0.6);
     line-height: 1.2;
 }
+
+.detail-weighted {
+    padding: 0 20px;
+    margin-top: 6px;
+    font-size: 13px;
+    color: #6b6b6b;
+}
 .detail-badge {
     display: inline-block;
     padding: 6px 14px;
