@@ -1737,7 +1737,7 @@ input[type="checkbox"]:checked + .checkmark::after {
 .admin-login-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1751,51 +1751,63 @@ input[type="checkbox"]:checked + .checkmark::after {
 
 .admin-login-card {
     background: #ffffff;
-    border-radius: 16px;
-    padding: 28px 24px;
+    border-radius: 0;
+    padding: 24px 20px;
     width: 100%;
-    max-width: 420px;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+    max-width: 360px;
+    border: 1px solid var(--admin-border);
+    box-shadow: none;
 }
 
 .admin-login-card h2 {
-    font-size: 22px;
+    font-size: 18px;
     margin-bottom: 6px;
-    color: #1A1F2E;
+    color: var(--admin-text);
     text-align: center;
+    font-weight: 300;
 }
 
 .admin-login-subtitle {
     text-align: center;
-    color: #6a737d;
+    color: var(--admin-muted);
     font-size: 14px;
     margin-bottom: 18px;
 }
 
 .admin-login-card label {
     display: block;
-    font-weight: 600;
+    font-weight: 300;
     font-size: 14px;
     margin-bottom: 8px;
-    color: #2c3e50;
+    color: var(--admin-text);
 }
 
 .admin-login-card input[type="password"] {
     width: 100%;
     padding: 12px 14px;
-    border-radius: 10px;
-    border: 2px solid #e9ecef;
+    border-radius: 0;
+    border: 1px solid var(--admin-border);
     font-size: 16px;
     margin-bottom: 16px;
+    background: #ffffff;
 }
 
 .admin-login-card input[type="password"]:focus {
     outline: none;
-    border-color: #0b5c56;
+    border-color: var(--admin-text);
+    box-shadow: none;
 }
 
 .admin-login-card .btn {
     width: 100%;
+    border-radius: 0;
+    background: var(--admin-text);
+    color: var(--admin-bg);
+    border: 1px solid var(--admin-text);
+}
+
+.admin-login-card img {
+    display: none !important;
 }
 
 .admin-login-error {
@@ -1918,6 +1930,136 @@ input[type="checkbox"]:checked + .checkmark::after {
     padding: 24px;
     color: var(--admin-muted);
     text-align: center;
+}
+
+.orders-management {
+    border: 1px solid var(--admin-border);
+    padding: 16px;
+    background: var(--admin-bg);
+}
+
+.orders-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.orders-tab {
+    padding: 8px 12px;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-bg);
+    color: var(--admin-text);
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 300;
+}
+
+.orders-tab.active {
+    background: var(--admin-text);
+    color: var(--admin-bg);
+    border-color: var(--admin-text);
+}
+
+.orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.order-card {
+    border: 1px solid var(--admin-border);
+    padding: 12px;
+    background: var(--admin-bg);
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.order-id {
+    font-size: 14px;
+    font-weight: 300;
+}
+
+.order-status {
+    font-size: 12px;
+    color: var(--admin-muted);
+}
+
+.order-meta {
+    font-size: 12px;
+    color: var(--admin-muted);
+    margin-bottom: 8px;
+}
+
+.order-address {
+    font-size: 12px;
+    color: var(--admin-text);
+    margin-bottom: 10px;
+}
+
+.order-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.order-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    border-top: 1px solid var(--admin-border);
+    padding-top: 8px;
+}
+
+.order-item:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.order-item-name {
+    font-size: 13px;
+    color: var(--admin-text);
+}
+
+.order-item-price {
+    font-size: 12px;
+    color: var(--admin-muted);
+}
+
+.weight-inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.weight-inputs input {
+    border: 1px solid var(--admin-border);
+    border-radius: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #ffffff;
+}
+
+.order-actions {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.order-actions .btn {
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
 }
 
 .category-section,
