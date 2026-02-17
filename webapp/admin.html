@@ -118,6 +118,16 @@
 
         <!-- Заказы -->
         <div class="orders-management" id="orders-management" style="display: none;">
+            <div class="test-mode-bar">
+                <div class="test-mode-info">
+                    <div class="test-mode-title">Тестовый режим</div>
+                    <div class="test-mode-desc">Заказы от 1₽, без доставки и ограничений по времени</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="test-mode-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
             <div class="orders-tabs">
                 <button class="orders-tab active" data-status="new">Новые</button>
                 <button class="orders-tab" data-status="in_work">В работе</button>
