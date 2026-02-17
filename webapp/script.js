@@ -159,7 +159,7 @@ let paymentTimeLeft = 10 * 60; // 10 минут в секундах
 let currentOrderId = null;
 
 // 🧪 РЕЖИМ ТЕСТИРОВАНИЯ
-const TEST_MODE = false; // Установите false для продакшена
+let TEST_MODE = false; // Управляется из админ-панели
 const TEST_MIN_ORDER = 1; // Минимальная сумма для тестов
 const PROD_MIN_ORDER = 3500; // Минимальная сумма для продакшена
 const FORCE_DEMO_MODE = false; // Принудительный демо-режим (без реальных платежей)
@@ -217,6 +217,17 @@ function isForceDemoMode() {
     return FORCE_DEMO_MODE;
 }
 
+async function loadTestModeState() {
+    try {
+        const response = await fetch(`${API_BASE}/api/test-mode`);
+        if (!response.ok) return;
+        const result = await response.json();
+        TEST_MODE = Boolean(result.enabled);
+    } catch (error) {
+        console.warn('Не удалось загрузить тестовый режим:', error);
+    }
+}
+
 // Функция для переключения демо-режима (для разработки)
 function toggleDemoMode() {
     if (FORCE_DEMO_MODE) {
@@ -266,8 +277,8 @@ function showTestModeIndicator() {
     // Показываем уведомление о тестовом режиме
     setTimeout(() => {
         const message = FORCE_DEMO_MODE 
-            ? '🧪 Включен тестовый режим. Минимальный заказ: 100₽. ДЕМО-РЕЖИМ: без реальных платежей!'
-            : '🧪 Включен тестовый режим. Минимальный заказ: 100₽';
+            ? '🧪 Включен тестовый режим. Минимальный заказ: 1₽. ДЕМО-РЕЖИМ: без реальных платежей!'
+            : '🧪 Включен тестовый режим. Минимальный заказ: 1₽, доставка 0₽, без ограничений по времени';
         showNotification(message, 'info');
     }, 1000);
 }
@@ -1897,7 +1908,9 @@ function calculateCartTotal() {
 
     const deliveryZone = document.getElementById('delivery-zone')?.value;
     let delivery = 0;
-    if (promoFreeDelivery) {
+    if (TEST_MODE) {
+        delivery = 0;
+    } else if (promoFreeDelivery) {
         delivery = 0;
     } else if (deliveryZone === 'moscow') {
         delivery = subtotalAfterPromo >= 5000 ? 0 : 400;
@@ -2464,6 +2477,18 @@ function updateDeliveryInfo() {
     const deliveryZone = document.getElementById('delivery-zone').value;
     const deliveryInfo = document.querySelector('.delivery-info');
     
+    if (TEST_MODE) {
+        deliveryInfo.innerHTML = `
+            <h4>Информация о доставке</h4>
+            <div class="delivery-rules">
+                <div class="delivery-rule">
+                    <strong>Тестовый режим:</strong> доставка 0₽, минимальный заказ ${getMinOrderAmount()}₽
+                </div>
+            </div>
+        `;
+        return;
+    }
+
     if (deliveryZone === 'moscow') {
         deliveryInfo.innerHTML = `
             <h4>Информация о доставке</h4>
@@ -2555,23 +2580,27 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             // Проверяем минимальный заказ в зависимости от зоны доставки
-            const deliveryZone = document.getElementById('delivery-zone').value;
+            let deliveryZone = document.getElementById('delivery-zone').value;
             const { subtotal } = calculateCartTotal();
             
-            const minOrder = getMinOrderAmount();
-            if (deliveryZone === 'mo' && subtotal < minOrder) {
-                showNotification(`Для Московской области минимальный заказ: ${formatPriceValue(minOrder)}₽`, 'warning');
-                releaseSubmissionFlag();
-                return;
-            } else if (deliveryZone === 'moscow' && subtotal < minOrder) {
-                const suffix = TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : '';
-                showNotification(`Для Москвы минимальный заказ: ${formatPriceValue(minOrder)}₽${suffix}`, 'warning');
-                releaseSubmissionFlag();
-                return;
+            if (!TEST_MODE) {
+                const minOrder = getMinOrderAmount();
+                if (deliveryZone === 'mo' && subtotal < minOrder) {
+                    showNotification(`Для Московской области минимальный заказ: ${formatPriceValue(minOrder)}₽`, 'warning');
+                    releaseSubmissionFlag();
+                    return;
+                } else if (deliveryZone === 'moscow' && subtotal < minOrder) {
+                    const suffix = TEST_MODE ? ' (тестовый режим' + (FORCE_DEMO_MODE ? ', демо-режим' : '') + ')' : '';
+                    showNotification(`Для Москвы минимальный заказ: ${formatPriceValue(minOrder)}₽${suffix}`, 'warning');
+                    releaseSubmissionFlag();
+                    return;
+                } else if (!deliveryZone) {
+                    showNotification('Выберите зону доставки', 'warning');
+                    releaseSubmissionFlag();
+                    return;
+                }
             } else if (!deliveryZone) {
-                showNotification('Выберите зону доставки', 'warning');
-                releaseSubmissionFlag();
-                return;
+                deliveryZone = 'moscow';
             }
             
             // Проверяем обязательные поля
@@ -2579,10 +2608,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const house = document.getElementById('house').value.trim();
             const phone = document.getElementById('phone').value.trim();
             
-            if (!street || !house) {
-                showNotification('Заполните адрес доставки', 'warning');
-                releaseSubmissionFlag();
-                return;
+            if (!TEST_MODE) {
+                if (!street || !house) {
+                    showNotification('Заполните адрес доставки', 'warning');
+                    releaseSubmissionFlag();
+                    return;
+                }
             }
             
             // Проверяем имя клиента
@@ -2631,19 +2662,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const userId = getUserId();
             console.log(`🔍 CLIENT: Создаем заказ для пользователя: ${userId}`);
             
-            const formData = {
-                userId: userId, // Добавляем ID пользователя
-                telegramUser: telegramUser, // Данные Telegram профиля
-                customerName: document.getElementById('customerName').value.trim(), // Имя из формы
-                deliveryZone: deliveryZone,
-                address: {
+            const resolvedAddress = TEST_MODE && (!street || !house)
+                ? {
+                    street: 'Тестовый режим',
+                    house: '—',
+                    apartment: '',
+                    floor: '',
+                    entrance: '',
+                    intercom: ''
+                }
+                : {
                     street: document.getElementById('street').value.trim(),
                     house: document.getElementById('house').value.trim(),
                     apartment: document.getElementById('apartment').value.trim(),
                     floor: document.getElementById('floor').value.trim(),
                     entrance: document.getElementById('entrance').value.trim(),
                     intercom: document.getElementById('intercom').value.trim()
-                },
+                };
+            
+            const formData = {
+                userId: userId, // Добавляем ID пользователя
+                telegramUser: telegramUser, // Данные Telegram профиля
+                customerName: document.getElementById('customerName').value.trim(), // Имя из формы
+                deliveryZone: deliveryZone,
+                address: resolvedAddress,
                 phone: document.getElementById('phone').value.trim(),
                 comment: document.getElementById('comment').value.trim(),
                 cartItems: Object.values(cart).filter(i => i.quantity > 0),
@@ -3088,6 +3130,8 @@ async function initApp() {
         handlePaymentSuccess();
         return; // Выходим, т.к. обработка успешной оплаты покажет нужный экран
     }
+
+    await loadTestModeState();
     
     // 🧪 Показываем индикатор тестового режима
     if (TEST_MODE) {
