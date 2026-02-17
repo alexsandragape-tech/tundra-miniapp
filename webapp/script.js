@@ -1383,6 +1383,9 @@ function showProductDetail(categoryId, productId) {
         : `<div class="detail-price">${formatPriceValue(product.price)}₽${product.unit}</div>`;
     const detailBadge = promoActive ? '<div class="detail-badge">Акция</div>' : '';
     const detailWeight = getDetailWeight(product.unit);
+    const weightBasedNote = product.weightBased
+        ? `<div class="detail-weighted">Весовой товар. Финальная стоимость будет сформирована после оформления заказа.</div>`
+        : '';
     const nutrition = getDetailNutrition(product);
     const bottomPriceHtml = promoActive
         ? `<div class="detail-bottom-price">
@@ -1404,6 +1407,7 @@ function showProductDetail(categoryId, productId) {
                 ${product.name}${detailWeight ? ` <span class="detail-weight">${detailWeight}</span>` : ''}
             </div>
             ${detailBadge}
+            ${weightBasedNote}
 
             <div class="detail-divider"></div>
             <div class="detail-nutrition">
