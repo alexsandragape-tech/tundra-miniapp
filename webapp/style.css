@@ -561,10 +561,16 @@ body.modal-open {
 
 .category-name {
     font-size: 18px; /* Возвращен к исходному размеру */
-    font-weight: 600;
+    font-weight: 400;
     color: #1A1F2E;
     margin-bottom: 4px; /* Уменьшен отступ снизу */
     margin-top: 3px; /* Уменьшен отступ сверху от изображения */
+}
+
+/* Название каталога (Колбасы/Рийеты/...) - Commissioner Regular */
+#category-title {
+    font-family: 'Commissioner', 'Montserrat', 'Open Sans', sans-serif;
+    font-weight: 400;
 }
 
 .category-desc {
