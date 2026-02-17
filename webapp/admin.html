@@ -36,6 +36,7 @@
             <aside class="admin-sidebar">
                 <div class="admin-sidebar-title">Разделы</div>
                 <div class="admin-tabs">
+                    <button class="tab-btn active" onclick="showTab('orders')">Заказы</button>
                     <button class="tab-btn" onclick="showTab('categories')">Категории</button>
                     <button class="tab-btn" onclick="showTab('promocodes')">Промокоды</button>
                     <button class="tab-btn" onclick="showTab('banners')">Баннеры</button>
@@ -113,6 +114,17 @@
 
         <div class="admin-empty" id="admin-empty">
             Выберите раздел слева
+        </div>
+
+        <!-- Заказы -->
+        <div class="orders-management" id="orders-management" style="display: none;">
+            <div class="orders-tabs">
+                <button class="orders-tab active" data-status="new">Новые</button>
+                <button class="orders-tab" data-status="in_work">В работе</button>
+                <button class="orders-tab" data-status="completed">Завершенные</button>
+                <button class="orders-tab" data-status="cancelled">Отмененные</button>
+            </div>
+            <div id="orders-list" class="orders-list"></div>
         </div>
 
         <div class="categories-container" id="categories-container" style="display: none;">
