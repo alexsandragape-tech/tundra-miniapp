@@ -16,6 +16,7 @@ function safeParseJson(value, fallback, what) {
 function mapDbOrderToApi(dbOrder) {
     if (!dbOrder) return null;
     const promoData = safeParseJson(dbOrder.promo_data, null, 'promo_data');
+    const weightItems = safeParseJson(dbOrder.weight_items, null, 'weight_items');
     return {
         id: dbOrder.order_id || dbOrder.id || dbOrder.orderId,
         status: dbOrder.status,
@@ -31,6 +32,10 @@ function mapDbOrderToApi(dbOrder) {
         customerName: dbOrder.user_name || dbOrder.customerName,
         createdAt: dbOrder.created_at || dbOrder.createdAt,
         payment_id: dbOrder.payment_id || dbOrder.paymentId,
+        paymentUrl: dbOrder.payment_url || dbOrder.paymentUrl,
+        paymentExpiresAt: dbOrder.payment_expires_at || dbOrder.paymentExpiresAt || null,
+        hasWeightItems: dbOrder.has_weight_items === true,
+        weightItems,
         telegramUserId: dbOrder.user_id || dbOrder.telegramUserId,
         appliedPromo: promoData
     };
@@ -43,7 +48,8 @@ function mapDbOrderToList(dbOrder) {
         purchase_date: dbOrder.created_at || dbOrder.createdAt,
         items: dbOrder.items || [],
         status: dbOrder.status,
-        payment_status: dbOrder.payment_status
+        payment_status: dbOrder.payment_status,
+        has_weight_items: dbOrder.has_weight_items === true
     };
 }
 
