@@ -118,6 +118,15 @@ let orderTimers = new Map();
 // 🔧 ХРАНИЛИЩЕ ТОВАРОВ ДЛЯ АДМИН ПАНЕЛИ
 let adminProducts = new Map();
 
+// 🧪 ТЕСТОВЫЙ РЕЖИМ (переключается из админки)
+let TEST_MODE_ENABLED = false;
+function isTestModeEnabled() {
+    return TEST_MODE_ENABLED === true;
+}
+function setTestModeEnabled(value) {
+    TEST_MODE_ENABLED = Boolean(value);
+}
+
 app.use(express.json());
 
 // ГЛОБАЛЬНОЕ ЛОГИРОВАНИЕ webhook запросов (для диагностики)
@@ -2065,6 +2074,7 @@ async function sendTelegramNotification(order, type) {
 // 🔧 MIDDLEWARE ДЛЯ ВАЛИДАЦИИ ДАННЫХ
 function validateOrderData(req, res, next) {
     const { cartItems, address, phone, customerName, deliveryZone } = req.body;
+    const testMode = isTestModeEnabled();
     
     // Логируем входящие данные для отладки
     logger.debug('🔍 Валидация заказа:', {
@@ -2084,12 +2094,14 @@ function validateOrderData(req, res, next) {
         });
     }
     
-    if (!address || !address.street || !address.house) {
-        logger.error('❌ Валидация: Адрес неполный:', address);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо указать адрес доставки'
-        });
+    if (!testMode) {
+        if (!address || !address.street || !address.house) {
+            logger.error('❌ Валидация: Адрес неполный:', address);
+            return res.status(400).json({
+                ok: false,
+                error: 'Необходимо указать адрес доставки'
+            });
+        }
     }
     
     if (!phone || typeof phone !== 'string' || phone.trim().length < 10) {
@@ -2100,12 +2112,14 @@ function validateOrderData(req, res, next) {
         });
     }
     
-    if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
-        logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
-        return res.status(400).json({
-            ok: false,
-            error: 'Необходимо выбрать зону доставки'
-        });
+    if (!testMode) {
+        if (!deliveryZone || !['moscow', 'mo'].includes(deliveryZone)) {
+            logger.error('❌ Валидация: Зона доставки некорректная:', deliveryZone);
+            return res.status(400).json({
+                ok: false,
+                error: 'Необходимо выбрать зону доставки'
+            });
+        }
     }
     
     // Валидируем товары в корзине
@@ -2149,6 +2163,7 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
     
     try {
         const orderData = req.body;
+        const testModeEnabled = isTestModeEnabled();
         const cartItems = Array.isArray(orderData.cartItems) ? orderData.cartItems : [];
         const deliveryZone = orderData.deliveryZone || 'moscow';
         const userIdForLoyalty = orderData.telegramUser?.id?.toString?.() || orderData.userId || 'unknown';
@@ -2186,7 +2201,11 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
 
         orderData.hasWeightItems = hasWeightItems;
         orderData.weightItems = weightItems;
-        orderData.autoExpireMinutes = hasWeightItems ? 0 : 10;
+        if (testModeEnabled) {
+            orderData.autoExpireMinutes = 0;
+        } else {
+            orderData.autoExpireMinutes = hasWeightItems ? 0 : 10;
+        }
         orderData.paymentStatus = hasWeightItems ? 'pending_weight' : 'pending';
 
         // Создаем заказ
@@ -3609,7 +3628,9 @@ async function calculateOrderPricing({ cartItems, deliveryZone, promoCode, userI
     }
 
     let delivery = 0;
-    if (appliedPromo?.appliesToDelivery) {
+    if (isTestModeEnabled()) {
+        delivery = 0;
+    } else if (appliedPromo?.appliesToDelivery) {
         delivery = 0;
     } else if (deliveryZone === 'moscow') {
         delivery = subtotalAfterLoyalty >= 5000 ? 0 : 400;
@@ -4072,6 +4093,23 @@ app.delete('/api/admin/banners/:id', requireAdminAuth, async (req, res) => {
     }
 });
 
+// 🧪 Тестовый режим (админ-панель)
+app.get('/api/admin/test-mode', requireAdminAuth, (req, res) => {
+    res.json({ ok: true, enabled: isTestModeEnabled() });
+});
+
+app.put('/api/admin/test-mode', requireAdminAuth, (req, res) => {
+    const { enabled } = req.body || {};
+    setTestModeEnabled(Boolean(enabled));
+    logger.info(`🧪 Тестовый режим: ${isTestModeEnabled() ? 'включен' : 'выключен'}`);
+    res.json({ ok: true, enabled: isTestModeEnabled() });
+});
+
+// Публичное состояние тестового режима (для фронта)
+app.get('/api/test-mode', (req, res) => {
+    res.json({ ok: true, enabled: isTestModeEnabled() });
+});
+
 // ===== Заказы (весовые) для админ-панели =====
 app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
     try {
@@ -4164,7 +4202,9 @@ app.post('/api/admin/orders/:orderId/weight', requireAdminAuth, async (req, res)
         const description = `Заказ #${order.order_id} - ${customerInfo.customerName}`;
         const payment = await createYooKassaPayment(order.order_id, totalAmount, description, customerInfo);
 
-        const paymentExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+        const paymentExpiresAt = isTestModeEnabled()
+            ? null
+            : new Date(Date.now() + 30 * 60 * 1000);
 
         await OrdersDB.update(orderId, {
             status: 'in_work',
@@ -4191,7 +4231,9 @@ app.post('/api/admin/orders/:orderId/weight', requireAdminAuth, async (req, res)
             weight_items: normalizedWeightItems
         });
 
-        scheduleOrderExpiry(orderId, 30);
+        if (!isTestModeEnabled()) {
+            scheduleOrderExpiry(orderId, 30);
+        }
 
         await sendPaymentLinkToClient(
             { ...order, telegramUserId: order.user_id, total_amount: totalAmount },
