@@ -1561,6 +1561,7 @@ function addToCart(categoryId, productId, quantity) {
             image: product.image,
             imageUrl: product.imageUrl,
             maxQty: product.maxQty,
+            weightBased: product.weightBased === true,
             quantity: 0
         };
     }
@@ -2744,6 +2745,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     orderCounter = currentOrderId;
                     localStorage.setItem('tundra_order_counter', orderCounter.toString());
                     
+                    if (result.order.requiresWeightConfirmation) {
+                        // Весовой заказ: ждём подтверждения суммы
+                        cart = {};
+                        localStorage.setItem('tundra_cart', JSON.stringify(cart));
+                        updateCartBadge();
+                        showNotification('Заказ принят. Мы уточним вес и отправим ссылку на оплату в Telegram.', 'info');
+                        showScreen('weight-confirmation-screen');
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                        window.isSubmittingOrder = false;
+                        return;
+                    }
+
                     // Сохраняем данные заказа для обновления профиля ПОСЛЕ оплаты
                     const serverTotals = result.order.totals || calculateCartTotal();
                     const orderData = {
