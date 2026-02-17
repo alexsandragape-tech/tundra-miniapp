@@ -32,6 +32,16 @@
         </div>
     </div>
     <div class="admin-container">
+        <div class="admin-layout">
+            <aside class="admin-sidebar">
+                <div class="admin-sidebar-title">Разделы</div>
+                <div class="admin-tabs">
+                    <button class="tab-btn" onclick="showTab('categories')">Категории</button>
+                    <button class="tab-btn" onclick="showTab('promocodes')">Промокоды</button>
+                    <button class="tab-btn" onclick="showTab('banners')">Баннеры</button>
+                </div>
+            </aside>
+            <main class="admin-content">
         <!-- 📱 МОБИЛЬНЫЙ ХЕДЕР -->
         <div class="mobile-header">
             <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
@@ -71,7 +81,7 @@
         </div>
 
         <!-- ДЕСКТОПНЫЙ ЗАГОЛОВОК -->
-        <header class="admin-header desktop-only">
+        <header class="admin-header">
             <h1>Админ панель Tundra Gourmet</h1>
             <div class="admin-stats">
                 <div class="stat">
@@ -90,7 +100,7 @@
         </header>
 
         <!-- ДЕСКТОПНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ -->
-        <div class="admin-toolbar desktop-only">
+        <div class="admin-toolbar">
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Поиск товаров..." oninput="filterProducts()">
             </div>
@@ -99,15 +109,13 @@
                 <button class="filter-btn" onclick="filterByStatus('available')">В наличии</button>
                 <button class="filter-btn" onclick="filterByStatus('hidden')">Скрыто</button>
             </div>
-            <div class="admin-tabs">
-                <button class="tab-btn active" onclick="showTab('products')">Товары</button>
-                <button class="tab-btn" onclick="showTab('categories')">Категории</button>
-                <button class="tab-btn" onclick="showTab('promocodes')">Промокоды</button>
-                <button class="tab-btn" onclick="showTab('banners')">Баннеры</button>
-            </div>
         </div>
 
-        <div class="categories-container" id="categories-container">
+        <div class="admin-empty" id="admin-empty">
+            Выберите раздел слева
+        </div>
+
+        <div class="categories-container" id="categories-container" style="display: none;">
             <!-- Категории и товары будут загружены через JavaScript -->
         </div>
 
@@ -403,6 +411,8 @@
 
         <!-- Уведомления -->
         <div id="admin-notification" class="admin-notification"></div>
+            </main>
+        </div>
     </div>
 
     <script src="admin-script.js"></script>
