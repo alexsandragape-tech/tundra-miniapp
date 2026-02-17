@@ -2372,77 +2372,64 @@ app.get('/admin', (req, res) => {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0b5c56, #2C5530);
+            background: #ffffff;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: #111111;
         }
         .login-container {
-            background: rgba(255,255,255,0.1);
-            padding: 40px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            background: #ffffff;
+            padding: 28px 24px;
+            border: 1px solid #e5e5e5;
             text-align: center;
-            max-width: 400px;
+            max-width: 360px;
             width: 90%;
         }
-        .login-icon { font-size: 60px; margin-bottom: 20px; }
-        .login-title { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
-        .login-subtitle { opacity: 0.9; margin-bottom: 30px; }
-        .login-form { margin-top: 30px; }
+        .login-title { font-size: 18px; font-weight: 400; margin-bottom: 6px; }
+        .login-subtitle { opacity: 0.7; margin-bottom: 18px; font-size: 14px; }
+        .login-form { margin-top: 10px; }
         .login-input {
             width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 12px;
+            padding: 12px 14px;
+            border: 1px solid #e5e5e5;
             font-size: 16px;
-            margin-bottom: 20px;
-            background: rgba(255,255,255,0.9);
-            color: #2c3e50;
+            margin-bottom: 16px;
+            background: #ffffff;
+            color: #111111;
         }
         .login-btn {
             width: 100%;
-            background: #D4A574;
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
+            background: #111111;
+            color: #ffffff;
+            border: 1px solid #111111;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 400;
             cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .login-btn:hover {
-            background: #C1965F;
-            transform: translateY(-2px);
         }
         .login-error {
-            background: rgba(231, 76, 60, 0.2);
-            border: 1px solid #e74c3c;
-            color: #e74c3c;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
+            border: 1px solid #111111;
+            color: #111111;
+            padding: 10px;
+            margin-bottom: 14px;
+            font-size: 13px;
         }
         .login-help {
-            margin-top: 30px;
-            font-size: 14px;
-            opacity: 0.7;
+            margin-top: 18px;
+            font-size: 12px;
+            opacity: 0.6;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <div class="login-icon">🔐</div>
         <h1 class="login-title">Админ панель</h1>
         <p class="login-subtitle">Tundra Gourmet</p>
         
         <div class="login-error">
-            ❌ Неверный пароль. Попробуйте еще раз.
+            Неверный пароль. Попробуйте еще раз.
         </div>
         
         <form class="login-form" method="GET">
@@ -2451,7 +2438,7 @@ app.get('/admin', (req, res) => {
         </form>
         
         <div class="login-help">
-            💡 Если забыли пароль, обратитесь к разработчику
+            Если забыли пароль, обратитесь к разработчику
         </div>
     </div>
 </body>
