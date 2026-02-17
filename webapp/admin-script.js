@@ -66,6 +66,52 @@ function handleAuthError() {
     adminPassword = null;
 }
 
+async function initTestModeToggle() {
+    const toggle = document.getElementById('test-mode-toggle');
+    if (!toggle) return;
+    const password = getAdminPassword();
+    if (!password) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/admin/test-mode`, {
+            headers: { 'X-Admin-Password': password }
+        });
+        if (response.ok) {
+            const result = await response.json();
+            toggle.checked = Boolean(result.enabled);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки тестового режима:', error);
+    }
+
+    toggle.addEventListener('change', async () => {
+        const enabled = toggle.checked;
+        try {
+            const updateResponse = await fetch(`${API_BASE}/api/admin/test-mode`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Password': password
+                },
+                body: JSON.stringify({ enabled })
+            });
+            if (!updateResponse.ok) {
+                throw new Error('Не удалось обновить тестовый режим');
+            }
+            const result = await updateResponse.json();
+            toggle.checked = Boolean(result.enabled);
+            showNotification(
+                result.enabled ? 'Тестовый режим включен' : 'Тестовый режим выключен',
+                result.enabled ? 'success' : 'info'
+            );
+        } catch (error) {
+            console.error('Ошибка обновления тестового режима:', error);
+            toggle.checked = !enabled;
+            showNotification('Не удалось переключить тестовый режим', 'error');
+        }
+    });
+}
+
 // Инициализация админ панели
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🔍 DOM загружен, инициализируем админ-панель');
@@ -106,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileInterface();
     initOrdersTabs();
     showTab('orders');
+    initTestModeToggle();
 
     const promoForm = document.getElementById('promo-form');
     if (promoForm) {
