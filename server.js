@@ -997,16 +997,16 @@ async function autoExpireOrder(orderId) {
     }
     
     // Отменяем заказ
-    order.status = 'expired';
-    order.paymentStatus = 'expired';
+    order.status = 'cancelled';
+    order.paymentStatus = 'cancelled';
     order.updatedAt = new Date();
     orders.set(orderId, order);
     
     // Обновляем в базе данных
     try {
         await OrdersDB.update(orderId, { 
-            status: 'expired',
-            payment_status: 'expired'
+            status: 'cancelled',
+            payment_status: 'cancelled'
         });
         logger.info(`💾 Заказ ${orderId} отменен в БД`);
     } catch (dbError) {
@@ -1032,6 +1032,46 @@ function clearOrderTimer(orderId) {
 function cancelOrderTimer(orderId) {
     clearOrderTimer(orderId);
     logger.debug(`🔥 Таймер заказа ${orderId} отменен (заказ оплачен)`);
+}
+
+function scheduleOrderExpiry(orderId, minutes) {
+    clearOrderTimer(orderId);
+    if (!minutes || minutes <= 0) return;
+    const timer = setTimeout(async () => {
+        await autoExpireOrder(orderId);
+    }, minutes * 60 * 1000);
+    orderTimers.set(orderId, timer);
+}
+
+function mapWeightOrderStatus(order) {
+    if (!order || order.has_weight_items !== true) return null;
+    const paymentStatus = order.payment_status || order.paymentStatus;
+    if (paymentStatus === 'pending_weight') return 'new';
+    if (paymentStatus === 'payment_pending') return 'in_work';
+    if (paymentStatus === 'paid') return 'completed';
+    if (paymentStatus === 'cancelled') return 'cancelled';
+    return 'new';
+}
+
+async function sendPaymentLinkToClient(order, paymentUrl, expiresAt) {
+    if (!config.TELEGRAM_BOT_TOKEN || !order?.telegramUserId) {
+        logger.warn('⚠️ Не удалось отправить ссылку клиенту: нет токена или telegramUserId');
+        return;
+    }
+    const expiryText = expiresAt
+        ? new Date(expiresAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+        : null;
+    const message =
+        `💳 <b>Ссылка на оплату</b>\n\n` +
+        `📋 Заказ №${order.id || order.order_id}\n` +
+        `💰 Сумма: ${order.total_amount || order.totals?.total || 0}₽\n` +
+        (expiryText ? `⏰ Оплатить до: ${expiryText}\n\n` : '\n') +
+        `Перейдите по ссылке для оплаты:\n${paymentUrl}`;
+    await axios.post(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        chat_id: order.telegramUserId,
+        text: message,
+        parse_mode: 'HTML'
+    });
 }
 
 // Настройка статических файлов (ПОЛНОСТЬЮ БЕЗ ОГРАНИЧЕНИЙ)
@@ -1541,7 +1581,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
             });
             
             // Принудительно проверяем статус платежа даже для заказов из БД
-            if (order.payment_id && order.payment_status === 'pending') {
+            if (order.payment_id && ['pending', 'payment_pending'].includes(order.payment_status)) {
                 logger.info('🔍 API: Принудительная проверка статуса платежа для заказа ' + orderId);
                 try {
                     // Проверяем, что checkout инициализирован
@@ -1665,7 +1705,7 @@ app.get('/api/orders/:orderId', async (req, res) => {
             logger.info('🔍 API: Заказ ' + orderId + ' в памяти:', order ? 'найден' : 'не найден');
             
             // Если заказ найден в памяти, но не в БД, проверяем статус платежа в ЮKassa
-            if (order && order.paymentId) {
+            if (order && order.paymentId && ['pending', 'payment_pending'].includes(order.paymentStatus)) {
                 logger.info('🔍 API: Проверяем статус платежа в ЮKassa для заказа ' + orderId);
                 try {
                     // Проверяем, что checkout инициализирован
@@ -1740,28 +1780,33 @@ async function createOrder(orderData) {
     orderCounter++;
     const orderId = orderCounter.toString();
     
-    
+    const autoExpireMinutes = Number.isFinite(orderData.autoExpireMinutes)
+        ? orderData.autoExpireMinutes
+        : 10;
+
     const order = {
         id: orderId,
         status: 'new', // new, accepted, preparing, delivering, completed, cancelled, expired
         paymentStatus: 'pending', // pending, paid, cancelled, expired
         createdAt: new Date(),
         updatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
+        expiresAt: autoExpireMinutes > 0 ? new Date(Date.now() + autoExpireMinutes * 60 * 1000) : null,
         ...orderData
     };
     
     // 💾 СОХРАНЯЕМ В ПАМЯТЬ (в БД сохраняется в API-маршруте)
     orders.set(orderId, order);
     
-    // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ НА 10 МИНУТ
-    const timer = setTimeout(async () => {
-        await autoExpireOrder(orderId);
-    }, 10 * 60 * 1000); // 10 минут
-    
-    orderTimers.set(orderId, timer);
-    
-    logger.debug('🔥 Заказ ' + orderId + ' создан. Автоотмена через 10 минут.');
+    if (autoExpireMinutes > 0) {
+        // 🔥 ЗАПУСКАЕМ ТАЙМЕР АВТООТМЕНЫ
+        const timer = setTimeout(async () => {
+            await autoExpireOrder(orderId);
+        }, autoExpireMinutes * 60 * 1000);
+        orderTimers.set(orderId, timer);
+        logger.debug(`🔥 Заказ ${orderId} создан. Автоотмена через ${autoExpireMinutes} минут.`);
+    } else {
+        logger.debug(`🔥 Заказ ${orderId} создан без автоотмены.`);
+    }
     
     return order;
 }
@@ -2125,6 +2170,25 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         orderData.promoCode = pricing.promoCode;
         orderData.promoDiscount = pricing.totals.promoDiscount;
         
+        const hasWeightItems = cartItems.some(item => item.weightBased === true);
+        const weightItems = hasWeightItems
+            ? cartItems
+                .filter(item => item.weightBased === true)
+                .map(item => ({
+                    productId: item.productId,
+                    name: item.name,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    weightGrams: null,
+                    finalPrice: null
+                }))
+            : null;
+
+        orderData.hasWeightItems = hasWeightItems;
+        orderData.weightItems = weightItems;
+        orderData.autoExpireMinutes = hasWeightItems ? 0 : 10;
+        orderData.paymentStatus = hasWeightItems ? 'pending_weight' : 'pending';
+
         // Создаем заказ
         order = await createOrder(orderData);
         logger.info('✅ Заказ #' + order.id + ' создан, сумма: ' + (order.totals?.total || 0) + '₽');
@@ -2141,14 +2205,16 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         const totalAmount = order.totals?.total || 0;
         const description = 'Заказ #' + order.id + ' - ' + customerName;
         
-        if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
-            logger.error('❌ ЮKassa ключи не настроены');
-            throw new Error('ЮKassa ключи не настроены');
-        }
-        
-        if (!checkout) {
-            logger.error('❌ ЮKassa не инициализирована');
-            throw new Error('ЮKassa недоступна');
+        if (!hasWeightItems) {
+            if (!config.YOOKASSA_SHOP_ID || !config.YOOKASSA_SECRET_KEY) {
+                logger.error('❌ ЮKassa ключи не настроены');
+                throw new Error('ЮKassa ключи не настроены');
+            }
+            
+            if (!checkout) {
+                logger.error('❌ ЮKassa не инициализирована');
+                throw new Error('ЮKassa недоступна');
+            }
         }
         
         const customerInfo = {
@@ -2163,49 +2229,51 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
         order.telegramUsername = customerInfo.telegramUsername;
         order.telegramUserId = telegramUser?.id || null; // Сохраняем Telegram ID для уведомлений
         
-        // Создаем платеж в ЮKassa с защитой от падения
-        try {
-            const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
-            logger.info('💳 Детали платежа ЮKassa:', {
-                paymentId: payment.id,
-                status: payment.status,
-                confirmation: payment.confirmation,
-                confirmationUrl: payment.confirmation?.confirmation_url
-            });
-            // Сохраняем ID платежа в заказе
-            order.paymentId = payment.id;
-            order.paymentUrl = payment.confirmation?.confirmation_url;
-            if (!order.paymentUrl) {
-                logger.error('❌ PaymentUrl не получен от ЮKassa!', {
-                    payment: payment,
-                    confirmation: payment.confirmation
-                });
-            } else {
-                logger.info('✅ PaymentUrl получен:', order.paymentUrl);
-            }
-        } catch (paymentError) {
-            logger.error('❌ Создание платежа не удалось:', paymentError.message);
-            if (paymentError.response) {
-                logger.error('📋 Detali oshibki YooKassa (status):', paymentError.response.status);
-                logger.error('📋 Detali oshibki YooKassa (data):', paymentError.response.data);
-            } else {
-                logger.error('📋 YooKassa error without response:', paymentError);
-            }
-            // Очищаем временно созданный заказ и таймер автоотмены
+        if (!hasWeightItems) {
+            // Создаем платеж в ЮKassa с защитой от падения
             try {
-                if (order && orders.has(order.id)) {
-                    orders.delete(order.id);
+                const payment = await createYooKassaPayment(order.id, totalAmount, description, customerInfo);
+                logger.info('💳 Детали платежа ЮKassa:', {
+                    paymentId: payment.id,
+                    status: payment.status,
+                    confirmation: payment.confirmation,
+                    confirmationUrl: payment.confirmation?.confirmation_url
+                });
+                // Сохраняем ID платежа в заказе
+                order.paymentId = payment.id;
+                order.paymentUrl = payment.confirmation?.confirmation_url;
+                if (!order.paymentUrl) {
+                    logger.error('❌ PaymentUrl не получен от ЮKassa!', {
+                        payment: payment,
+                        confirmation: payment.confirmation
+                    });
+                } else {
+                    logger.info('✅ PaymentUrl получен:', order.paymentUrl);
                 }
-                const t = orderTimers.get(order.id);
-                if (t) {
-                    clearTimeout(t);
-                    orderTimers.delete(order.id);
+            } catch (paymentError) {
+                logger.error('❌ Создание платежа не удалось:', paymentError.message);
+                if (paymentError.response) {
+                    logger.error('📋 Detali oshibki YooKassa (status):', paymentError.response.status);
+                    logger.error('📋 Detali oshibki YooKassa (data):', paymentError.response.data);
+                } else {
+                    logger.error('📋 YooKassa error without response:', paymentError);
                 }
-            } catch (e) {
-                logger.warn('⚠️ Ошибка очистки временного заказа:', e.message);
+                // Очищаем временно созданный заказ и таймер автоотмены
+                try {
+                    if (order && orders.has(order.id)) {
+                        orders.delete(order.id);
+                    }
+                    const t = orderTimers.get(order.id);
+                    if (t) {
+                        clearTimeout(t);
+                        orderTimers.delete(order.id);
+                    }
+                } catch (e) {
+                    logger.warn('⚠️ Ошибка очистки временного заказа:', e.message);
+                }
+                // Возвращаем ошибку клиенту
+                throw paymentError; // Пробрасываем ошибку дальше
             }
-            // Возвращаем ошибку клиенту
-            throw paymentError; // Пробрасываем ошибку дальше
         }
         
         // Обновляем заказ в памяти
@@ -2222,12 +2290,15 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
             items: orderData.cartItems,
             totalAmount: totalAmount,
             status: 'new',
-            paymentStatus: 'pending',
+            paymentStatus: hasWeightItems ? 'pending_weight' : 'pending',
             paymentId: order.paymentId,
             paymentUrl: order.paymentUrl,
             promoCode: order.appliedPromo?.code || null,
             promoDiscount: order.totals?.promoDiscount || 0,
-            promoData: order.appliedPromo || null
+            promoData: order.appliedPromo || null,
+            hasWeightItems: hasWeightItems,
+            weightItems: weightItems,
+            paymentExpiresAt: null
         });
         
         logger.info('✅ Заказ #' + order.id + ' сохранен в БД');
@@ -2243,7 +2314,8 @@ app.post('/api/orders', validateOrderData, async (req, res) => {
                 status: order.status,
                 paymentUrl: order.paymentUrl,
                 totals: order.totals,
-                appliedPromo: order.appliedPromo
+                appliedPromo: order.appliedPromo,
+                requiresWeightConfirmation: hasWeightItems === true
             }
         });
         
@@ -3555,7 +3627,7 @@ async function calculateOrderPricing({ cartItems, deliveryZone, promoCode, userI
     } else if (deliveryZone === 'moscow') {
         delivery = subtotalAfterLoyalty >= 5000 ? 0 : 400;
     } else if (deliveryZone === 'mo') {
-        delivery = 700;
+        delivery = 1000;
     }
 
     const total = subtotalAfterLoyalty + delivery;
@@ -4010,6 +4082,140 @@ app.delete('/api/admin/banners/:id', requireAdminAuth, async (req, res) => {
     } catch (error) {
         logger.error('❌ Ошибка удаления баннера:', error.message);
         res.status(500).json({ ok: false, error: 'Не удалось удалить баннер' });
+    }
+});
+
+// ===== Заказы (весовые) для админ-панели =====
+app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
+    try {
+        const status = (req.query.status || '').toString().trim();
+        const orders = await OrdersDB.getAll();
+        const weightOrders = orders.filter(order => order.has_weight_items === true);
+        const filtered = status
+            ? weightOrders.filter(order => mapWeightOrderStatus(order) === status)
+            : weightOrders;
+        res.json({ ok: true, orders: filtered });
+    } catch (error) {
+        logger.error('❌ Ошибка получения заказов для админа:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось загрузить заказы' });
+    }
+});
+
+app.get('/api/admin/orders/:orderId', requireAdminAuth, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const order = await OrdersDB.getById(orderId);
+        if (!order) {
+            return res.status(404).json({ ok: false, error: 'Заказ не найден' });
+        }
+        res.json({ ok: true, order });
+    } catch (error) {
+        logger.error('❌ Ошибка получения заказа для админа:', error.message);
+        res.status(500).json({ ok: false, error: 'Не удалось загрузить заказ' });
+    }
+});
+
+app.post('/api/admin/orders/:orderId/weight', requireAdminAuth, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { weightItems } = req.body || {};
+
+        if (!Array.isArray(weightItems) || weightItems.length === 0) {
+            return res.status(400).json({ ok: false, error: 'Укажите весовые позиции' });
+        }
+
+        const order = await OrdersDB.getById(orderId);
+        if (!order) {
+            return res.status(404).json({ ok: false, error: 'Заказ не найден' });
+        }
+        if (order.has_weight_items !== true) {
+            return res.status(400).json({ ok: false, error: 'Заказ не является весовым' });
+        }
+
+        const existingWeightItems = Array.isArray(order.weight_items) ? order.weight_items : [];
+        const weightById = new Map(weightItems.map(item => [item.productId, item]));
+
+        const normalizedWeightItems = existingWeightItems.map(item => {
+            const input = weightById.get(item.productId);
+            if (!input) {
+                throw new Error(`Не указаны данные для товара ${item.name || item.productId}`);
+            }
+            const weightGrams = Number(input.weightGrams);
+            const finalPrice = Number(input.finalPrice);
+            if (!Number.isFinite(weightGrams) || weightGrams <= 0) {
+                throw new Error(`Некорректный вес для товара ${item.name || item.productId}`);
+            }
+            if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+                throw new Error(`Некорректная цена для товара ${item.name || item.productId}`);
+            }
+            return {
+                ...item,
+                weightGrams,
+                finalPrice
+            };
+        });
+
+        const weightIdSet = new Set(normalizedWeightItems.map(item => item.productId));
+        const fixedItems = (order.items || []).filter(item => !weightIdSet.has(item.productId));
+        const pricingItems = [
+            ...fixedItems.map(item => ({ price: Number(item.price), quantity: Number(item.quantity) })),
+            ...normalizedWeightItems.map(item => ({ price: Number(item.finalPrice), quantity: 1 }))
+        ];
+
+        const pricing = await calculateOrderPricing({
+            cartItems: pricingItems,
+            deliveryZone: order.delivery_zone || 'moscow',
+            promoCode: order.promo_code || null,
+            userId: order.user_id || 'unknown'
+        });
+
+        const totalAmount = pricing.totals.total || 0;
+        const customerInfo = {
+            customerName: order.user_name || 'Клиент',
+            phone: order.phone || ''
+        };
+        const description = `Заказ #${order.order_id} - ${customerInfo.customerName}`;
+        const payment = await createYooKassaPayment(order.order_id, totalAmount, description, customerInfo);
+
+        const paymentExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+        await OrdersDB.update(orderId, {
+            status: 'in_work',
+            paymentStatus: 'payment_pending',
+            paymentId: payment.id,
+            paymentUrl: payment.confirmation?.confirmation_url,
+            paymentExpiresAt,
+            total_amount: totalAmount,
+            promoDiscount: pricing.totals.promoDiscount || 0,
+            weightItems: normalizedWeightItems
+        });
+
+        const orderForMemory = orders.get(orderId) || {};
+        orders.set(orderId, {
+            ...orderForMemory,
+            ...order,
+            status: 'in_work',
+            paymentStatus: 'payment_pending',
+            paymentId: payment.id,
+            paymentUrl: payment.confirmation?.confirmation_url,
+            paymentExpiresAt,
+            total_amount: totalAmount,
+            totals: pricing.totals,
+            weight_items: normalizedWeightItems
+        });
+
+        scheduleOrderExpiry(orderId, 30);
+
+        await sendPaymentLinkToClient(
+            { ...order, telegramUserId: order.user_id, total_amount: totalAmount },
+            payment.confirmation?.confirmation_url,
+            paymentExpiresAt
+        );
+
+        res.json({ ok: true, paymentUrl: payment.confirmation?.confirmation_url, totalAmount });
+    } catch (error) {
+        logger.error('❌ Ошибка формирования веса заказа:', error.message);
+        res.status(500).json({ ok: false, error: error.message || 'Не удалось сформировать оплату' });
     }
 });
 
