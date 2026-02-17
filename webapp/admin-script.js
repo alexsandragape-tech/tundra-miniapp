@@ -15,6 +15,7 @@ let promoSupportedTypes = [];
 let currentPromoId = null;
 let banners = [];
 let currentBannerId = null;
+let currentCategoryId = null;
 
 // 📝 НАЗВАНИЯ КАТЕГОРИЙ ДЛЯ АДМИН-ПАНЕЛИ
 const categories = {
@@ -84,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.editBanner = editBanner;
     window.deleteBanner = deleteBanner;
     window.moveProduct = moveProduct;
+    window.openCategory = openCategory;
+    window.closeCategoryView = closeCategoryView;
     
     console.log('✅ Глобальные функции экспортированы:', {
         toggleProductAvailability: typeof window.toggleProductAvailability,
@@ -986,16 +989,49 @@ function renderProducts() {
     
     console.log('renderProducts: Все ID категорий:', Array.from(allCategoryIds));
     
-    // Показываем все категории (включая скрытые - чтобы можно было их показать)
-    Array.from(allCategoryIds).forEach(categoryId => {
+    const categoryIds = Array.from(allCategoryIds);
+    const idsToRender = currentCategoryId ? [currentCategoryId] : categoryIds;
+
+    if (currentCategoryId) {
+        const currentName = categories[currentCategoryId] || currentCategoryId;
+        container.innerHTML += `
+            <div class="category-back">
+                <button class="back-btn" onclick="closeCategoryView()">Назад</button>
+                <div class="category-back-title">${currentName}</div>
+            </div>
+        `;
+    }
+
+    // Показываем категории
+    idsToRender.forEach(categoryId => {
         const categoryProducts = products[categoryId] || [];
         const availableCount = categoryProducts.filter(p => p.available !== false).length;
         const hiddenCount = categoryProducts.filter(p => p.available === false).length;
         const isCategoryVisible = categoryVisibility[categoryId] !== false; // статус видимости для клиентов
+        const isOpen = currentCategoryId === categoryId;
+        const productsHtml = isOpen
+            ? `<div class="products-grid">
+                    ${categoryProducts.map(product => renderProductCard(categoryId, product)).join('')}
+               </div>`
+            : '';
+        const categoryActions = isOpen
+            ? `<div class="category-actions">
+                    <button class="edit-category-btn" onclick="event.stopPropagation(); editCategoryName('${categoryId}')" title="Редактировать название категории">
+                        Изменить название
+                    </button>
+                    <button class="edit-category-btn" 
+                            onclick="event.stopPropagation(); toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
+                        ${isCategoryVisible ? 'Скрыть' : 'Показать'}
+                    </button>
+                    <button class="add-product-btn" onclick="event.stopPropagation(); showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
+                        Добавить товар
+                    </button>
+               </div>`
+            : '';
         
         const categoryHtml = `
-            <div class="category-section" data-category="${categoryId}">
-                <div class="category-header">
+            <div class="category-section ${isOpen ? 'open' : ''}" data-category="${categoryId}">
+                <div class="category-header" onclick="openCategory('${categoryId}')">
                     <div class="category-info">
                         <div class="category-title" id="category-title-${categoryId}">${categories[categoryId] || categoryId}</div>
                         <div class="category-stats">
@@ -1004,22 +1040,9 @@ function renderProducts() {
                             Скрыто: ${hiddenCount}${isCategoryVisible ? '' : ' | Категория: скрыта'}
                         </div>
                     </div>
-                    <div class="category-actions">
-                        <button class="edit-category-btn" onclick="editCategoryName('${categoryId}')" title="Редактировать название категории">
-                            Изменить название
-                        </button>
-                        <button class="edit-category-btn" 
-                                onclick="toggleCategoryVisibility('${categoryId}')" title="Скрыть/Показать категорию в клиентском приложении">
-                            ${isCategoryVisible ? 'Скрыть' : 'Показать'}
-                        </button>
-                        <button class="add-product-btn" onclick="showAddProductModal('${categoryId}')" title="Добавить товар в категорию">
-                            Добавить товар
-                        </button>
-                    </div>
+                    ${categoryActions}
                 </div>
-                <div class="products-grid">
-                    ${categoryProducts.map(product => renderProductCard(categoryId, product)).join('')}
-                </div>
+                ${productsHtml}
             </div>
         `;
         
@@ -1038,6 +1061,19 @@ function renderProducts() {
             });
         });
     }, 100);
+}
+
+function openCategory(categoryId) {
+    if (currentCategoryId === categoryId) {
+        return;
+    }
+    currentCategoryId = categoryId;
+    renderProducts();
+}
+
+function closeCategoryView() {
+    currentCategoryId = null;
+    renderProducts();
 }
 
 // Загрузить карту видимости категорий из сервера
@@ -1102,8 +1138,10 @@ function renderProductCard(categoryId, product) {
                         onclick="event.stopPropagation(); toggleProductAvailability('${safeCategoryId}', '${safeProductId}');">
                     ${isHidden ? 'Показать' : 'Скрыть'}
                 </button>
-                <button class="btn secondary btn-small" onclick="event.stopPropagation(); moveProduct('${safeCategoryId}', '${safeProductId}', -1)">↑</button>
-                <button class="btn secondary btn-small" onclick="event.stopPropagation(); moveProduct('${safeCategoryId}', '${safeProductId}', 1)">↓</button>
+                <div class="move-controls" onclick="event.stopPropagation();">
+                    <button class="move-btn" onclick="moveProduct('${safeCategoryId}', '${safeProductId}', -1)">↑</button>
+                    <button class="move-btn" onclick="moveProduct('${safeCategoryId}', '${safeProductId}', 1)">↓</button>
+                </div>
                 <div class="status-indicator ${isHidden ? 'hidden' : ''} ${isModified ? 'modified' : ''}">
                     ${isHidden ? 'Скрыто' : isModified ? 'Изменено' : 'В наличии'}
                 </div>
@@ -1331,7 +1369,8 @@ function closeEditModal() {
 
 // Фильтрация товаров
 function filterProducts() {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const searchInput = document.getElementById('search-input');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     const productCards = document.querySelectorAll('.product-card');
     
     productCards.forEach(card => {
@@ -2071,15 +2110,12 @@ function showTab(tabName) {
     
     // Переключаем контент
     const categoriesContainer = document.getElementById('categories-container');
-    const categoriesManagement = document.getElementById('categories-management');
     const promoManagement = document.getElementById('promo-management');
     const bannersManagement = document.getElementById('banners-management');
+    const adminEmpty = document.getElementById('admin-empty');
 
     if (categoriesContainer) {
-        categoriesContainer.style.display = tabName === 'products' ? 'block' : 'none';
-    }
-    if (categoriesManagement) {
-        categoriesManagement.style.display = tabName === 'categories' ? 'block' : 'none';
+        categoriesContainer.style.display = tabName === 'categories' ? 'block' : 'none';
     }
     if (promoManagement) {
         promoManagement.style.display = tabName === 'promocodes' ? 'block' : 'none';
@@ -2087,10 +2123,14 @@ function showTab(tabName) {
     if (bannersManagement) {
         bannersManagement.style.display = tabName === 'banners' ? 'block' : 'none';
     }
-
-    if (tabName === 'categories') {
-        loadCategoriesManagement();
+    if (adminEmpty) {
+        adminEmpty.style.display = tabName ? 'none' : 'block';
     }
+
+    if (tabName !== 'categories') {
+        currentCategoryId = null;
+    }
+
     if (tabName === 'promocodes') {
         loadPromoCodes();
     }
